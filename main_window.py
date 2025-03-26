@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 from xml.dom import minidom 
 from PyQt6.QtWidgets import QMessageBox
 import logging
+from styles import ButtonStyles
 
 # Настройка логгера
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -26,7 +27,7 @@ class MainWindow(QMainWindow):
         
         # Создаем виджет для отображения координат
         self.coords_label = QLabel("Mouse Coords: (0, 0)", self)
-        self.coords_label.setStyleSheet("font-size: 14px; color: black; background-color: white; padding: 5px;")
+        self.coords_label.setStyleSheet(ButtonStyles.COORDS_LABEL)
 
         # Создаем окно свойств
         self.properties_window = PropertiesWindow()
@@ -217,30 +218,27 @@ class MainWindow(QMainWindow):
         mode_layout.setSpacing(5)
         mode_container.setLayout(mode_layout)
 
-        # Кнопка наблюдателя
+        # Кнопка режима наблюдателя
         self.observer_button = QToolButton()
         self.observer_button.setText("Наблюдатель")
         self.observer_button.setCheckable(True)
-        self.observer_button.setFixedSize(100, 50)
-        self.observer_button.setStyleSheet(self.get_button_style())
+        self.observer_button.setStyleSheet(ButtonStyles.MODE_BUTTON)
         self.observer_button.clicked.connect(lambda: self.set_mode("observer"))
         mode_layout.addWidget(self.observer_button)
 
-        # Кнопка рисования
+        # Кнопка режима рисования
         self.drawing_button = QToolButton()
         self.drawing_button.setText("Рисование")
         self.drawing_button.setCheckable(True)
-        self.drawing_button.setFixedSize(100, 50)
-        self.drawing_button.setStyleSheet(self.get_button_style())
+        self.drawing_button.setStyleSheet(ButtonStyles.MODE_BUTTON)
         self.drawing_button.clicked.connect(lambda: self.set_mode("drawing"))
         mode_layout.addWidget(self.drawing_button)
 
-        # Кнопка редактирования
+        # Кнопка режима редактирования
         self.edit_button = QToolButton()
         self.edit_button.setText("Редактирование")
         self.edit_button.setCheckable(True)
-        self.edit_button.setFixedSize(100, 50)
-        self.edit_button.setStyleSheet(self.get_button_style())
+        self.edit_button.setStyleSheet(ButtonStyles.MODE_BUTTON)
         self.edit_button.clicked.connect(lambda: self.set_mode("edit"))
         mode_layout.addWidget(self.edit_button)
 
@@ -254,24 +252,22 @@ class MainWindow(QMainWindow):
         drawing_layout.setSpacing(5)
         drawing_container.setLayout(drawing_layout)
 
-        # Кнопка для стены
+        # Кнопка для рисования стен
         self.wall_button = QToolButton()
         self.wall_button.setText("Стена")
         self.wall_button.setCheckable(True)
-        self.wall_button.setFixedSize(100, 50)
-        self.wall_button.setStyleSheet(self.get_button_style())
+        self.wall_button.setStyleSheet(ButtonStyles.DRAWING_BUTTON)
         self.wall_button.clicked.connect(lambda: self.set_drawing_type("wall"))
-        self.wall_button.setEnabled(False)  # По умолчанию отключена
+        self.wall_button.setEnabled(False)
         drawing_layout.addWidget(self.wall_button)
 
-        # Кнопка для региона
+        # Кнопка для рисования регионов
         self.region_button = QToolButton()
         self.region_button.setText("Регион")
         self.region_button.setCheckable(True)
-        self.region_button.setFixedSize(100, 50)
-        self.region_button.setStyleSheet(self.get_button_style())
+        self.region_button.setStyleSheet(ButtonStyles.DRAWING_BUTTON)
         self.region_button.clicked.connect(lambda: self.set_drawing_type("region"))
-        self.region_button.setEnabled(False)  # По умолчанию отключена
+        self.region_button.setEnabled(False)
         drawing_layout.addWidget(self.region_button)
 
         # Добавляем контейнер на панель инструментов
@@ -429,3 +425,10 @@ class MainWindow(QMainWindow):
                 item.rect().width(),
                 item.rect().height()
             )
+
+    def init_ui(self):
+        # ... остальной код ...
+        
+        # Обновляем стиль для меток
+        self.coords_label.setStyleSheet(ButtonStyles.COORDS_LABEL)
+        self.status_label.setStyleSheet(ButtonStyles.STATUS_LABEL)
