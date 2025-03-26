@@ -24,7 +24,7 @@ class PropertiesWindow(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Свойства")
-        self.setMinimumWidth(300)
+        self.setMinimumWidth(320)
         
         # Создаем основной layout
         layout = QVBoxLayout()

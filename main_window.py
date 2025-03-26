@@ -124,10 +124,10 @@ class MainWindow(QMainWindow):
     
     def toggle_properties_window(self):
         """Скрывает или показывает окно свойств."""
-        if self.properties_window.isVisible():
-            self.properties_window.hide()
+        if self.properties_dock.isVisible():
+            self.properties_dock.hide()
         else:
-            self.properties_window.show()            
+            self.properties_dock.show()
     
     def create_scene_size_widget(self):
         size_widget = QWidget()

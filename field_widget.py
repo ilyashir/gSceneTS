@@ -408,6 +408,7 @@ class FieldWidget(QGraphicsView):
                     return 
                 else:                    
                     wall.setLine(wall.line().x1(), wall.line().y1(), pos.x(), pos.y())
+            self.properties_window.update_properties(wall)  # Обновляем свойства
             return
         elif self.edit_mode and self.selected_item == self.robot_model:
             self.robot_model.setPos(pos)  # Перемещаем робота
