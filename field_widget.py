@@ -19,12 +19,23 @@ logger = logging.getLogger(__name__)
 class FieldWidget(QGraphicsView):
     # Сигнал для передачи координат мыши
     mouse_coords_updated = pyqtSignal(float, float)
-     # Сигнал для обновления полей ввода
+    # Сигнал для обновления полей ввода
     update_size_fields = pyqtSignal(int, int)
+    # Сигнал для выбора объекта
+    item_selected = pyqtSignal(object)
+    # Сигнал для снятия выделения с объекта
+    item_deselected = pyqtSignal()
+    # Сигнал для обновления свойств объекта
+    properties_updated = pyqtSignal(object)
 
     def __init__(self, properties_window):
         super().__init__()
         self.properties_window = properties_window
+
+        # Подключаем сигналы к слотам
+        self.item_selected.connect(self.properties_window.update_properties)
+        self.item_deselected.connect(self.properties_window.clear_properties)
+        self.properties_updated.connect(self.properties_window.update_properties)
 
         self.setScene(QGraphicsScene(self))
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -164,24 +175,21 @@ class FieldWidget(QGraphicsView):
     
     def select_item(self, item):
         """Выделяет объект жёлтым контуром."""
-        print(type(self.selected_item))
         if self.selected_item:
-            print("Снимаем выделение с объекта", type(self.selected_item))
-            self.deselect_item()  # Снимаем выделение с предыдущего объекта
+            self.deselect_item()
 
         if isinstance(item, (Wall, Robot, Region)):
-            print("Выделение объекта", type(item))
             self.selected_item = item
-            self.selected_item.set_highlight(True)  # Включаем подсветку
-            self.properties_window.update_properties(item)  # Обновляем свойства
+            self.selected_item.set_highlight(True)
+            self.item_selected.emit(item)
 
     def deselect_item(self):
         """Снимает выделение с объекта."""
         if self.selected_item:
             if isinstance(self.selected_item, (Wall, Robot, Region)):
-                self.selected_item.set_highlight(False)  # Возвращаем стандартный контур
+                self.selected_item.set_highlight(False)
             self.selected_item = None
-            self.properties_window.clear_properties()  # Очищаем свойства
+            self.item_deselected.emit()
     
     def wall_intersects_robot(self, start, end):
         """
@@ -440,8 +448,10 @@ class FieldWidget(QGraphicsView):
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             if self.dragging_robot:
+                logger.debug("Ending robot drag")
                 self.dragging_robot = False
             elif self.edit_mode:
+                logger.debug("Clearing selected marker")
                 self.selected_marker = None
             elif self.drawing_mode == "region" and self.temp_region:
                 self.scene().removeItem(self.temp_region)

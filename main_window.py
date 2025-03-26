@@ -11,6 +11,10 @@ from xml.dom import minidom
 from PyQt6.QtWidgets import QMessageBox
 import logging
 
+# Настройка логгера
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -31,16 +35,14 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout()
         layout.addWidget(self.coords_label)  # Добавляем метку с координатами
         # Добавляем окно с полем
-        self.field_widget = FieldWidget(self.properties_window)
-       
+        self.field_widget = FieldWidget(self.properties_window)       
         layout.addWidget(self.field_widget)
     
         container.setLayout(layout)
         self.setCentralWidget(container)
 
-        # Подключаем сигнал от FieldWidget для обновления полей ввода размера сцены
+        # Подключаем сигналы
         self.field_widget.update_size_fields.connect(self.update_size_fields)
-        # Подключаем сигнал от FieldWidget для обновления координат
         self.field_widget.mouse_coords_updated.connect(self.update_coords_label)
 
         # Создаем кнопку для скрытия/открытия окна свойств
@@ -82,8 +84,17 @@ class MainWindow(QMainWindow):
         self.snap_to_grid_checkbox.stateChanged.connect(self.toggle_snap_to_grid)
         self.toolbar.addWidget(self.snap_to_grid_checkbox)
 
-        self.create_tool_buttons()
-        self.debug_mode = False  # Переменная для отслеживания режима отладки
+        # Создаем кнопки режимов
+        self.create_mode_buttons()
+        self.create_drawing_buttons()
+        
+        # Кнопка для генерации XML
+        generate_button = QPushButton("Generate XML")
+        generate_button.clicked.connect(self.generate_xml)
+        self.toolbar.addWidget(generate_button)
+
+        # Устанавливаем режим наблюдателя по умолчанию
+        self.set_mode("observer")
     
     def update_coords_label(self, x, y):
         # Обновляет текст в QLabel с координатами мыши.
@@ -100,13 +111,6 @@ class MainWindow(QMainWindow):
         else:
             self.properties_window.show()            
     
-    def toggle_debug_mode(self):
-        self.debug_mode = not self.debug_mode
-        if self.debug_mode:
-            print("Debug mode enabled")  # Сообщение в консоль
-        else:
-            print("Debug mode disabled")  # Сообщение в консоль    
-
     def create_scene_size_widget(self):
         size_widget = QWidget()
         size_layout = QVBoxLayout()  # Используем вертикальный макет
@@ -194,104 +198,151 @@ class MainWindow(QMainWindow):
         self.width_input.setText(str(width))
         self.height_input.setText(str(height))   
 
-    def create_tool_buttons(self):
+    def create_mode_buttons(self):
+        # Создаем контейнер для кнопок режимов
+        mode_container = QWidget()
+        mode_layout = QHBoxLayout()
+        mode_layout.setSpacing(5)
+        mode_container.setLayout(mode_layout)
+
+        # Кнопка наблюдателя
+        self.observer_button = QToolButton()
+        self.observer_button.setText("Наблюдатель")
+        self.observer_button.setCheckable(True)
+        self.observer_button.setFixedSize(100, 50)
+        self.observer_button.setStyleSheet(self.get_button_style())
+        self.observer_button.clicked.connect(lambda: self.set_mode("observer"))
+        mode_layout.addWidget(self.observer_button)
+
+        # Кнопка рисования
+        self.drawing_button = QToolButton()
+        self.drawing_button.setText("Рисование")
+        self.drawing_button.setCheckable(True)
+        self.drawing_button.setFixedSize(100, 50)
+        self.drawing_button.setStyleSheet(self.get_button_style())
+        self.drawing_button.clicked.connect(lambda: self.set_mode("drawing"))
+        mode_layout.addWidget(self.drawing_button)
+
+        # Кнопка редактирования
+        self.edit_button = QToolButton()
+        self.edit_button.setText("Редактирование")
+        self.edit_button.setCheckable(True)
+        self.edit_button.setFixedSize(100, 50)
+        self.edit_button.setStyleSheet(self.get_button_style())
+        self.edit_button.clicked.connect(lambda: self.set_mode("edit"))
+        mode_layout.addWidget(self.edit_button)
+
+        # Добавляем контейнер на панель инструментов
+        self.toolbar.addWidget(mode_container)
+
+    def create_drawing_buttons(self):
+        # Создаем контейнер для кнопок рисования
+        drawing_container = QWidget()
+        drawing_layout = QHBoxLayout()
+        drawing_layout.setSpacing(5)
+        drawing_container.setLayout(drawing_layout)
+
         # Кнопка для стены
         self.wall_button = QToolButton()
-        self.wall_button.setText("Draw wall")
+        self.wall_button.setText("Стена")
         self.wall_button.setCheckable(True)
         self.wall_button.setFixedSize(100, 50)
         self.wall_button.setStyleSheet(self.get_button_style())
-        self.wall_button.clicked.connect(lambda: self.set_drawing_mode("wall"))
-        self.toolbar.addWidget(self.wall_button)
+        self.wall_button.clicked.connect(lambda: self.set_drawing_type("wall"))
+        self.wall_button.setEnabled(False)  # По умолчанию отключена
+        drawing_layout.addWidget(self.wall_button)
 
         # Кнопка для региона
         self.region_button = QToolButton()
-        self.region_button.setText("Draw region")
+        self.region_button.setText("Регион")
         self.region_button.setCheckable(True)
         self.region_button.setFixedSize(100, 50)
         self.region_button.setStyleSheet(self.get_button_style())
-        self.region_button.clicked.connect(lambda: self.set_drawing_mode("region"))
-        self.toolbar.addWidget(self.region_button)
+        self.region_button.clicked.connect(lambda: self.set_drawing_type("region"))
+        self.region_button.setEnabled(False)  # По умолчанию отключена
+        drawing_layout.addWidget(self.region_button)
 
-        # Создаем пустой виджет для отступа
-        spacer_widget = QWidget()
-        spacer_widget.setFixedHeight(30)  # Устанавливаем высоту отступа
-        self.toolbar.addWidget(spacer_widget)  # Добавляем отступ на панель инструментов
+        # Добавляем контейнер на панель инструментов
+        self.toolbar.addWidget(drawing_container)
 
-        # Кнопка для редактирования
-        self.edit_button = QToolButton()
-        self.edit_button.setText("Edit")
-        self.edit_button.setCheckable(True)
-        self.edit_button.setFixedSize(50, 50)
-        self.edit_button.setStyleSheet(self.get_button_style())
-        self.edit_button.clicked.connect(self.set_edit_mode)
-        self.toolbar.addWidget(self.edit_button)
+    def set_mode(self, mode):
+        """Устанавливает режим работы."""
+        logger.debug(f"Setting mode to: {mode}")
+        
+        # Отключаем все кнопки режимов
+        self.observer_button.setChecked(False)
+        self.drawing_button.setChecked(False)
+        self.edit_button.setChecked(False)
+        
+        # Включаем нужную кнопку
+        if mode == "observer":
+            logger.debug("Switching to observer mode")
+            self.observer_button.setChecked(True)
+            self.wall_button.setEnabled(False)
+            self.region_button.setEnabled(False)
+            self.field_widget.set_drawing_mode(None)
+            self.field_widget.set_edit_mode(False)
+        elif mode == "drawing":
+            logger.debug("Switching to drawing mode")
+            self.drawing_button.setChecked(True)
+            self.wall_button.setEnabled(True)
+            self.region_button.setEnabled(True)
+            self.field_widget.set_edit_mode(False)
+            # Если есть активная кнопка рисования, устанавливаем соответствующий режим
+            if self.wall_button.isChecked():
+                self.field_widget.set_drawing_mode("wall")
+            elif self.region_button.isChecked():
+                self.field_widget.set_drawing_mode("region")
+        elif mode == "edit":
+            logger.debug("Switching to edit mode")
+            self.edit_button.setChecked(True)
+            self.wall_button.setEnabled(False)
+            self.region_button.setEnabled(False)
+            self.field_widget.set_drawing_mode(None)
+            self.field_widget.set_edit_mode(True)
 
-        # Кнопка для отладки
-        self.debug_button = QToolButton()
-        self.debug_button.setText("Debug")
-        self.debug_button.setCheckable(True)
-        self.debug_button.setFixedSize(50, 50)
-        self.debug_button.setStyleSheet(self.get_button_style())
-        self.debug_button.clicked.connect(self.toggle_debug_mode)
-        self.toolbar.addWidget(self.debug_button)
-
-        # Кнопка для генерации XML
-        generate_button = QPushButton("Generate XML")
-        generate_button.clicked.connect(self.generate_xml)
-        self.toolbar.addWidget(generate_button)
+    def set_drawing_type(self, drawing_type):
+        """Устанавливает тип рисования (стена или регион)."""
+        logger.debug(f"Setting drawing type to: {drawing_type}")
+        
+        # Отключаем обе кнопки
+        self.wall_button.setChecked(False)
+        self.region_button.setChecked(False)
+        
+        # Включаем нужную кнопку
+        if drawing_type == "wall":
+            logger.debug("Setting wall drawing mode")
+            self.wall_button.setChecked(True)
+            self.field_widget.set_drawing_mode("wall")
+        elif drawing_type == "region":
+            logger.debug("Setting region drawing mode")
+            self.region_button.setChecked(True)
+            self.field_widget.set_drawing_mode("region")
+        else:
+            logger.debug("Clearing drawing mode")
+            self.field_widget.set_drawing_mode(None)
 
     def get_button_style(self):
         return """
             QToolButton {
-                background-color: lightgray;
-                border: 1px solid gray;
+                background-color: #f0f0f0;
+                border: 1px solid #999;
                 border-radius: 5px;
+                padding: 5px;
             }
             QToolButton:hover {
-                background-color: darkgray;
+                background-color: #e0e0e0;
             }
             QToolButton:checked {
-                background-color: darkgray;
-                border: 2px solid black;
+                background-color: #4CAF50;
+                color: white;
+                border: 2px solid #2E7D32;
+            }
+            QToolButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
             }
         """
-
-    def set_drawing_mode(self, mode):
-        # Отключаем все кнопки
-        self.wall_button.setChecked(False)
-        self.region_button.setChecked(False)
-        self.edit_button.setChecked(False)
-        self.field_widget.set_edit_mode(False)
-
-        # Включаем выбранную кнопку
-        if mode == "wall":
-            self.wall_button.setChecked(True)         
-            if self.debug_mode:
-                print("Drawing mode: Wall")  # Отладочный вывод
-        elif mode == "region":
-            self.region_button.setChecked(True)
-            # self.region_button.setStyleSheet("background-color: darkgray;")
-            if self.debug_mode:
-                print("Drawing mode: Region")  # Отладочный вывод
-        elif mode == "edit":
-            self.edit_button.setChecked(True)
-            self.field_widget.set_edit_mode(True)
-            # self.edit_button.setStyleSheet("background-color: darkgray;")
-            if self.debug_mode:
-                print("Drawing mode: Edit")  # Отладочный вывод
-
-
-        # Устанавливаем режим рисования
-        self.field_widget.set_drawing_mode(mode)
-   
-    def update_scene_size(self):
-        width = int(self.width_input.text())
-        height = int(self.height_input.text())
-        self.field_widget.set_scene_size(width, height)
-
-    def set_edit_mode(self):        
-        self.set_drawing_mode("edit" if self.edit_button.isChecked() else None)
 
     def generate_xml(self):
         try:
