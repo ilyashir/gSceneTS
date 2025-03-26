@@ -1,6 +1,10 @@
 from PyQt6.QtWidgets import QGraphicsLineItem, QGraphicsEllipseItem, QGraphicsItem, QGraphicsRectItem
 from PyQt6.QtGui import QPixmap, QPainter, QPen, QBrush, QColor, QTransform
 from PyQt6.QtCore import Qt, QRectF, QLineF, QPointF
+import logging
+# Настройка логгера
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 class Wall(QGraphicsLineItem):
     _next_id = 1  # Счетчик для генерации уникальных ID
@@ -152,8 +156,69 @@ class Wall(QGraphicsLineItem):
         pen = QPen(Qt.GlobalColor.black, self.stroke_width)
         pen.setColor(Qt.GlobalColor.transparent)  # Прозрачный цвет (для пользовательского цвета)
         self.setPen(pen)
+        
+        self.update_brick_rect()
+        
+        # Обновляем размеры маркеров
+        logger.debug(f"Updating marker to size {self.stroke_width}")
+        line = self.line()
+        marker_size = self.stroke_width + 2
+        self.start_marker.setRect(
+            line.x1() - marker_size/2,
+            line.y1() - marker_size/2,
+            marker_size,
+            marker_size
+        )
+        self.end_marker.setRect(
+            line.x2() - marker_size/2,
+            line.y2() - marker_size/2,
+            marker_size,
+            marker_size
+        )
+        
+        if self.highlight_rect:
+            length = line.length()
+            angle = line.angle()
+            
+            # Создаем прямоугольник, покрывающий линию
+            rect = QRectF(0, -self.stroke_width / 2, length, self.stroke_width)
+            self.highlight_rect.setRect(rect)
+
+            # Применяем поворот к прямоугольнику выделения
+            transform = QTransform()
+            transform.translate(line.p1().x(), line.p1().y())
+            transform.rotate(-angle)
+            self.highlight_rect.setTransform(transform)
+            self.highlight_rect.setZValue(20)
 
     def set_stroke_width(self, width):
         """Устанавливает ширину обводки стены."""
         self.stroke_width = width
+        self.update_appearance()
+
+    def setLine(self, x1, y1, x2, y2):
+        """Переопределенный метод установки линии с обновлением маркеров."""
+        # Вызываем родительский метод для установки линии
+        super().setLine(x1, y1, x2, y2)
+        
+        # Обновляем позиции маркеров
+        if hasattr(self, 'start_marker'):
+            # Устанавливаем позицию с учетом размера маркера
+            self.start_marker.setRect(
+                x1 - self.stroke_width // 2 - 1,
+                y1 - self.stroke_width // 2 - 1,
+                self.stroke_width + 2,
+                self.stroke_width + 2
+            )
+        
+        if hasattr(self, 'end_marker'):
+            # Устанавливаем позицию с учетом размера маркера
+            self.end_marker.setRect(
+                x2 - self.stroke_width // 2 - 1,
+                y2 - self.stroke_width // 2 - 1,
+                self.stroke_width + 2,
+                self.stroke_width + 2
+            )
+        
+        # Обновляем внешний вид стены
         self.update_appearance()

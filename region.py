@@ -45,8 +45,8 @@ class Region(QGraphicsRectItem):
         Устанавливает новый цвет региона и обновляет штриховку.
         :param color: Новый цвет в формате HEX.
         """
-        self.color = QColor(color)
-        self.brush.setColor(self.color)
+        self.color = color
+        self.brush.setColor(QColor(self.color))
         self.setBrush(self.brush)  
 
     def set_id(self, new_id):

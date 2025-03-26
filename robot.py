@@ -7,7 +7,7 @@ class Robot(QGraphicsPixmapItem):
     def __init__(self, pos):
         super().__init__()
         self.setPos(pos)
-        self.direction = "0"  # Направление робота (по умолчанию 0 градусов)
+        self.direction = 0.0  # Направление робота (по умолчанию 0 градусов)
         self.renderer = QSvgRenderer() # Инициализация рендера без файла
         self.highlight_rect = None  # Прямоугольник для выделения
         self.update_appearance()        
@@ -40,7 +40,7 @@ class Robot(QGraphicsPixmapItem):
             
             # Применяем поворот на основе направления
             transform = QTransform()
-            transform.rotate(float(self.direction))
+            transform.rotate(self.direction)
             painter.setTransform(transform)
             
             # Рендерим SVG
@@ -89,5 +89,5 @@ class Robot(QGraphicsPixmapItem):
 
     def set_direction(self, direction):
         """Устанавливает направление робота и обновляет его внешний вид."""
-        self.direction = direction
+        self.direction = float(direction)
         self.update_appearance()            

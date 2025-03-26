@@ -1,9 +1,9 @@
 from PyQt6.QtWidgets import (
     QMainWindow, QToolBar, QToolButton, QPushButton, QLineEdit, QWidget, QHBoxLayout, QVBoxLayout, QLabel,
-    QCheckBox, QSpacerItem, QSizePolicy, QFileDialog
+    QCheckBox, QSpacerItem, QSizePolicy, QFileDialog, QDockWidget
 )
 from PyQt6.QtGui import QIcon
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from field_widget import FieldWidget
 from properties_window import PropertiesWindow
 import xml.etree.ElementTree as ET
@@ -16,33 +16,50 @@ logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %
 logger = logging.getLogger(__name__)
 
 class MainWindow(QMainWindow):
+    scene_size_changed = pyqtSignal(int, int)  # width, height
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("TS scene generator")
         self.resize(1200, 800)  # Устанавливаем начальный размер
         self.showMaximized()  # Открыть на весь экран
-
+        
         # Создаем виджет для отображения координат
         self.coords_label = QLabel("Mouse Coords: (0, 0)", self)
         self.coords_label.setStyleSheet("font-size: 14px; color: black; background-color: white; padding: 5px;")
 
-        # Добавляем окно со свойствами
+        # Создаем окно свойств
         self.properties_window = PropertiesWindow()
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.properties_window)
+        self.properties_dock = QDockWidget("Свойства", self)
+        self.properties_dock.setWidget(self.properties_window)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.properties_dock)
 
         # Создаем контейнер для координат и FieldWidget
         container = QWidget()
         layout = QVBoxLayout()
         layout.addWidget(self.coords_label)  # Добавляем метку с координатами
+        
         # Добавляем окно с полем
         self.field_widget = FieldWidget(self.properties_window)       
         layout.addWidget(self.field_widget)
     
         container.setLayout(layout)
         self.setCentralWidget(container)
+        
+        # Подключаем сигналы от главного окна
+        self.scene_size_changed.connect(self.field_widget.set_scene_size)
+        # Подключаем сигналы от окна свойств
+        self.properties_window.robot_position_changed.connect(self.field_widget.update_robot_position)
+        self.properties_window.robot_rotation_changed.connect(self.field_widget.update_robot_rotation)
+        self.properties_window.wall_position_point1_changed.connect(self.field_widget.update_wall_point1)
+        self.properties_window.wall_position_point2_changed.connect(self.field_widget.update_wall_point2)
+        self.properties_window.wall_size_changed.connect(self.field_widget.update_wall_size)
+        self.properties_window.region_position_changed.connect(self.field_widget.update_region_position)
+        self.properties_window.region_size_changed.connect(self.field_widget.update_region_size)
+        self.properties_window.region_color_changed.connect(self.field_widget.update_region_color)
 
         # Подключаем сигналы
-        self.field_widget.update_size_fields.connect(self.update_size_fields)
+        # self.field_widget.update_size_fields.connect(self.update_size_fields)
         self.field_widget.mouse_coords_updated.connect(self.update_coords_label)
 
         # Создаем кнопку для скрытия/открытия окна свойств
@@ -147,13 +164,13 @@ class MainWindow(QMainWindow):
         # Поле для ширины
         self.width_input = QLineEdit(str(self.field_widget.scene_width))
         self.width_input.setPlaceholderText("Width")
-        # self.width_input.editingFinished.connect(self.update_scene_size)
+        
         input_layout.addWidget(self.width_input)
 
         # Поле для высоты
         self.height_input = QLineEdit(str(self.field_widget.scene_height))
         self.height_input.setPlaceholderText("Height")
-        # self.height_input.editingFinished.connect(self.update_scene_size)
+        
         input_layout.addWidget(self.height_input)
 
         # Добавляем виджет с полями ввода в вертикальный макет
@@ -191,12 +208,7 @@ class MainWindow(QMainWindow):
             return
 
         # Вызываем метод изменения размера сцены
-        self.field_widget.set_scene_size(new_width, new_height)
-    
-    def update_size_fields(self, width, height):
-        """Обновляет поля ввода текущими размерами сцены."""
-        self.width_input.setText(str(width))
-        self.height_input.setText(str(height))   
+        self.scene_size_changed.emit(new_width, new_height)
 
     def create_mode_buttons(self):
         # Создаем контейнер для кнопок режимов
@@ -388,3 +400,32 @@ class MainWindow(QMainWindow):
         
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {e}")
+
+    def update_properties(self, item):
+        """Обновляет окно свойств в зависимости от выбранного элемента."""
+        if item is None:
+            self.properties_window.hide_all_groups()
+            return
+            
+        if isinstance(item, Robot):
+            self.properties_window.show_robot_properties(
+                item.pos().x(),
+                item.pos().y(),
+                item.rotation()
+            )
+        elif isinstance(item, Wall):
+            self.properties_window.show_wall_properties(
+                item.pos().x(),
+                item.pos().y(),
+                item.rotation(),
+                item.line().length(),
+                item.line().width()
+            )
+        elif isinstance(item, Region):
+            self.properties_window.show_region_properties(
+                item.pos().x(),
+                item.pos().y(),
+                item.rotation(),
+                item.rect().width(),
+                item.rect().height()
+            )
