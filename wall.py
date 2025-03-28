@@ -125,6 +125,7 @@ class Wall(QGraphicsLineItem):
             # Создаем прямоугольник для выделения
             if not self.highlight_rect:           
                 self.highlight_rect = QGraphicsRectItem(self)
+                self.highlight_rect.setData(0, "its_wall")
                 self.highlight_rect.setPen(QPen(Qt.GlobalColor.green, 2))
                 self.highlight_rect.setBrush(QBrush(Qt.GlobalColor.transparent))
             
@@ -162,7 +163,7 @@ class Wall(QGraphicsLineItem):
         # Обновляем прямоугольник с паттерном "кирпичная стена" в соответствии с линией
         self.update_brick_rect()
         
-        # Обновляем размеры маркеров только если это не программное обновление
+        # Обновляем размеры маркеров
         if self._updating:
             self.update_markers()
         
@@ -217,6 +218,6 @@ class Wall(QGraphicsLineItem):
         """Переопределенный метод установки линии с обновлением маркеров."""
         # Вызываем родительский метод для установки линии
         super().setLine(x1, y1, x2, y2)
-        
+        logger.debug(f"Wall line set to: {x1, y1, x2, y2}")
         # Обновляем внешний вид стены вместе с маркерами
         self.update_appearance()

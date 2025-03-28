@@ -61,8 +61,8 @@ class FieldWidget(QGraphicsView):
         self.robot_model = None  # вместо self.robot_position
         self.dragging_robot = False
         self.robot_offset = QPointF()
-        self.scene_width = 800
-        self.scene_height = 600
+        self.scene_width = 1300
+        self.scene_height = 1000
 
         # Создаем группы для слоев
         self.grid_layer = QGraphicsItemGroup()
@@ -75,7 +75,7 @@ class FieldWidget(QGraphicsView):
 
         self.draw_grid()
         self.draw_axes()
-        self.set_robot(QPointF(0, 0))  # Робот по умолчанию в (0, 0)
+        self.init_robot(QPointF(0, 0))  # Робот по умолчанию в (0, 0)
 
     # отрисовка сетки
     def draw_grid(self):
@@ -147,7 +147,7 @@ class FieldWidget(QGraphicsView):
         self.axes_layer.addToGroup(x_label)
 
         y_label = QGraphicsTextItem("Y")
-        y_label.setPos(-20, self.scene_height // 2 - 20)
+        y_label.setPos(-25, self.scene_height // 2 - 20)
         y_label.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, False)
         y_label.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
         self.axes_layer.addToGroup(y_label)
@@ -176,6 +176,7 @@ class FieldWidget(QGraphicsView):
     def select_item(self, item):
         """Выделяеv объект"""
         # Проверяем, не выделяем ли тот же объект
+        logger.debug(f"Selecting item: {item}, а был выделен {self.selected_item}")
         if item == self.selected_item:
             logger.debug(f"Item {item} is already selected, skipping")
             return
@@ -199,10 +200,13 @@ class FieldWidget(QGraphicsView):
     
     def wall_intersects_robot(self, x1, y1, x2, y2):
         """Проверяет, пересекается ли стена с роботом."""
-        if not self.robot_model:  # вместо self.robot_position
+        if not self.robot_model: 
             return False
             
-        robot_rect = self.robot_model.boundingRect()  # вместо self.robot_position
+        robot_rect = self.robot_model.boundingRect()
+        # Учитываем позицию робота при проверке пересечения
+        robot_rect.translate(self.robot_model.pos())
+        
         # Линия стены
         wall_line = QLineF(QPointF(x1, y1), QPointF(x2, y2))
         # Проверяем пересечение линии стены с прямоугольником робота
@@ -216,7 +220,7 @@ class FieldWidget(QGraphicsView):
         :return: True, если линия пересекает прямоугольник, иначе False.
         """
         # Получаем стороны прямоугольника
-        top = QLineF(rect.topLeft(), rect.topRight())
+        top = QLineF(rect.topLeft(), rect.topRight())           
         right = QLineF(rect.topRight(), rect.bottomRight())
         bottom = QLineF(rect.bottomLeft(), rect.bottomRight())
         left = QLineF(rect.topLeft(), rect.bottomLeft())
@@ -260,8 +264,7 @@ class FieldWidget(QGraphicsView):
         self.select_item(region) 
         logger.debug(f"Region added: {region}")
 
-
-    def set_robot(self, pos):
+    def init_robot(self, pos):
         logger.debug(f"Setting robot position to {pos}")
         if self.robot_model is not None:
             logger.debug("Removing existing robot from scene")
@@ -323,18 +326,65 @@ class FieldWidget(QGraphicsView):
                 region.rect().y() < -height // 2 or region.rect().y() + region.rect().height() > height // 2):
                 return False
 
+        if (self.robot_model.pos().x() < -width // 2 or self.robot_model.pos().x() + self.robot_model.boundingRect().width() > width // 2 or
+            self.robot_model.pos().y() < -height // 2 or self.robot_model.pos().y() + self.robot_model.boundingRect().height() > height // 2):
+            return False
+
         return True
     
-    def is_point_within_scene(self, point):
+    def check_object_within_scene(self, item):
         """
-        Проверяет, находится ли точка в пределах сцены.
-        :param point: Точка (QPointF).
-        :return: True, если точка находится в пределах сцены, иначе False.
+        Проверяет, находится ли объект в пределах сцены.
+        :param item: Объект для проверки (Wall, Region или Robot).
+        :return: True, если объект находится в пределах сцены, иначе False.
         """
-        return (
-            -self.scene_width / 2 <= point.x() <= self.scene_width / 2 and
-            -self.scene_height / 2 <= point.y() <= self.scene_height / 2
-        )
+        if isinstance(item, Wall):
+            # Для стены проверяем обе точки
+            line = item.line()
+            return (
+                -self.scene_width / 2 <= line.x1() <= self.scene_width / 2 and
+                -self.scene_width / 2 <= line.x2() <= self.scene_width / 2 and
+                -self.scene_height / 2 <= line.y1() <= self.scene_height / 2 and
+                -self.scene_height / 2 <= line.y2() <= self.scene_height / 2
+            )
+        elif isinstance(item, Region):
+            # Для региона проверяем все углы прямоугольника
+            rect = item.rect()
+            pos = item.pos()
+            
+            # Вычисляем координаты углов региона
+            top_left = (pos.x() + rect.x(), pos.y() + rect.y())
+            top_right = (pos.x() + rect.x() + rect.width(), pos.y() + rect.y())
+            bottom_left = (pos.x() + rect.x(), pos.y() + rect.y() + rect.height())
+            bottom_right = (pos.x() + rect.x() + rect.width(), pos.y() + rect.y() + rect.height())
+            
+            logger.debug(f"Region bounds check: TL={top_left}, TR={top_right}, BL={bottom_left}, BR={bottom_right}")
+            logger.debug(f"Scene bounds: x=({-self.scene_width/2}, {self.scene_width/2}), y=({-self.scene_height/2}, {self.scene_height/2})")
+            
+            # Проверяем, что все углы региона находятся в пределах сцены
+            return (
+                -self.scene_width / 2 <= top_left[0] <= self.scene_width / 2 and
+                -self.scene_width / 2 <= top_right[0] <= self.scene_width / 2 and
+                -self.scene_width / 2 <= bottom_left[0] <= self.scene_width / 2 and
+                -self.scene_width / 2 <= bottom_right[0] <= self.scene_width / 2 and
+                -self.scene_height / 2 <= top_left[1] <= self.scene_height / 2 and
+                -self.scene_height / 2 <= top_right[1] <= self.scene_height / 2 and
+                -self.scene_height / 2 <= bottom_left[1] <= self.scene_height / 2 and
+                -self.scene_height / 2 <= bottom_right[1] <= self.scene_height / 2
+            )
+        elif isinstance(item, Robot):
+            # Для робота проверяем его позицию и размеры
+            # Размер робота фиксирован - 50x50 пикселей
+            pos = item.pos()
+            logger.debug(f"Checking robot position: pos=({pos.x()}, {pos.y()})")
+            logger.debug(f"Scene bounds: x=({-self.scene_width/2}, {self.scene_width/2}), y=({-self.scene_height/2}, {self.scene_height/2})")
+            
+            # Проверяем, что робот полностью находится в пределах сцены
+            return (
+                -self.scene_width / 2 <= pos.x() <= self.scene_width / 2 - 50 and
+                -self.scene_height / 2 <= pos.y() <= self.scene_height / 2 - 50
+            )
+        return False
     
     def mousePressEvent(self, event):
         posOriginal = self.mapToScene(event.pos()) # оригинальные координаты
@@ -344,22 +394,52 @@ class FieldWidget(QGraphicsView):
         print("click", type(item))
         if event.button() == Qt.MouseButton.LeftButton:
             
-            if item and isinstance(item, (Robot, Region)) :
-                self.select_item(item)  # Выделяем объект
-            elif item and (item.data(0) == "its_wall" or item.data(0) == "wall_marker"):
-                self.select_item(item.parentItem())  # Выделяем объект
+            # Проверка клика по выделяемому объекту или его дочернему элементу
+            if item:
+                # Проверяем, не является ли item частью уже выделенного объекта
+                parent_item = item.parentItem()
+                if parent_item and parent_item == self.selected_item:
+                    # Если кликнули на дочерний элемент выделенного объекта (например, рамку выделения)
+                    target_item = parent_item
+                # Иначе проверяем тип объекта
+                elif isinstance(item, (Robot, Region)) or (hasattr(item, 'data') and item.data(0) in ["its_wall", "wall_marker"]):
+                    # Выделяем объект или его родительский элемент
+                    if isinstance(item, (Robot, Region)):
+                        target_item = item
+                    else:
+                        target_item = item.parentItem()
+                    
+                    self.select_item(target_item)
+                else:
+                    # Клик по другому объекту, не являющемуся выделяемым
+                    self.deselect_item()
             else:
+                # Клик по пустому месту
                 self.deselect_item()
 
+            # Обработка перемещения объектов в режиме редактирования
             if self.edit_mode:
-                if item == self.robot_model:  # Перетаскивание робота
-                    self.dragging_robot = True
-                    self.robot_offset = pos - self.robot_model.pos()
-                    return
-                elif item and item.data(0) == "wall_marker":  # Проверяем свойство
+                if item and hasattr(item, 'data') and item.data(0) == "wall_marker":  # Проверяем свойство
                     self.selected_marker = item
-                return
+                    self.dragging_item = None  # Сбрасываем перетаскиваемый объект
+                    return
+                elif item and hasattr(item, 'data') and item.data(0) == "its_wall":
+                    self.dragging_item = item.parentItem()
+                    # Сохраняем точку захвата
+                    self.grab_point = pos
+                    # Сохраняем начальные координаты стены
+                    line = self.dragging_item.line()
+                    self.initial_line = QLineF(line.x1(), line.y1(), line.x2(), line.y2())
+                    return
+                elif item and (isinstance(item, (Robot, Region)) or 
+                              (parent_item and isinstance(parent_item, (Robot, Region)))):
+                    # Если кликнули на робота/регион или на его дочерний элемент
+                    drag_item = item if isinstance(item, (Robot, Region)) else parent_item
+                    self.dragging_item = drag_item
+                    self.drag_offset = pos - self.dragging_item.pos()
+                    return
 
+            # Обработка рисования стен и регионов
             if self.drawing_mode == "wall":  
                 if self.wall_start is None:
                     self.wall_start = pos  # Устанавливаем начальную точку стены
@@ -390,9 +470,60 @@ class FieldWidget(QGraphicsView):
         # Отправляем сигнал с координатами        
         self.mouse_coords_updated.emit(posOriginal.x(), posOriginal.y())
         
-        if self.edit_mode and self.dragging_robot:
-            logger.debug(f"Dragging robot to {pos}")
-            self.robot_model.setPos(pos - self.robot_offset)  # Перемещение робота
+        if self.edit_mode and hasattr(self, 'dragging_item') and self.dragging_item:
+            logger.debug(f"Dragging {self.dragging_item}")            
+            if isinstance(self.dragging_item, (Robot, Region)):
+                # Вычисляем новую позицию
+                new_pos = pos - self.drag_offset
+                
+                # Создаем временный объект для проверки
+                if isinstance(self.dragging_item, Robot):
+                    temp_robot = Robot(new_pos)
+                    logger.debug(f"from: {temp_robot.x(), temp_robot.y(), temp_robot.x() + temp_robot.boundingRect().width(), temp_robot.y() + temp_robot.boundingRect().height()}")  
+                    if not self.check_object_within_scene(temp_robot):
+                        logger.debug(f"ERR robot would be out of bounds")
+                        return
+                elif isinstance(self.dragging_item, Region):                        
+                    # Создаем временный регион для проверки
+                    rect = self.dragging_item.rect()
+                    temp_region = Region(new_pos, rect.width(), rect.height())
+                    # Копируем все свойства региона
+                    temp_region.setRect(rect)
+                    temp_region.setPos(new_pos)
+                    
+                    logger.debug(f"Current region: pos=({self.dragging_item.pos().x()}, {self.dragging_item.pos().y()}), rect=({rect.x()}, {rect.y()}, {rect.width()}, {rect.height()})")
+                    logger.debug(f"Temp region: pos=({new_pos.x()}, {new_pos.y()}), rect=({temp_region.rect().x()}, {temp_region.rect().y()}, {temp_region.rect().width()}, {temp_region.rect().height()})")
+                    
+                    if not self.check_object_within_scene(temp_region):
+                        logger.debug(f"ERR region would be out of bounds")
+                        return
+                
+                self.dragging_item.setPos(new_pos)
+            elif isinstance(self.dragging_item, Wall):
+                # Вычисляем смещение относительно точки захвата
+                dx = pos.x() - self.grab_point.x()
+                dy = pos.y() - self.grab_point.y()
+                new_pos_x1 = self.initial_line.x1() + dx
+                new_pos_y1 = self.initial_line.y1() + dy
+                new_pos_x2 = self.initial_line.x2() + dx
+                new_pos_y2 = self.initial_line.y2() + dy
+                logger.debug(f"to: {new_pos_x1, new_pos_y1, new_pos_x2, new_pos_y2}")
+                
+                # Создаем временную стену для проверки границ
+                temp_wall = Wall(QPointF(new_pos_x1, new_pos_y1), QPointF(new_pos_x2, new_pos_y2))
+                
+                # Обновляем саму линию стены, смещая обе точки, если нет пересечения с роботом
+                if self.wall_intersects_robot(new_pos_x1, new_pos_y1, new_pos_x2, new_pos_y2) or not self.check_object_within_scene(temp_wall):
+                    logger.debug(f"ERR robot intersects or wall would be out of bounds")
+                    return 
+                else:
+                    with self.dragging_item.updating():
+                        self.dragging_item.setLine(
+                            new_pos_x1,
+                            new_pos_y1,
+                            new_pos_x2,
+                            new_pos_y2
+                        )
             return
         elif self.edit_mode and self.selected_marker:            
             wall = self.selected_marker.parentItem()
@@ -436,12 +567,12 @@ class FieldWidget(QGraphicsView):
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            if self.dragging_robot:
-                logger.debug("Ending robot drag")
-                self.dragging_robot = False
-            elif self.edit_mode:
+            if self.edit_mode and self.selected_marker:
                 logger.debug("Clearing selected marker")
                 self.selected_marker = None
+            elif hasattr(self, 'dragging_item'):
+                self.dragging_item = None  # Сбрасываем перетаскиваемый объект
+
             elif self.drawing_mode == "region" and self.temp_region:
                 self.scene().removeItem(self.temp_region)
                 self.temp_region = None
