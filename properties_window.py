@@ -8,6 +8,7 @@ import logging
 from robot import Robot
 from wall import Wall
 from region import Region
+from custom_widgets import EditableLineEdit
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,7 @@ class PropertiesWindow(QWidget):
         # ID (только для чтения)
         id_layout = QHBoxLayout()
         id_layout.addWidget(QLabel("ID:"))
-        self.robot_id = QLineEdit()
+        self.robot_id = EditableLineEdit()
         self.robot_id.setReadOnly(True)  # Только для чтения
         self.robot_id.setStyleSheet("background-color: #f0f0f0;")  # Серый фон для визуального отличия
         id_layout.addWidget(self.robot_id)
@@ -100,8 +101,8 @@ class PropertiesWindow(QWidget):
         # ID
         id_layout = QHBoxLayout()
         id_layout.addWidget(QLabel("ID:"))
-        self.wall_id = QLineEdit()
-        self.wall_id.textChanged.connect(self.on_wall_id_changed)
+        self.wall_id = EditableLineEdit()
+        self.wall_id.valueChanged.connect(self.on_wall_id_changed)
         id_layout.addWidget(self.wall_id)
         layout.addLayout(id_layout)
         
@@ -156,8 +157,8 @@ class PropertiesWindow(QWidget):
         # ID
         id_layout = QHBoxLayout()
         id_layout.addWidget(QLabel("ID:"))
-        self.region_id = QLineEdit()
-        self.region_id.textChanged.connect(self.on_region_id_changed)
+        self.region_id = EditableLineEdit()
+        self.region_id.valueChanged.connect(self.on_region_id_changed)
         id_layout.addWidget(self.region_id)
         layout.addLayout(id_layout)
         
@@ -194,8 +195,8 @@ class PropertiesWindow(QWidget):
         # Цвет
         color_layout = QHBoxLayout()
         color_layout.addWidget(QLabel("Цвет:"))
-        self.region_color = QLineEdit()
-        self.region_color.textChanged.connect(self.region_color_changed.emit)
+        self.region_color = EditableLineEdit()
+        self.region_color.valueChanged.connect(self.region_color_changed.emit)
         color_layout.addWidget(self.region_color)
         layout.addLayout(color_layout)
         
@@ -269,7 +270,6 @@ class PropertiesWindow(QWidget):
     def show_wall_properties(self, x1, y1, x2, y2, width, wall_id):
         """Показывает свойства стены."""
         # Блокируем сигналы
-        self.wall_id.blockSignals(True)
         self.wall_x1.blockSignals(True)
         self.wall_y1.blockSignals(True)
         self.wall_x2.blockSignals(True)
@@ -286,7 +286,6 @@ class PropertiesWindow(QWidget):
         self.wall_width.setValue(width)
         
         # Разблокируем сигналы
-        self.wall_id.blockSignals(False)
         self.wall_x1.blockSignals(False)
         self.wall_y1.blockSignals(False)
         self.wall_x2.blockSignals(False)
@@ -296,12 +295,10 @@ class PropertiesWindow(QWidget):
     def show_region_properties(self, x, y, width, height, color, region_id):
         """Показывает свойства региона."""
         # Блокируем сигналы
-        self.region_id.blockSignals(True)
         self.region_x.blockSignals(True)
         self.region_y.blockSignals(True)
         self.region_width.blockSignals(True)
         self.region_height.blockSignals(True)
-        self.region_color.blockSignals(True)
         
         self.hide_all_groups()
         self.region_group.show()
@@ -313,12 +310,10 @@ class PropertiesWindow(QWidget):
         self.region_color.setText(color)
         
         # Разблокируем сигналы
-        self.region_id.blockSignals(False)
         self.region_x.blockSignals(False)
         self.region_y.blockSignals(False)
         self.region_width.blockSignals(False)
         self.region_height.blockSignals(False)
-        self.region_color.blockSignals(False)
 
     def update_properties(self, item):
         """Обновляет свойства в зависимости от выбранного элемента."""
