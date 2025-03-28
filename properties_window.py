@@ -229,21 +229,6 @@ class PropertiesWindow(QWidget):
         # Теперь используем только сигнал вместо прямого вызова метода
         self.region_id_changed.emit(new_id)
     
-    def show_duplicate_id_warning(self, id_value):
-        """Показывает предупреждение о дублировании ID"""
-        QMessageBox.warning(
-            self,
-            "Ошибка",
-            f"ID '{id_value}' уже используется. Пожалуйста, выберите другой ID.",
-            QMessageBox.StandardButton.Ok
-        )
-    
-    def get_walls_from_parent(self):
-        """Получает список всех стен из родительского виджета"""
-        if hasattr(self.parent(), 'walls'):
-            return self.parent().walls
-        return []
-    
     def hide_all_groups(self):
         """Скрывает все группы свойств и сбрасывает текущий элемент."""
         self.robot_group.hide()
