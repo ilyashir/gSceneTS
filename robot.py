@@ -10,6 +10,7 @@ class Robot(QGraphicsPixmapItem):
         self.direction = 0.0  # Направление робота (по умолчанию 0 градусов)
         self.renderer = QSvgRenderer() # Инициализация рендера без файла
         self.highlight_rect = None  # Прямоугольник для выделения
+        self.id = "robot1"  # Фиксированный ID для робота
         self.update_appearance()        
 
         # Устанавливаем высокое Z-value, чтобы робот был поверх других объектов

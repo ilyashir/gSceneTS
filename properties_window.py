@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
-    QPushButton, QCheckBox, QGroupBox, QSpinBox, QDoubleSpinBox
+    QPushButton, QCheckBox, QGroupBox, QSpinBox, QDoubleSpinBox,
+    QMessageBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 import logging
@@ -20,6 +21,8 @@ class PropertiesWindow(QWidget):
     region_position_changed = pyqtSignal(int, int)  # x, y
     region_size_changed = pyqtSignal(int, int)  # width, height
     region_color_changed = pyqtSignal(str)  # color
+    wall_id_changed = pyqtSignal(str)  # id for walls
+    region_id_changed = pyqtSignal(str)  # id for regions
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -46,10 +49,22 @@ class PropertiesWindow(QWidget):
         
         # Скрываем группы по умолчанию
         self.hide_all_groups()
+        
+        # Текущий выбранный элемент
+        self.current_item = None
     
     def create_robot_properties(self):
         group = QGroupBox("Свойства робота")
         layout = QVBoxLayout()
+        
+        # ID (только для чтения)
+        id_layout = QHBoxLayout()
+        id_layout.addWidget(QLabel("ID:"))
+        self.robot_id = QLineEdit()
+        self.robot_id.setReadOnly(True)  # Только для чтения
+        self.robot_id.setStyleSheet("background-color: #f0f0f0;")  # Серый фон для визуального отличия
+        id_layout.addWidget(self.robot_id)
+        layout.addLayout(id_layout)
         
         # Позиция
         pos_layout = QHBoxLayout()
@@ -81,6 +96,14 @@ class PropertiesWindow(QWidget):
     def create_wall_properties(self):
         group = QGroupBox("Свойства стены")
         layout = QVBoxLayout()
+        
+        # ID
+        id_layout = QHBoxLayout()
+        id_layout.addWidget(QLabel("ID:"))
+        self.wall_id = QLineEdit()
+        self.wall_id.textChanged.connect(self.on_wall_id_changed)
+        id_layout.addWidget(self.wall_id)
+        layout.addLayout(id_layout)
         
         # Точка 1
         point1_layout = QHBoxLayout()
@@ -130,6 +153,14 @@ class PropertiesWindow(QWidget):
         group = QGroupBox("Свойства региона")
         layout = QVBoxLayout()
         
+        # ID
+        id_layout = QHBoxLayout()
+        id_layout.addWidget(QLabel("ID:"))
+        self.region_id = QLineEdit()
+        self.region_id.textChanged.connect(self.on_region_id_changed)
+        id_layout.addWidget(self.region_id)
+        layout.addLayout(id_layout)
+        
         # Позиция
         pos_layout = QHBoxLayout()
         pos_layout.addWidget(QLabel("X:"))
@@ -171,23 +202,74 @@ class PropertiesWindow(QWidget):
         group.setLayout(layout)
         return group
     
+    def on_wall_id_changed(self, new_id):
+        """Обработчик изменения ID стены"""
+        if not self.current_item or not isinstance(self.current_item, Wall):
+            return
+        
+        # Проверка уникальности нового ID
+        if new_id != self.current_item.id:
+            # Проверка для стен
+            for wall in self.get_walls_from_parent():
+                if wall != self.current_item and wall.id == new_id:
+                    self.show_duplicate_id_warning(new_id)
+                    self.wall_id.setText(self.current_item.id)  # Возвращаем прежний ID
+                    return
+                    
+            # Если ID не занят, обновляем его
+            self.wall_id_changed.emit(new_id)
+    
+    def on_region_id_changed(self, new_id):
+        """Обработчик изменения ID региона"""
+        if not self.current_item or not isinstance(self.current_item, Region):
+            return
+        
+        # Проверка уникальности нового ID
+        if new_id != self.current_item.id:
+            # Проверка для регионов
+            if new_id in Region._existing_ids and new_id != self.current_item.id:
+                self.show_duplicate_id_warning(new_id)
+                self.region_id.setText(self.current_item.id)  # Возвращаем прежний ID
+                return
+                
+            # Если ID не занят, обновляем его
+            self.region_id_changed.emit(new_id)
+    
+    def show_duplicate_id_warning(self, id_value):
+        """Показывает предупреждение о дублировании ID"""
+        QMessageBox.warning(
+            self,
+            "Ошибка",
+            f"ID '{id_value}' уже используется. Пожалуйста, выберите другой ID.",
+            QMessageBox.StandardButton.Ok
+        )
+    
+    def get_walls_from_parent(self):
+        """Получает список всех стен из родительского виджета"""
+        if hasattr(self.parent(), 'walls'):
+            return self.parent().walls
+        return []
+    
     def hide_all_groups(self):
         """Скрывает все группы свойств."""
         self.robot_group.hide()
         self.wall_group.hide()
         self.region_group.hide()
+        self.current_item = None
     
-    def show_robot_properties(self, x, y, rotation):
+    def show_robot_properties(self, x, y, rotation, robot_id):
         """Показывает свойства робота."""
         self.hide_all_groups()
         self.robot_group.show()
+        self.robot_id.setText(robot_id)
         self.robot_x.setValue(x)
         self.robot_y.setValue(y)
         self.robot_rotation.setValue(rotation)
     
-    def show_wall_properties(self, x1, y1, x2, y2, width):
+    def show_wall_properties(self, x1, y1, x2, y2, width, wall_id):
         """Показывает свойства стены."""
         # Блокируем сигналы
+        self.wall_id.blockSignals(True)
         self.wall_x1.blockSignals(True)
         self.wall_y1.blockSignals(True)
         self.wall_x2.blockSignals(True)
@@ -196,6 +278,7 @@ class PropertiesWindow(QWidget):
         
         self.hide_all_groups()
         self.wall_group.show()
+        self.wall_id.setText(wall_id)
         self.wall_x1.setValue(x1)
         self.wall_y1.setValue(y1)
         self.wall_x2.setValue(x2)
@@ -203,21 +286,39 @@ class PropertiesWindow(QWidget):
         self.wall_width.setValue(width)
         
         # Разблокируем сигналы
+        self.wall_id.blockSignals(False)
         self.wall_x1.blockSignals(False)
         self.wall_y1.blockSignals(False)
         self.wall_x2.blockSignals(False)
         self.wall_y2.blockSignals(False)
         self.wall_width.blockSignals(False)
     
-    def show_region_properties(self, x, y, width, height, color):
+    def show_region_properties(self, x, y, width, height, color, region_id):
         """Показывает свойства региона."""
+        # Блокируем сигналы
+        self.region_id.blockSignals(True)
+        self.region_x.blockSignals(True)
+        self.region_y.blockSignals(True)
+        self.region_width.blockSignals(True)
+        self.region_height.blockSignals(True)
+        self.region_color.blockSignals(True)
+        
         self.hide_all_groups()
         self.region_group.show()
+        self.region_id.setText(region_id)
         self.region_x.setValue(x)
         self.region_y.setValue(y)
         self.region_width.setValue(width)
         self.region_height.setValue(height)
         self.region_color.setText(color)
+        
+        # Разблокируем сигналы
+        self.region_id.blockSignals(False)
+        self.region_x.blockSignals(False)
+        self.region_y.blockSignals(False)
+        self.region_width.blockSignals(False)
+        self.region_height.blockSignals(False)
+        self.region_color.blockSignals(False)
 
     def update_properties(self, item):
         """Обновляет свойства в зависимости от выбранного элемента."""
@@ -225,12 +326,15 @@ class PropertiesWindow(QWidget):
             self.hide_all_groups()
             return
 
+        self.current_item = item
+
         if isinstance(item, Robot):
             pos = item.pos()
             self.show_robot_properties(
                 int(pos.x()),
                 int(pos.y()),
-                int(item.rotation())
+                int(item.rotation()),
+                item.id
             )
 
         elif isinstance(item, Wall):
@@ -240,7 +344,8 @@ class PropertiesWindow(QWidget):
                 int(line.y1()),
                 int(line.x2()),
                 int(line.y2()),
-                item.pen().width()
+                item.stroke_width,
+                item.id
             )
 
         elif isinstance(item, Region):
@@ -251,63 +356,10 @@ class PropertiesWindow(QWidget):
                 int(pos.y()),
                 int(rect.width()),
                 int(rect.height()),
-                item.color
+                item.color,
+                item.id
             )
 
     def clear_properties(self):
-        """Очищает все свойства."""
-        logger.debug("Starting clear_properties")
+        """Очищает все поля свойств."""
         self.hide_all_groups()
-        
-        # Блокируем сигналы
-        self.robot_x.blockSignals(True)
-        self.robot_y.blockSignals(True) 
-        self.robot_rotation.blockSignals(True)
-        
-        self.wall_x1.blockSignals(True)
-        self.wall_y1.blockSignals(True)
-        self.wall_x2.blockSignals(True)
-        self.wall_y2.blockSignals(True)
-        self.wall_width.blockSignals(True)
-        
-        self.region_x.blockSignals(True)
-        self.region_y.blockSignals(True)
-        self.region_width.blockSignals(True)
-        self.region_height.blockSignals(True)
-        self.region_color.blockSignals(True)
-        
-        # Сбрасываем значения всех полей
-        logger.debug("Resetting values")
-        self.robot_x.setValue(0)
-        self.robot_y.setValue(0)
-        self.robot_rotation.setValue(0)
-        
-        self.wall_x1.setValue(0)
-        self.wall_y1.setValue(0)
-        self.wall_x2.setValue(0)
-        self.wall_y2.setValue(0)
-        self.wall_width.setValue(1)
-        
-        self.region_x.setValue(0)
-        self.region_y.setValue(0)
-        self.region_width.setValue(1)
-        self.region_height.setValue(1)
-        self.region_color.setText("")
-        
-        # Разблокируем сигналы
-        self.robot_x.blockSignals(False)
-        self.robot_y.blockSignals(False)
-        self.robot_rotation.blockSignals(False)
-        
-        self.wall_x1.blockSignals(False)
-        self.wall_y1.blockSignals(False)
-        self.wall_x2.blockSignals(False)
-        self.wall_y2.blockSignals(False)
-        self.wall_width.blockSignals(False)
-        
-        self.region_x.blockSignals(False)
-        self.region_y.blockSignals(False)
-        self.region_width.blockSignals(False)
-        self.region_height.blockSignals(False)
-        self.region_color.blockSignals(False)
-        logger.debug("Finished clear_properties")
