@@ -60,7 +60,6 @@ class MainWindow(QMainWindow):
         self.properties_window.region_color_changed.connect(self.field_widget.update_region_color)
 
         # Подключаем сигналы
-        # self.field_widget.update_size_fields.connect(self.update_size_fields)
         self.field_widget.mouse_coords_updated.connect(self.update_coords_label)
 
         # Создаем кнопку для скрытия/открытия окна свойств
@@ -396,35 +395,6 @@ class MainWindow(QMainWindow):
         
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {e}")
-
-    def update_properties(self, item):
-        """Обновляет окно свойств в зависимости от выбранного элемента."""
-        if item is None:
-            self.properties_window.hide_all_groups()
-            return
-            
-        if isinstance(item, Robot):
-            self.properties_window.show_robot_properties(
-                item.pos().x(),
-                item.pos().y(),
-                item.rotation()
-            )
-        elif isinstance(item, Wall):
-            self.properties_window.show_wall_properties(
-                item.pos().x(),
-                item.pos().y(),
-                item.rotation(),
-                item.line().length(),
-                item.line().width()
-            )
-        elif isinstance(item, Region):
-            self.properties_window.show_region_properties(
-                item.pos().x(),
-                item.pos().y(),
-                item.rotation(),
-                item.rect().width(),
-                item.rect().height()
-            )
 
     def init_ui(self):
         # ... остальной код ...

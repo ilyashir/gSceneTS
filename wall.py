@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import QGraphicsLineItem, QGraphicsEllipseItem, QGraphicsItem, QGraphicsRectItem
 from PyQt6.QtGui import QPixmap, QPainter, QPen, QBrush, QColor, QTransform
 from PyQt6.QtCore import Qt, QRectF, QLineF, QPointF
+from contextlib import contextmanager
 import logging
 # Настройка логгера
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -15,6 +16,7 @@ class Wall(QGraphicsLineItem):
         Wall._next_id += 1  # Увеличиваем счетчик
 
         self.highlight_rect = None  # Прямоугольник для выделения
+        self._updating = False  # Флаг для отслеживания состояния обновления
 
         # Настройка внешнего вида стены
         self.brick_width = 10  # Ширина кирпича
@@ -153,30 +155,19 @@ class Wall(QGraphicsLineItem):
 
     def update_appearance(self):
         """Обновляет внешний вид стены в зависимости от атрибутов."""
+        logger.debug(f"Updating appearance of wall with stroke width {self.stroke_width}")
         pen = QPen(Qt.GlobalColor.black, self.stroke_width)
         pen.setColor(Qt.GlobalColor.transparent)  # Прозрачный цвет (для пользовательского цвета)
         self.setPen(pen)
-        
+        # Обновляем прямоугольник с паттерном "кирпичная стена" в соответствии с линией
         self.update_brick_rect()
         
-        # Обновляем размеры маркеров
-        logger.debug(f"Updating marker to size {self.stroke_width}")
-        line = self.line()
-        marker_size = self.stroke_width + 2
-        self.start_marker.setRect(
-            line.x1() - marker_size/2,
-            line.y1() - marker_size/2,
-            marker_size,
-            marker_size
-        )
-        self.end_marker.setRect(
-            line.x2() - marker_size/2,
-            line.y2() - marker_size/2,
-            marker_size,
-            marker_size
-        )
+        # Обновляем размеры маркеров только если это не программное обновление
+        if self._updating:
+            self.update_markers()
         
         if self.highlight_rect:
+            line = self.line()
             length = line.length()
             angle = line.angle()
             
@@ -191,34 +182,41 @@ class Wall(QGraphicsLineItem):
             self.highlight_rect.setTransform(transform)
             self.highlight_rect.setZValue(20)
 
+    def update_markers(self):
+        """Обновляет размеры и позиции маркеров."""
+        line = self.line()
+        marker_size = self.stroke_width + 2
+        self.start_marker.setRect(
+            line.x1() - marker_size/2,
+            line.y1() - marker_size/2,
+            marker_size,
+            marker_size
+        )
+        self.end_marker.setRect(
+            line.x2() - marker_size/2,
+            line.y2() - marker_size/2,
+            marker_size,
+            marker_size
+        )
+
     def set_stroke_width(self, width):
         """Устанавливает ширину обводки стены."""
         self.stroke_width = width
         self.update_appearance()
+
+    @contextmanager
+    def updating(self):
+        """Контекстный менеджер для временного изменения состояния обновления."""
+        self._updating = True
+        try:
+            yield
+        finally:
+            self._updating = False
 
     def setLine(self, x1, y1, x2, y2):
         """Переопределенный метод установки линии с обновлением маркеров."""
         # Вызываем родительский метод для установки линии
         super().setLine(x1, y1, x2, y2)
         
-        # Обновляем позиции маркеров
-        if hasattr(self, 'start_marker'):
-            # Устанавливаем позицию с учетом размера маркера
-            self.start_marker.setRect(
-                x1 - self.stroke_width // 2 - 1,
-                y1 - self.stroke_width // 2 - 1,
-                self.stroke_width + 2,
-                self.stroke_width + 2
-            )
-        
-        if hasattr(self, 'end_marker'):
-            # Устанавливаем позицию с учетом размера маркера
-            self.end_marker.setRect(
-                x2 - self.stroke_width // 2 - 1,
-                y2 - self.stroke_width // 2 - 1,
-                self.stroke_width + 2,
-                self.stroke_width + 2
-            )
-        
-        # Обновляем внешний вид стены
+        # Обновляем внешний вид стены вместе с маркерами
         self.update_appearance()

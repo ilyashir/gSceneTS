@@ -174,11 +174,16 @@ class FieldWidget(QGraphicsView):
         return QPointF(x, y)
     
     def select_item(self, item):
-        """Выделяет объект жёлтым контуром."""
+        """Выделяеv объект"""
+        # Проверяем, не выделяем ли тот же объект
+        if item == self.selected_item:
+            logger.debug(f"Item {item} is already selected, skipping")
+            return
         if self.selected_item:
             self.deselect_item()
 
         if isinstance(item, (Wall, Robot, Region)):
+            logger.debug(f"Selecting item: {item}")
             self.selected_item = item
             self.selected_item.set_highlight(True)
             self.item_selected.emit(item)
@@ -186,6 +191,7 @@ class FieldWidget(QGraphicsView):
     def deselect_item(self):
         """Снимает выделение с объекта."""
         if self.selected_item:
+            logger.debug(f"Deselecting item: {self.selected_item}")
             if isinstance(self.selected_item, (Wall, Robot, Region)):
                 self.selected_item.set_highlight(False)
             self.selected_item = None
@@ -197,7 +203,6 @@ class FieldWidget(QGraphicsView):
             return False
             
         robot_rect = self.robot_model.boundingRect()  # вместо self.robot_position
-        robot_pos = self.robot_model.pos()  # вместо self.robot_position
         # Линия стены
         wall_line = QLineF(QPointF(x1, y1), QPointF(x2, y2))
         # Проверяем пересечение линии стены с прямоугольником робота
@@ -338,10 +343,8 @@ class FieldWidget(QGraphicsView):
         item = self.scene().itemAt(posOriginal, self.transform())
         print("click", type(item))
         if event.button() == Qt.MouseButton.LeftButton:
-            logger.debug("click left button")
             
             if item and isinstance(item, (Robot, Region)) :
-                # print("Время выделять, а сейчас активный", type(self.selected_item))
                 self.select_item(item)  # Выделяем объект
             elif item and (item.data(0) == "its_wall" or item.data(0) == "wall_marker"):
                 self.select_item(item.parentItem())  # Выделяем объект
@@ -385,34 +388,31 @@ class FieldWidget(QGraphicsView):
         pos = self.snap_to_grid(posOriginal) # координаты с привязкой к сетке
         
         # Отправляем сигнал с координатами        
-        self.mouse_coords_updated.emit(posOriginal.x(), posOriginal. y())
+        self.mouse_coords_updated.emit(posOriginal.x(), posOriginal.y())
         
-        if self.dragging_robot:
+        if self.edit_mode and self.dragging_robot:
             logger.debug(f"Dragging robot to {pos}")
-            # pos = self.snap_to_grid(self.mapToScene(event.pos()))
             self.robot_model.setPos(pos - self.robot_offset)  # Перемещение робота
             return
-        
-        if self.edit_mode and self.selected_marker:            
-            
+        elif self.edit_mode and self.selected_marker:            
             wall = self.selected_marker.parentItem()
             if self.selected_marker == wall.start_marker:
+                logger.debug(f"Moving wall start marker to {pos}")
                 if self.wall_intersects_robot(pos.x(), pos.y(), wall.line().x2(), wall.line().y2()):
                     logger.debug(f"ERR robot intersects")
                     return 
                 else:
-                    wall.setLine(pos.x(), pos.y(), wall.line().x2(), wall.line().y2())                
+                    with wall.updating():
+                        wall.setLine(pos.x(), pos.y(), wall.line().x2(), wall.line().y2())
+                    self.properties_window.update_properties(wall)  # Обновляем свойства
             else:
                 if self.wall_intersects_robot(wall.line().x1(), wall.line().y1(), pos.x(), pos.y()):
                     logger.debug(f"ERR robot intersects")
                     return 
                 else:                    
-                    wall.setLine(wall.line().x1(), wall.line().y1(), pos.x(), pos.y())
-            self.properties_window.update_properties(wall)  # Обновляем свойства
-            return
-        elif self.edit_mode and self.selected_item == self.robot_model:
-            self.robot_model.setPos(pos)  # Перемещаем робота
-            self.properties_window.update_properties(self.robot_model)  # Обновляем свойства
+                    with wall.updating():
+                        wall.setLine(wall.line().x1(), wall.line().y1(), pos.x(), pos.y())
+                    self.properties_window.update_properties(wall)  # Обновляем свойства
             return
 
         if self.drawing_mode == "wall" and self.wall_start:
@@ -458,6 +458,7 @@ class FieldWidget(QGraphicsView):
     
     def update_wall_point1(self, x1, y1):
         """Обновляет первую точку стены."""
+        logger.debug(f"Updating wall point1 to {x1}, {y1}")
         if self.selected_item and isinstance(self.selected_item, Wall):
             # Получаем координаты второй точки
             line = self.selected_item.line()
@@ -468,10 +469,12 @@ class FieldWidget(QGraphicsView):
                 logger.debug(f"Wall would intersect with robot, canceling update")
                 return
                 
-            self.selected_item.setLine(x1, y1, x2, y2)
+            with self.selected_item.updating():
+                self.selected_item.setLine(x1, y1, x2, y2)
     
     def update_wall_point2(self, x2, y2):
         """Обновляет вторую точку стены."""
+        logger.debug(f"Updating wall point2 to {x2}, {y2}")
         if self.selected_item and isinstance(self.selected_item, Wall):
             # Получаем координаты первой точки
             line = self.selected_item.line()
@@ -482,10 +485,12 @@ class FieldWidget(QGraphicsView):
                 logger.debug(f"Wall would intersect with robot, canceling update")
                 return
                 
-            self.selected_item.setLine(x1, y1, x2, y2)                 
+            with self.selected_item.updating():
+                self.selected_item.setLine(x1, y1, x2, y2)
     
     def update_wall_size(self, width):
         """Обновляет размер стены."""
+        logger.debug(f"Updating wall size to {width}")
         if self.selected_item and isinstance(self.selected_item, Wall):
             self.selected_item.set_stroke_width(width)            
     

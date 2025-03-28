@@ -187,6 +187,13 @@ class PropertiesWindow(QWidget):
     
     def show_wall_properties(self, x1, y1, x2, y2, width):
         """Показывает свойства стены."""
+        # Блокируем сигналы
+        self.wall_x1.blockSignals(True)
+        self.wall_y1.blockSignals(True)
+        self.wall_x2.blockSignals(True)
+        self.wall_y2.blockSignals(True)
+        self.wall_width.blockSignals(True)
+        
         self.hide_all_groups()
         self.wall_group.show()
         self.wall_x1.setValue(x1)
@@ -194,6 +201,13 @@ class PropertiesWindow(QWidget):
         self.wall_x2.setValue(x2)
         self.wall_y2.setValue(y2)
         self.wall_width.setValue(width)
+        
+        # Разблокируем сигналы
+        self.wall_x1.blockSignals(False)
+        self.wall_y1.blockSignals(False)
+        self.wall_x2.blockSignals(False)
+        self.wall_y2.blockSignals(False)
+        self.wall_width.blockSignals(False)
     
     def show_region_properties(self, x, y, width, height, color):
         """Показывает свойства региона."""
@@ -210,7 +224,7 @@ class PropertiesWindow(QWidget):
         if item is None:
             self.hide_all_groups()
             return
-            
+
         if isinstance(item, Robot):
             pos = item.pos()
             self.show_robot_properties(
@@ -218,6 +232,7 @@ class PropertiesWindow(QWidget):
                 int(pos.y()),
                 int(item.rotation())
             )
+
         elif isinstance(item, Wall):
             line = item.line()
             self.show_wall_properties(
@@ -227,6 +242,7 @@ class PropertiesWindow(QWidget):
                 int(line.y2()),
                 item.pen().width()
             )
+
         elif isinstance(item, Region):
             rect = item.rect()
             pos = item.pos()
@@ -240,9 +256,28 @@ class PropertiesWindow(QWidget):
 
     def clear_properties(self):
         """Очищает все свойства."""
+        logger.debug("Starting clear_properties")
         self.hide_all_groups()
         
+        # Блокируем сигналы
+        self.robot_x.blockSignals(True)
+        self.robot_y.blockSignals(True) 
+        self.robot_rotation.blockSignals(True)
+        
+        self.wall_x1.blockSignals(True)
+        self.wall_y1.blockSignals(True)
+        self.wall_x2.blockSignals(True)
+        self.wall_y2.blockSignals(True)
+        self.wall_width.blockSignals(True)
+        
+        self.region_x.blockSignals(True)
+        self.region_y.blockSignals(True)
+        self.region_width.blockSignals(True)
+        self.region_height.blockSignals(True)
+        self.region_color.blockSignals(True)
+        
         # Сбрасываем значения всех полей
+        logger.debug("Resetting values")
         self.robot_x.setValue(0)
         self.robot_y.setValue(0)
         self.robot_rotation.setValue(0)
@@ -258,3 +293,21 @@ class PropertiesWindow(QWidget):
         self.region_width.setValue(1)
         self.region_height.setValue(1)
         self.region_color.setText("")
+        
+        # Разблокируем сигналы
+        self.robot_x.blockSignals(False)
+        self.robot_y.blockSignals(False)
+        self.robot_rotation.blockSignals(False)
+        
+        self.wall_x1.blockSignals(False)
+        self.wall_y1.blockSignals(False)
+        self.wall_x2.blockSignals(False)
+        self.wall_y2.blockSignals(False)
+        self.wall_width.blockSignals(False)
+        
+        self.region_x.blockSignals(False)
+        self.region_y.blockSignals(False)
+        self.region_width.blockSignals(False)
+        self.region_height.blockSignals(False)
+        self.region_color.blockSignals(False)
+        logger.debug("Finished clear_properties")
