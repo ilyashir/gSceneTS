@@ -59,4 +59,55 @@ class TestWall:
         wall.set_highlight(True)
         
         # Отключаем подсветку
-        wall.set_highlight(False) 
+        wall.set_highlight(False)
+    
+    def test_wall_id_uniqueness(self):
+        """Тест уникальности ID стен"""
+        # Создаем несколько стен
+        wall1 = Wall(QPointF(0, 0), QPointF(100, 100))
+        wall2 = Wall(QPointF(200, 200), QPointF(300, 300))
+        wall3 = Wall(QPointF(400, 400), QPointF(500, 500))
+        
+        # Проверяем, что ID разные
+        assert wall1.id != wall2.id
+        assert wall1.id != wall3.id
+        assert wall2.id != wall3.id
+        
+        # Проверяем, что ID начинаются с "w"
+        assert wall1.id.startswith("w")
+        assert wall2.id.startswith("w")
+        assert wall3.id.startswith("w")
+        
+        # Проверяем, что ID находятся в множестве существующих ID
+        assert wall1.id in Wall._existing_ids
+        assert wall2.id in Wall._existing_ids
+        assert wall3.id in Wall._existing_ids
+    
+    def test_wall_set_id(self):
+        """Тест установки ID стены"""
+        # Создаем стену
+        wall1 = Wall(QPointF(0, 0), QPointF(100, 100))
+        wall2 = Wall(QPointF(200, 200), QPointF(300, 300))
+        
+        old_id1 = wall1.id
+        
+        # Проверяем успешную установку уникального ID
+        new_id = "w_test_unique"
+        result = wall1.set_id(new_id)
+        
+        assert result is True
+        assert wall1.id == new_id
+        assert old_id1 not in Wall._existing_ids
+        assert new_id in Wall._existing_ids
+        
+        # Проверяем невозможность установки неуникального ID
+        old_id2 = wall2.id
+        result = wall2.set_id(new_id)
+        
+        assert result is False
+        assert wall2.id == old_id2  # ID не должен измениться
+        
+        # Проверяем возможность установки того же ID для той же стены
+        result = wall1.set_id(new_id)
+        assert result is True
+        assert wall1.id == new_id 

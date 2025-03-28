@@ -36,6 +36,10 @@ class FieldWidget(QGraphicsView):
         self.item_selected.connect(self.properties_window.update_properties)
         self.item_deselected.connect(self.properties_window.clear_properties)
         self.properties_updated.connect(self.properties_window.update_properties)
+        
+        # Подключаем сигналы изменения ID от окна свойств
+        self.properties_window.wall_id_changed.connect(self.update_wall_id)
+        self.properties_window.region_id_changed.connect(self.update_region_id)
 
         self.setScene(QGraphicsScene(self))
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -648,3 +652,25 @@ class FieldWidget(QGraphicsView):
     def set_grid_size(self, size):
         """Устанавливает размер сетки."""
         self.grid_size = size
+
+    def update_wall_id(self, new_id):
+        """Обновляет ID выбранной стены."""
+        if self.selected_item and isinstance(self.selected_item, Wall):
+            old_id = self.selected_item.id
+            # Используем метод set_id для установки нового ID
+            result = self.selected_item.set_id(new_id)
+            if result:
+                logger.debug(f"Wall ID changed from {old_id} to {new_id}")
+            else:
+                logger.warning(f"Failed to change wall ID from {old_id} to {new_id}")
+                # Если не удалось обновить ID, обновляем свойства с правильным ID
+                self.properties_updated.emit(self.selected_item)
+
+    def update_region_id(self, new_id):
+        """Обновляет ID выбранного региона."""
+        if self.selected_item and isinstance(self.selected_item, Region):
+            old_id = self.selected_item.id
+            # Используем встроенный метод класса Region для установки ID, 
+            # который включает проверку уникальности
+            self.selected_item.set_id(new_id)
+            logger.debug(f"Region ID changed from {old_id} to {new_id}")

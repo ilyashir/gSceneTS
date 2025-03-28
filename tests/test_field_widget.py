@@ -136,4 +136,43 @@ class TestFieldWidget:
         
         # Ожидаем, что координаты не изменились (или были только обрезаны по границам)
         assert non_snapped_pos.x() == original_pos.x()
-        assert non_snapped_pos.y() == original_pos.y() 
+        assert non_snapped_pos.y() == original_pos.y()
+        
+    def test_update_wall_id(self, field_widget):
+        """Тест обновления ID стены"""
+        # Добавляем стену
+        start = QPointF(100, 100)
+        end = QPointF(200, 200)
+        field_widget.add_wall(start, end)
+        
+        # Получаем добавленную стену
+        wall = field_widget.walls[-1]
+        old_id = wall.id
+        
+        # Выделяем стену
+        field_widget.select_item(wall)
+        assert field_widget.selected_item == wall
+        
+        # Обновляем ID стены на уникальный
+        new_id = "w_unique_test_id"
+        field_widget.update_wall_id(new_id)
+        
+        # Проверяем, что ID стены обновился
+        assert wall.id == new_id
+        assert old_id not in Wall._existing_ids
+        assert new_id in Wall._existing_ids
+        
+        # Создаем еще одну стену
+        field_widget.add_wall(QPointF(300, 300), QPointF(400, 400))
+        second_wall = field_widget.walls[-1]
+        second_wall_old_id = second_wall.id
+        
+        # Выделяем вторую стену
+        field_widget.select_item(second_wall)
+        assert field_widget.selected_item == second_wall
+        
+        # Пытаемся установить для второй стены тот же ID
+        field_widget.update_wall_id(new_id)
+        
+        # ID второй стены не должен измениться, так как ID должен быть уникальным
+        assert second_wall.id == second_wall_old_id 

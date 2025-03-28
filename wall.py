@@ -9,11 +9,13 @@ logger = logging.getLogger(__name__)
 
 class Wall(QGraphicsLineItem):
     _next_id = 1  # Счетчик для генерации уникальных ID
+    _existing_ids = set()  # Множество для хранения всех существующих ID
 
     def __init__(self, start, end):
         super().__init__(start.x(), start.y(), end.x(), end.y())
         self.id = f"w{Wall._next_id}"  # Генерация уникального ID
         Wall._next_id += 1  # Увеличиваем счетчик
+        Wall._existing_ids.add(self.id)  # Добавляем ID в множество существующих
 
         self.highlight_rect = None  # Прямоугольник для выделения
         self._updating = False  # Флаг для отслеживания состояния обновления
@@ -221,3 +223,19 @@ class Wall(QGraphicsLineItem):
         logger.debug(f"Wall line set to: {x1, y1, x2, y2}")
         # Обновляем внешний вид стены вместе с маркерами
         self.update_appearance()
+
+    def set_id(self, new_id):
+        """
+        Устанавливает новый ID для стены, если он уникален.
+        :param new_id: Новый ID.
+        """
+        if new_id in self._existing_ids and new_id != self.id:
+            # Если ID уже занят, выводим сообщение в лог
+            logger.warning(f"ID '{new_id}' уже занят другой стеной.")
+            return False
+        else:
+            # Удаляем старый ID из множества и добавляем новый
+            self._existing_ids.remove(self.id)
+            self.id = new_id
+            self._existing_ids.add(self.id)
+            return True
