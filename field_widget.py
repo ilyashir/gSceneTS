@@ -37,10 +37,6 @@ class FieldWidget(QGraphicsView):
         self.item_deselected.connect(self.properties_window.clear_properties)
         self.properties_updated.connect(self.properties_window.update_properties)
         
-        # Подключаем сигналы изменения ID от окна свойств
-        self.properties_window.wall_id_changed.connect(self.update_wall_id)
-        self.properties_window.region_id_changed.connect(self.update_region_id)
-
         self.setScene(QGraphicsScene(self))
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.setMouseTracking(True)
@@ -416,7 +412,9 @@ class FieldWidget(QGraphicsView):
                     self.select_item(target_item)
                 else:
                     # Клик по другому объекту, не являющемуся выделяемым
-                    self.deselect_item()
+                    # Не будем снимать выделение при клике на объекты вне сцены (например, кнопки подтверждения)
+                    if item.scene() == self.scene():
+                        self.deselect_item()
             else:
                 # Клик по пустому месту
                 self.deselect_item()
@@ -661,16 +659,90 @@ class FieldWidget(QGraphicsView):
             result = self.selected_item.set_id(new_id)
             if result:
                 logger.debug(f"Wall ID changed from {old_id} to {new_id}")
+                # Обновляем свойства объекта с новым ID
+                self.properties_updated.emit(self.selected_item)
+                return True
             else:
                 logger.warning(f"Failed to change wall ID from {old_id} to {new_id}")
-                # Если не удалось обновить ID, обновляем свойства с правильным ID
+                # Показываем предупреждение о дублировании ID
+                QMessageBox.warning(
+                    None,
+                    "Ошибка",
+                    f"ID '{new_id}' уже используется другой стеной. Пожалуйста, выберите другой ID.",
+                    QMessageBox.StandardButton.Ok
+                )
+                # Обновляем свойства с правильным ID
                 self.properties_updated.emit(self.selected_item)
+                return False
+        return False
 
     def update_region_id(self, new_id):
         """Обновляет ID выбранного региона."""
         if self.selected_item and isinstance(self.selected_item, Region):
             old_id = self.selected_item.id
-            # Используем встроенный метод класса Region для установки ID, 
-            # который включает проверку уникальности
-            self.selected_item.set_id(new_id)
-            logger.debug(f"Region ID changed from {old_id} to {new_id}")
+            # Используем метод set_id класса Region для установки ID
+            result = self.selected_item.set_id(new_id)
+            if result:
+                logger.debug(f"Region ID changed from {old_id} to {new_id}")
+                # Обновляем свойства объекта с новым ID
+                self.properties_updated.emit(self.selected_item)
+                return True
+            else:
+                logger.warning(f"Failed to change region ID from {old_id} to {new_id}")
+                # Показываем предупреждение о дублировании ID
+                QMessageBox.warning(
+                    None,
+                    "Ошибка",
+                    f"ID '{new_id}' уже используется другим регионом. Пожалуйста, выберите другой ID.",
+                    QMessageBox.StandardButton.Ok
+                )
+                # Обновляем свойства с правильным ID
+                self.properties_updated.emit(self.selected_item)
+                return False
+        return False
+
+    def update_object_id(self, object_item, new_id):
+        """Обновляет ID объекта, переданного в качестве параметра."""
+        if object_item and isinstance(object_item, Wall):
+            old_id = object_item.id
+            # Используем метод set_id для установки нового ID
+            result = object_item.set_id(new_id)
+            if result:
+                logger.debug(f"Wall ID changed from {old_id} to {new_id}")
+                # Обновляем свойства объекта с новым ID
+                self.properties_updated.emit(object_item)
+                return True
+            else:
+                logger.warning(f"Failed to change wall ID from {old_id} to {new_id}")
+                # Показываем предупреждение о дублировании ID
+                QMessageBox.warning(
+                    None,
+                    "Ошибка",
+                    f"ID '{new_id}' уже используется другой стеной. Пожалуйста, выберите другой ID.",
+                    QMessageBox.StandardButton.Ok
+                )
+                # Обновляем свойства объекта с правильным ID
+                self.properties_updated.emit(object_item)
+                return False
+        elif object_item and isinstance(object_item, Region):
+            old_id = object_item.id
+            # Используем метод set_id класса Region для установки ID
+            result = object_item.set_id(new_id)
+            if result:
+                logger.debug(f"Region ID changed from {old_id} to {new_id}")
+                # Обновляем свойства объекта с новым ID
+                self.properties_updated.emit(object_item)
+                return True
+            else:
+                logger.warning(f"Failed to change region ID from {old_id} to {new_id}")
+                # Показываем предупреждение о дублировании ID
+                QMessageBox.warning(
+                    None,
+                    "Ошибка",
+                    f"ID '{new_id}' уже используется другим регионом. Пожалуйста, выберите другой ID.",
+                    QMessageBox.StandardButton.Ok
+                )
+                # Обновляем свойства объекта с правильным ID
+                self.properties_updated.emit(object_item)
+                return False
+        return False

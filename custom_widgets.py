@@ -14,7 +14,7 @@ class EditableLineEdit(QWidget):
     Виджет редактируемого текстового поля с кнопками подтверждения и отмены.
     """
     # Сигналы
-    valueChanged = pyqtSignal(str)  # Сигнал при подтверждении нового значения
+    valueChanged = pyqtSignal(str, object)  # Сигнал при подтверждении нового значения, теперь передает и объект
     editingCanceled = pyqtSignal()  # Сигнал при отмене редактирования
     editingStarted = pyqtSignal()   # Сигнал при начале редактирования
     
@@ -22,6 +22,7 @@ class EditableLineEdit(QWidget):
         super().__init__(parent)
         self._original_value = ""
         self._is_edited = False
+        self._linked_object = None  # Ссылка на связанный объект
         
         # Основной layout
         self.layout = QHBoxLayout(self)
@@ -91,10 +92,12 @@ class EditableLineEdit(QWidget):
     def _handle_text_changed(self, text):
         """Обрабатывает изменение текста в поле ввода."""
         if text != self._original_value and not self._is_edited:
+            logger.debug(f"Text changed from '{self._original_value}' to '{text}', showing buttons")
             self._is_edited = True
             self._show_buttons()
             self.editingStarted.emit()
         elif text == self._original_value and self._is_edited:
+            logger.debug(f"Text reverted to original value '{self._original_value}', hiding buttons")
             self._is_edited = False
             self._hide_buttons()
     
@@ -137,13 +140,25 @@ class EditableLineEdit(QWidget):
     
     def _confirm_changes(self):
         """Подтверждает изменения."""
-        self._original_value = self.text_field.text()
-        self._is_edited = False
-        self._hide_buttons()
-        self.valueChanged.emit(self._original_value)
+        text = self.text_field.text()
+        # Проверяем, что текст действительно изменился
+        if text != self._original_value:
+            logger.debug(f"Confirming change from '{self._original_value}' to '{text}'")
+            # Сначала отправляем сигнал, и только потом меняем внутреннее состояние
+            # Это предотвратит потерю ссылки на текущий объект до отправки сигнала
+            self.valueChanged.emit(text, self._linked_object)
+            self._original_value = text
+            self._is_edited = False
+            self._hide_buttons()
+        else:
+            # Если текст не изменился, просто скрываем кнопки
+            logger.debug(f"Text unchanged, hiding buttons")
+            self._is_edited = False
+            self._hide_buttons()
     
     def _cancel_changes(self):
         """Отменяет изменения."""
+        logger.debug(f"Canceling changes, reverting to '{self._original_value}'")
         self.text_field.setText(self._original_value)
         self._is_edited = False
         self._hide_buttons()
@@ -157,6 +172,15 @@ class EditableLineEdit(QWidget):
         """Устанавливает стиль для текстового поля."""
         self.text_field.setStyleSheet(stylesheet)
         super().setStyleSheet(stylesheet)
+        
+    def setLinkedObject(self, obj):
+        """Устанавливает связанный объект для текстового поля."""
+        self._linked_object = obj
+        logger.debug(f"Linked object set: {obj}")
+        
+    def getLinkedObject(self):
+        """Возвращает связанный объект."""
+        return self._linked_object
 
 
 class FlatRoundButton(QPushButton):
@@ -164,7 +188,7 @@ class FlatRoundButton(QPushButton):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(24, 24)
+        self.setFixedSize(22, 22)
         self.setFlat(True)
     
     def paintEvent(self, event):

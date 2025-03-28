@@ -102,7 +102,7 @@ class PropertiesWindow(QWidget):
         id_layout = QHBoxLayout()
         id_layout.addWidget(QLabel("ID:"))
         self.wall_id = EditableLineEdit()
-        self.wall_id.valueChanged.connect(self.on_wall_id_changed)
+        self.wall_id.valueChanged.connect(lambda text, obj: self.on_wall_id_changed(text, obj))
         id_layout.addWidget(self.wall_id)
         layout.addLayout(id_layout)
         
@@ -158,7 +158,7 @@ class PropertiesWindow(QWidget):
         id_layout = QHBoxLayout()
         id_layout.addWidget(QLabel("ID:"))
         self.region_id = EditableLineEdit()
-        self.region_id.valueChanged.connect(self.on_region_id_changed)
+        self.region_id.valueChanged.connect(lambda text, obj: self.on_region_id_changed(text, obj))
         id_layout.addWidget(self.region_id)
         layout.addLayout(id_layout)
         
@@ -196,45 +196,38 @@ class PropertiesWindow(QWidget):
         color_layout = QHBoxLayout()
         color_layout.addWidget(QLabel("Цвет:"))
         self.region_color = EditableLineEdit()
-        self.region_color.valueChanged.connect(self.region_color_changed.emit)
+        self.region_color.valueChanged.connect(lambda text, obj: self.region_color_changed.emit(text))
         color_layout.addWidget(self.region_color)
         layout.addLayout(color_layout)
         
         group.setLayout(layout)
         return group
     
-    def on_wall_id_changed(self, new_id):
+    def on_wall_id_changed(self, new_id, wall_item):
         """Обработчик изменения ID стены"""
-        if not self.current_item or not isinstance(self.current_item, Wall):
-            return
+        logger.debug(f"on_wall_id_changed called with new_id: {new_id}, item: {wall_item}")
         
-        # Проверка уникальности нового ID
-        if new_id != self.current_item.id:
-            # Проверка для стен
-            for wall in self.get_walls_from_parent():
-                if wall != self.current_item and wall.id == new_id:
-                    self.show_duplicate_id_warning(new_id)
-                    self.wall_id.setText(self.current_item.id)  # Возвращаем прежний ID
-                    return
-                    
-            # Если ID не занят, обновляем его
-            self.wall_id_changed.emit(new_id)
+        if not wall_item or not isinstance(wall_item, Wall):
+            logger.warning("No wall item passed or item is not a wall")
+            return
+            
+        # Отправляем сигнал на изменение ID
+        logger.debug(f"Emitting wall_id_changed signal with ID: {new_id}")
+        # Теперь используем только сигнал вместо прямого вызова метода
+        self.wall_id_changed.emit(new_id)
     
-    def on_region_id_changed(self, new_id):
+    def on_region_id_changed(self, new_id, region_item):
         """Обработчик изменения ID региона"""
-        if not self.current_item or not isinstance(self.current_item, Region):
-            return
+        logger.debug(f"on_region_id_changed called with new_id: {new_id}, item: {region_item}")
         
-        # Проверка уникальности нового ID
-        if new_id != self.current_item.id:
-            # Проверка для регионов
-            if new_id in Region._existing_ids and new_id != self.current_item.id:
-                self.show_duplicate_id_warning(new_id)
-                self.region_id.setText(self.current_item.id)  # Возвращаем прежний ID
-                return
-                
-            # Если ID не занят, обновляем его
-            self.region_id_changed.emit(new_id)
+        if not region_item or not isinstance(region_item, Region):
+            logger.warning("No region item passed or item is not a region")
+            return
+            
+        # Отправляем сигнал на изменение ID
+        logger.debug(f"Emitting region_id_changed signal with ID: {new_id}")
+        # Теперь используем только сигнал вместо прямого вызова метода
+        self.region_id_changed.emit(new_id)
     
     def show_duplicate_id_warning(self, id_value):
         """Показывает предупреждение о дублировании ID"""
@@ -252,15 +245,21 @@ class PropertiesWindow(QWidget):
         return []
     
     def hide_all_groups(self):
-        """Скрывает все группы свойств."""
+        """Скрывает все группы свойств и сбрасывает текущий элемент."""
         self.robot_group.hide()
         self.wall_group.hide()
         self.region_group.hide()
         self.current_item = None
     
+    def hide_groups(self):
+        """Скрывает все группы свойств без сброса текущего элемента."""
+        self.robot_group.hide()
+        self.wall_group.hide()
+        self.region_group.hide()
+    
     def show_robot_properties(self, x, y, rotation, robot_id):
         """Показывает свойства робота."""
-        self.hide_all_groups()
+        self.hide_groups()
         self.robot_group.show()
         self.robot_id.setText(robot_id)
         self.robot_x.setValue(x)
@@ -276,9 +275,18 @@ class PropertiesWindow(QWidget):
         self.wall_y2.blockSignals(True)
         self.wall_width.blockSignals(True)
         
-        self.hide_all_groups()
+        # Сохраняем локальную ссылку на текущий объект
+        wall_item = self.current_item
+        logger.debug(f"In show_wall_properties, current_item is: {self.current_item}")
+        
+        self.hide_groups()
         self.wall_group.show()
         self.wall_id.setText(wall_id)
+        
+        # Связываем объект с полем ID, используя локальную копию
+        logger.debug(f"Setting linked object to: {wall_item}")
+        self.wall_id.setLinkedObject(wall_item)
+        
         self.wall_x1.setValue(x1)
         self.wall_y1.setValue(y1)
         self.wall_x2.setValue(x2)
@@ -300,14 +308,26 @@ class PropertiesWindow(QWidget):
         self.region_width.blockSignals(True)
         self.region_height.blockSignals(True)
         
-        self.hide_all_groups()
+        # Сохраняем локальную ссылку на текущий объект
+        region_item = self.current_item
+        logger.debug(f"In show_region_properties, current_item is: {self.current_item}")
+        
+        self.hide_groups()
         self.region_group.show()
         self.region_id.setText(region_id)
+        
+        # Связываем объект с полем ID, используя локальную копию
+        logger.debug(f"Setting linked object to: {region_item}")
+        self.region_id.setLinkedObject(region_item)
+        
         self.region_x.setValue(x)
         self.region_y.setValue(y)
         self.region_width.setValue(width)
         self.region_height.setValue(height)
         self.region_color.setText(color)
+        
+        # Связываем объект с полем цвета
+        self.region_color.setLinkedObject(region_item)
         
         # Разблокируем сигналы
         self.region_x.blockSignals(False)
@@ -321,7 +341,9 @@ class PropertiesWindow(QWidget):
             self.hide_all_groups()
             return
 
+        logger.debug(f"update_properties called with item: {item}")
         self.current_item = item
+        logger.debug(f"self.current_item set to: {self.current_item}")
 
         if isinstance(item, Robot):
             pos = item.pos()
@@ -334,6 +356,7 @@ class PropertiesWindow(QWidget):
 
         elif isinstance(item, Wall):
             line = item.line()
+            logger.debug(f"Calling show_wall_properties for item: {item}")
             self.show_wall_properties(
                 int(line.x1()),
                 int(line.y1()),
@@ -346,6 +369,7 @@ class PropertiesWindow(QWidget):
         elif isinstance(item, Region):
             rect = item.rect()
             pos = item.pos()
+            logger.debug(f"Calling show_region_properties for item: {item}")
             self.show_region_properties(
                 int(pos.x()),
                 int(pos.y()),

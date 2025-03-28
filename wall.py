@@ -165,9 +165,8 @@ class Wall(QGraphicsLineItem):
         # Обновляем прямоугольник с паттерном "кирпичная стена" в соответствии с линией
         self.update_brick_rect()
         
-        # Обновляем размеры маркеров
-        if self._updating:
-            self.update_markers()
+        # Всегда обновляем размеры маркеров при обновлении внешнего вида
+        self.update_markers()
         
         if self.highlight_rect:
             line = self.line()
@@ -229,13 +228,24 @@ class Wall(QGraphicsLineItem):
         Устанавливает новый ID для стены, если он уникален.
         :param new_id: Новый ID.
         """
-        if new_id in self._existing_ids and new_id != self.id:
+        logger.debug(f"Attempting to set wall ID from '{self.id}' to '{new_id}'")
+        
+        # Сначала проверяем, изменился ли ID
+        if new_id == self.id:
+            logger.debug(f"New ID is the same as current ID, no change needed")
+            return True
+            
+        # Затем проверяем уникальность среди существующих ID
+        if new_id in self._existing_ids:
             # Если ID уже занят, выводим сообщение в лог
-            logger.warning(f"ID '{new_id}' уже занят другой стеной.")
+            logger.warning(f"ID '{new_id}' already used by another wall")
             return False
         else:
             # Удаляем старый ID из множества и добавляем новый
+            logger.debug(f"Removing old ID '{self.id}' from existing_ids")
             self._existing_ids.remove(self.id)
             self.id = new_id
+            logger.debug(f"Adding new ID '{new_id}' to existing_ids")
             self._existing_ids.add(self.id)
+            logger.debug(f"Wall ID successfully set to '{new_id}'")
             return True
