@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import QGraphicsRectItem, QMessageBox
 from PyQt6.QtGui import QPen, QBrush, QColor
 from PyQt6.QtCore import Qt, QRectF
+import logging
 
 class Region(QGraphicsRectItem):
     _next_id = 1  # Счетчик для генерации уникальных ID
@@ -53,17 +54,28 @@ class Region(QGraphicsRectItem):
         """
         Устанавливает новый ID для региона, если он уникален.
         :param new_id: Новый ID.
+        :return: True, если ID установлен успешно, False в противном случае.
         """
+        logger = logging.getLogger(__name__)
+        
+        logger.debug(f"Attempting to set region ID from '{self.id}' to '{new_id}'")
+        
+        # Проверяем, что ID изменился
+        if new_id == self.id:
+            logger.debug(f"New ID is the same as current ID, no change needed")
+            return True
+        
+        # Проверяем уникальность ID
         if new_id in Region._existing_ids:
-            # Если ID уже занят, выводим уведомление
-            QMessageBox.warning(
-                None,
-                "Ошибка",
-                f"ID '{new_id}' уже занят. Пожалуйста, выберите другой ID.",
-                QMessageBox.StandardButton.Ok
-            )
-        else:
-            # Удаляем старый ID из множества и добавляем новый
-            Region._existing_ids.remove(self.id)
-            self.id = new_id
-            Region._existing_ids.add(self.id)
+            # Если ID уже занят, выводим уведомление в лог
+            logger.warning(f"ID '{new_id}' already used by another region")
+            return False
+        
+        # Удаляем старый ID из множества и добавляем новый
+        logger.debug(f"Removing old ID '{self.id}' from existing_ids")
+        Region._existing_ids.remove(self.id)
+        self.id = new_id
+        logger.debug(f"Adding new ID '{new_id}' to existing_ids")
+        Region._existing_ids.add(self.id)
+        logger.debug(f"Region ID successfully set to '{new_id}'")
+        return True

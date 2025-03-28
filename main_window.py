@@ -58,7 +58,9 @@ class MainWindow(QMainWindow):
         self.properties_window.region_position_changed.connect(self.field_widget.update_region_position)
         self.properties_window.region_size_changed.connect(self.field_widget.update_region_size)
         self.properties_window.region_color_changed.connect(self.field_widget.update_region_color)
-
+        # Подключаем сигналы изменения ID от окна свойств
+        self.properties_window.wall_id_changed.connect(self.field_widget.update_wall_id)
+        self.properties_window.region_id_changed.connect(self.field_widget.update_region_id)
         # Подключаем сигналы
         self.field_widget.mouse_coords_updated.connect(self.update_coords_label)
 
