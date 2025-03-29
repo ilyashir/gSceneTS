@@ -9,6 +9,7 @@ from robot import Robot
 from wall import Wall
 from region import Region
 from custom_widgets import EditableLineEdit
+from styles import ButtonStyles
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,10 @@ class PropertiesWindow(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Свойства")
-        self.setMinimumWidth(320)
+        self.setMinimumWidth(340)
+        
+        # Применяем стиль Cursor к окну свойств
+        self.setStyleSheet(ButtonStyles.CURSOR_PROPERTIES_WINDOW)
         
         # Создаем основной layout
         layout = QVBoxLayout()
@@ -53,6 +57,29 @@ class PropertiesWindow(QWidget):
         
         # Текущий выбранный элемент
         self.current_item = None
+        
+        # Устанавливаем курсоры для элементов управления
+        self.setup_cursors()
+    
+    def setup_cursors(self):
+        """Устанавливает курсоры для элементов управления в окне свойств"""
+        # Для полей ввода
+        for edit in self.findChildren(QLineEdit):
+            edit.setCursor(Qt.CursorShape.IBeamCursor)
+        
+        # Для редактируемых текстовых полей
+        for edit in self.findChildren(EditableLineEdit):
+            edit.setCursor(Qt.CursorShape.IBeamCursor)
+            # В EditableLineEdit есть внутренние кнопки, установим для них курсор
+            for button in edit.findChildren(QPushButton):
+                button.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        # Для спинбоксов
+        for spinbox in self.findChildren(QSpinBox):
+            spinbox.setCursor(Qt.CursorShape.IBeamCursor)
+        
+        for spinbox in self.findChildren(QDoubleSpinBox):
+            spinbox.setCursor(Qt.CursorShape.IBeamCursor)
     
     def create_robot_properties(self):
         group = QGroupBox("Свойства робота")
@@ -63,7 +90,8 @@ class PropertiesWindow(QWidget):
         id_layout.addWidget(QLabel("ID:"))
         self.robot_id = EditableLineEdit()
         self.robot_id.setReadOnly(True)  # Только для чтения
-        self.robot_id.setStyleSheet("background-color: #f0f0f0;")  # Серый фон для визуального отличия
+        # Используем темный фон, как у других полей
+        self.robot_id.setStyleSheet(f"background-color: {ButtonStyles.SECONDARY_DARK}; color: {ButtonStyles.TEXT_COLOR}; border: 1px solid {ButtonStyles.BORDER_COLOR}; border-radius: 3px; padding: 3px;")
         id_layout.addWidget(self.robot_id)
         layout.addLayout(id_layout)
         
@@ -103,6 +131,7 @@ class PropertiesWindow(QWidget):
         id_layout.addWidget(QLabel("ID:"))
         self.wall_id = EditableLineEdit()
         self.wall_id.valueChanged.connect(lambda text, obj: self.on_wall_id_changed(text, obj))
+        self.wall_id.setStyleSheet(f"background-color: {ButtonStyles.SECONDARY_DARK}; color: {ButtonStyles.TEXT_COLOR}; border: 1px solid {ButtonStyles.BORDER_COLOR}; border-radius: 3px; padding: 3px;")
         id_layout.addWidget(self.wall_id)
         layout.addLayout(id_layout)
         
@@ -159,6 +188,7 @@ class PropertiesWindow(QWidget):
         id_layout.addWidget(QLabel("ID:"))
         self.region_id = EditableLineEdit()
         self.region_id.valueChanged.connect(lambda text, obj: self.on_region_id_changed(text, obj))
+        self.region_id.setStyleSheet(f"background-color: {ButtonStyles.SECONDARY_DARK}; color: {ButtonStyles.TEXT_COLOR}; border: 1px solid {ButtonStyles.BORDER_COLOR}; border-radius: 3px; padding: 3px;")
         id_layout.addWidget(self.region_id)
         layout.addLayout(id_layout)
         

@@ -1,0 +1,22 @@
+{
+    "app": {
+        "name": "TS Scene Generator",
+        "version": "1.0.0"
+    },
+    "appearance": {
+        "theme": "dark",
+        "theme_name": "Темный стиль"
+    },
+    "language": {
+        "current": "ru",
+        "name": "Русский"
+    },
+    "grid": {
+        "size": 50,
+        "snap_to_grid": false
+    },
+    "scene": {
+        "default_width": 1300,
+        "default_height": 1000
+    }
+}

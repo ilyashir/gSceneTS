@@ -9,6 +9,7 @@ from PyQt6.QtSvg import QSvgRenderer
 from robot import Robot
 from wall import Wall
 from region import Region
+from styles import ButtonStyles
 
 import logging
 
@@ -28,7 +29,7 @@ class FieldWidget(QGraphicsView):
     # Сигнал для обновления свойств объекта
     properties_updated = pyqtSignal(object)
 
-    def __init__(self, properties_window):
+    def __init__(self, properties_window, scene_width=1300, scene_height=1000, grid_size=50):
         super().__init__()
         self.properties_window = properties_window
 
@@ -41,7 +42,13 @@ class FieldWidget(QGraphicsView):
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.setMouseTracking(True)
         
-        self.grid_size = 50 # размер графической сетки
+        # Применяем стиль из styles.py
+        self.setStyleSheet(ButtonStyles.CURSOR_SCENE_STYLE)
+        
+        # Белый фон для сцены
+        self.scene().setBackgroundBrush(QBrush(QColor("white")))
+        
+        self.grid_size = grid_size  # размер графической сетки из конфигурации
         self.snap_to_grid_enabled = True  # Привязка к сетке включена по умолчанию
 
         self.drawing_mode = None
@@ -58,11 +65,11 @@ class FieldWidget(QGraphicsView):
         # Состояния объектов
         self.walls = []
         self.regions = []
-        self.robot_model = None  # вместо self.robot_position
+        self.robot_model = None  
         self.dragging_robot = False
         self.robot_offset = QPointF()
-        self.scene_width = 1300
-        self.scene_height = 1000
+        self.scene_width = scene_width  # размеры сцены из конфигурации
+        self.scene_height = scene_height
 
         # Создаем группы для слоев
         self.grid_layer = QGraphicsItemGroup()
@@ -394,6 +401,12 @@ class FieldWidget(QGraphicsView):
         print("click", type(item))
         if event.button() == Qt.MouseButton.LeftButton:
             
+            # Если в режиме редактирования и нажали на объект, меняем курсор на "кулачок"
+            if self.edit_mode and item and (isinstance(item, (Robot, Region)) or 
+                      (hasattr(item, 'data') and (item.data(0) == "its_wall" or item.data(0) == "wall_marker")) or 
+                      (item.parentItem() and isinstance(item.parentItem(), (Robot, Region)))):
+                self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            
             # Проверка клика по выделяемому объекту или его дочернему элементу
             if item:
                 # Проверяем, не является ли item частью уже выделенного объекта
@@ -471,6 +484,34 @@ class FieldWidget(QGraphicsView):
         
         # Отправляем сигнал с координатами        
         self.mouse_coords_updated.emit(posOriginal.x(), posOriginal.y())
+        
+        # Проверяем, находится ли курсор над выделяемым объектом
+        item = self.scene().itemAt(posOriginal, self.transform())
+        
+        # Меняем курсор при наведении на объекты (редактируемые)
+        if self.edit_mode:
+            if item and (isinstance(item, (Robot, Region)) or 
+                        (hasattr(item, 'data') and (item.data(0) == "its_wall" or item.data(0) == "wall_marker")) or 
+                        (item.parentItem() and isinstance(item.parentItem(), (Robot, Region)))):
+                # Если перетаскиваем - устанавливаем курсор "кулачок"
+                if hasattr(self, 'dragging_item') and self.dragging_item:
+                    self.setCursor(Qt.CursorShape.ClosedHandCursor)
+                else:
+                    # Иначе устанавливаем курсор "ладошка"
+                    self.setCursor(Qt.CursorShape.OpenHandCursor)
+            else:
+                # Если не над объектом, возвращаем стандартный курсор
+                self.setCursor(Qt.CursorShape.ArrowCursor)
+        # В режиме наблюдателя устанавливаем указательный палец при наведении на объекты
+        elif not self.drawing_mode:  # Режим наблюдателя
+            if item and (isinstance(item, (Robot, Region)) or 
+                       (hasattr(item, 'data') and (item.data(0) == "its_wall" or item.data(0) == "wall_marker")) or 
+                       (item.parentItem() and isinstance(item.parentItem(), (Robot, Region)))):
+                # Устанавливаем курсор "указательный палец"
+                self.setCursor(Qt.CursorShape.PointingHandCursor)
+            else:
+                # Если не над объектом, возвращаем стандартный курсор
+                self.setCursor(Qt.CursorShape.ArrowCursor)
         
         if self.edit_mode and hasattr(self, 'dragging_item') and self.dragging_item:
             logger.debug(f"Dragging {self.dragging_item}")            
@@ -568,6 +609,9 @@ class FieldWidget(QGraphicsView):
         super().mouseMoveEvent(event)    
 
     def mouseReleaseEvent(self, event):
+        # После отпускания кнопки мыши возвращаем стандартный курсор, если не над объектом
+        self.setCursor(Qt.CursorShape.ArrowCursor)
+            
         if event.button() == Qt.MouseButton.LeftButton:
             if self.edit_mode and self.selected_marker:
                 logger.debug("Clearing selected marker")

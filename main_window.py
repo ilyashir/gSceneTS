@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QMainWindow, QToolBar, QToolButton, QPushButton, QLineEdit, QWidget, QHBoxLayout, QVBoxLayout, QLabel,
-    QCheckBox, QSpacerItem, QSizePolicy, QFileDialog, QDockWidget
+    QCheckBox, QSpacerItem, QSizePolicy, QFileDialog, QDockWidget, QSpinBox, QDoubleSpinBox
 )
 from PyQt6.QtGui import QIcon
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -11,6 +11,7 @@ from xml.dom import minidom
 from PyQt6.QtWidgets import QMessageBox
 import logging
 from styles import ButtonStyles
+from config import config
 
 # Настройка логгера
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -21,13 +22,24 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("TS scene generator")
+        
+        # Получаем настройки из конфигурации
+        app_name = config.get("app", "name")
+        self.scene_width = config.get("scene", "default_width")
+        self.scene_height = config.get("scene", "default_height")
+        self.grid_size = config.get("grid", "size")
+        self.snap_to_grid_default = config.get("grid", "snap_to_grid")
+        
+        self.setWindowTitle(app_name)
         self.resize(1200, 800)  # Устанавливаем начальный размер
         self.showMaximized()  # Открыть на весь экран
         
+        # Применяем Cursor стиль к главному окну
+        self.setStyleSheet(ButtonStyles.CURSOR_MAIN_WINDOW)
+        
         # Создаем виджет для отображения координат
         self.coords_label = QLabel("Mouse Coords: (0, 0)", self)
-        self.coords_label.setStyleSheet(ButtonStyles.COORDS_LABEL)
+        self.coords_label.setStyleSheet(ButtonStyles.CURSOR_COORDS_LABEL)
 
         # Создаем окно свойств
         self.properties_window = PropertiesWindow()
@@ -40,8 +52,11 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout()
         layout.addWidget(self.coords_label)  # Добавляем метку с координатами
         
-        # Добавляем окно с полем
-        self.field_widget = FieldWidget(self.properties_window)       
+        # Добавляем окно с полем с параметрами из конфигурации
+        self.field_widget = FieldWidget(self.properties_window, 
+                                        scene_width=self.scene_width, 
+                                        scene_height=self.scene_height,
+                                        grid_size=self.grid_size)       
         layout.addWidget(self.field_widget)
     
         container.setLayout(layout)
@@ -68,21 +83,11 @@ class MainWindow(QMainWindow):
         self.toggle_properties_button = QToolButton(self)
         self.toggle_properties_button.setIcon(QIcon("images/icon.webp"))  # Укажите путь к иконке
         self.toggle_properties_button.setToolTip("Toggle Properties")
-        self.toggle_properties_button.setStyleSheet("""
-            QToolButton {
-                background-color: lightgray;
-                border: 1px solid gray;
-                border-radius: 2px;
-            }
-            QToolButton:hover {
-                background-color: darkgray;
-            }
-            QToolButton:checked {
-                background-color: darkgray;
-                border: 2px solid black;
-            }
-        """)
+        self.toggle_properties_button.setStyleSheet(ButtonStyles.CURSOR_TOGGLE_BUTTON)
         self.toggle_properties_button.clicked.connect(self.toggle_properties_window)
+        
+        # Устанавливаем курсор для кнопки
+        self.toggle_properties_button.setCursor(Qt.CursorShape.PointingHandCursor)
 
         # Создаем правую панель инструментов и добавляем кнопку
         self.right_toolbar = QToolBar("Right Toolbar", self)
@@ -98,10 +103,19 @@ class MainWindow(QMainWindow):
         self.create_scene_size_widget()
 
         # Добавляем чекбокс "Привязываться к сетке"
+        snap_to_grid_container = QWidget()
+        snap_to_grid_layout = QHBoxLayout()
+        snap_to_grid_layout.setContentsMargins(10, 0, 0, 0)  # Добавляем отступ слева
+        
         self.snap_to_grid_checkbox = QCheckBox("Привязываться к сетке", self)
-        self.snap_to_grid_checkbox.setChecked(True)  # По умолчанию включено
+        self.snap_to_grid_checkbox.setChecked(self.snap_to_grid_default)  # Значение из конфига
         self.snap_to_grid_checkbox.stateChanged.connect(self.toggle_snap_to_grid)
-        self.toolbar.addWidget(self.snap_to_grid_checkbox)
+        self.snap_to_grid_checkbox.setStyleSheet(ButtonStyles.CHECKBOX_STYLE)
+        self.snap_to_grid_checkbox.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        snap_to_grid_layout.addWidget(self.snap_to_grid_checkbox)
+        snap_to_grid_container.setLayout(snap_to_grid_layout)
+        self.toolbar.addWidget(snap_to_grid_container)
 
         # Создаем кнопки режимов
         self.create_mode_buttons()
@@ -109,11 +123,44 @@ class MainWindow(QMainWindow):
         
         # Кнопка для генерации XML
         generate_button = QPushButton("Generate XML")
+        generate_button.setStyleSheet(ButtonStyles.ACCENT_BUTTON)
         generate_button.clicked.connect(self.generate_xml)
+        generate_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.toolbar.addWidget(generate_button)
 
         # Устанавливаем режим наблюдателя по умолчанию
         self.set_mode("observer")
+        
+        # Устанавливаем курсоры для всех элементов интерфейса
+        self.setup_cursors()
+    
+    def setup_cursors(self):
+        """Устанавливает курсоры для всех кнопок и элементов интерфейса"""
+        # Устанавливаем курсоры для всех кнопок
+        for button in self.findChildren(QPushButton):
+            if button.isEnabled():
+                button.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        # Устанавливаем курсоры для всех ToolButton
+        for button in self.findChildren(QToolButton):
+            if button.isEnabled():
+                button.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        # Устанавливаем курсоры для чекбоксов
+        for checkbox in self.findChildren(QCheckBox):
+            if checkbox.isEnabled():
+                checkbox.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        # Устанавливаем курсоры для полей ввода
+        for edit in self.findChildren(QLineEdit):
+            edit.setCursor(Qt.CursorShape.IBeamCursor)
+        
+        # Устанавливаем курсоры для спинбоксов
+        for spinbox in self.findChildren(QSpinBox):
+            spinbox.setCursor(Qt.CursorShape.IBeamCursor)
+        
+        for spinbox in self.findChildren(QDoubleSpinBox):
+            spinbox.setCursor(Qt.CursorShape.IBeamCursor)
     
     def update_coords_label(self, x, y):
         # Обновляет текст в QLabel с координатами мыши.
@@ -121,7 +168,10 @@ class MainWindow(QMainWindow):
 
     def toggle_snap_to_grid(self, state):
         """Включает или выключает привязку к сетке."""
-        self.field_widget.snap_to_grid_enabled = state == Qt.CheckState.Checked.value
+        enabled = state == Qt.CheckState.Checked.value
+        self.field_widget.snap_to_grid_enabled = enabled
+        # Сохраняем настройку в конфиг
+        config.set("grid", "snap_to_grid", enabled)
     
     def toggle_properties_window(self):
         """Скрывает или показывает окно свойств."""
@@ -166,13 +216,13 @@ class MainWindow(QMainWindow):
         # Поле для ширины
         self.width_input = QLineEdit(str(self.field_widget.scene_width))
         self.width_input.setPlaceholderText("Width")
-        
+        self.width_input.setCursor(Qt.CursorShape.IBeamCursor)
         input_layout.addWidget(self.width_input)
 
         # Поле для высоты
         self.height_input = QLineEdit(str(self.field_widget.scene_height))
         self.height_input.setPlaceholderText("Height")
-        
+        self.height_input.setCursor(Qt.CursorShape.IBeamCursor)
         input_layout.addWidget(self.height_input)
 
         # Добавляем виджет с полями ввода в вертикальный макет
@@ -180,6 +230,8 @@ class MainWindow(QMainWindow):
         
         # Кнопка для применения изменений   
         self.apply_button = QPushButton("Применить", self)
+        self.apply_button.setStyleSheet(ButtonStyles.ACCENT_BUTTON)
+        self.apply_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.apply_button.clicked.connect(self.apply_size_changes)
         size_layout.addWidget(self.apply_button)
 
@@ -215,32 +267,38 @@ class MainWindow(QMainWindow):
     def create_mode_buttons(self):
         # Создаем контейнер для кнопок режимов
         mode_container = QWidget()
-        mode_layout = QHBoxLayout()
-        mode_layout.setSpacing(5)
+        mode_layout = QVBoxLayout()  # Изменяем на вертикальный макет для лучшего вида
+        mode_layout.setSpacing(8)
+        mode_layout.setContentsMargins(5, 10, 5, 10)
         mode_container.setLayout(mode_layout)
+        
+        # Заголовок
+        mode_label = QLabel("Режим работы")
+        mode_label.setStyleSheet(f"color: {ButtonStyles.TEXT_COLOR}; font-weight: bold;")
+        mode_layout.addWidget(mode_label)
 
         # Кнопка режима наблюдателя
-        self.observer_button = QToolButton()
-        self.observer_button.setText("Наблюдатель")
+        self.observer_button = QPushButton("Наблюдатель")
         self.observer_button.setCheckable(True)
         self.observer_button.setStyleSheet(ButtonStyles.MODE_BUTTON)
         self.observer_button.clicked.connect(lambda: self.set_mode("observer"))
+        self.observer_button.setCursor(Qt.CursorShape.PointingHandCursor)
         mode_layout.addWidget(self.observer_button)
 
         # Кнопка режима рисования
-        self.drawing_button = QToolButton()
-        self.drawing_button.setText("Рисование")
+        self.drawing_button = QPushButton("Рисование")
         self.drawing_button.setCheckable(True)
         self.drawing_button.setStyleSheet(ButtonStyles.MODE_BUTTON)
         self.drawing_button.clicked.connect(lambda: self.set_mode("drawing"))
+        self.drawing_button.setCursor(Qt.CursorShape.PointingHandCursor)
         mode_layout.addWidget(self.drawing_button)
 
         # Кнопка режима редактирования
-        self.edit_button = QToolButton()
-        self.edit_button.setText("Редактирование")
+        self.edit_button = QPushButton("Редактирование")
         self.edit_button.setCheckable(True)
         self.edit_button.setStyleSheet(ButtonStyles.MODE_BUTTON)
         self.edit_button.clicked.connect(lambda: self.set_mode("edit"))
+        self.edit_button.setCursor(Qt.CursorShape.PointingHandCursor)
         mode_layout.addWidget(self.edit_button)
 
         # Добавляем контейнер на панель инструментов
@@ -249,26 +307,32 @@ class MainWindow(QMainWindow):
     def create_drawing_buttons(self):
         # Создаем контейнер для кнопок рисования
         drawing_container = QWidget()
-        drawing_layout = QHBoxLayout()
-        drawing_layout.setSpacing(5)
+        drawing_layout = QVBoxLayout()  # Изменяем на вертикальный макет для лучшего вида
+        drawing_layout.setSpacing(8)
+        drawing_layout.setContentsMargins(5, 10, 5, 10)
         drawing_container.setLayout(drawing_layout)
+        
+        # Заголовок
+        drawing_label = QLabel("Инструменты")
+        drawing_label.setStyleSheet(f"color: {ButtonStyles.TEXT_COLOR}; font-weight: bold;")
+        drawing_layout.addWidget(drawing_label)
 
         # Кнопка для рисования стен
-        self.wall_button = QToolButton()
-        self.wall_button.setText("Стена")
+        self.wall_button = QPushButton("Стена")
         self.wall_button.setCheckable(True)
-        self.wall_button.setStyleSheet(ButtonStyles.DRAWING_BUTTON)
+        self.wall_button.setStyleSheet(ButtonStyles.TOOL_BUTTON)
         self.wall_button.clicked.connect(lambda: self.set_drawing_type("wall"))
         self.wall_button.setEnabled(False)
+        self.wall_button.setCursor(Qt.CursorShape.PointingHandCursor)
         drawing_layout.addWidget(self.wall_button)
 
         # Кнопка для рисования регионов
-        self.region_button = QToolButton()
-        self.region_button.setText("Регион")
+        self.region_button = QPushButton("Регион")
         self.region_button.setCheckable(True)
-        self.region_button.setStyleSheet(ButtonStyles.DRAWING_BUTTON)
+        self.region_button.setStyleSheet(ButtonStyles.TOOL_BUTTON)
         self.region_button.clicked.connect(lambda: self.set_drawing_type("region"))
         self.region_button.setEnabled(False)
+        self.region_button.setCursor(Qt.CursorShape.PointingHandCursor)
         drawing_layout.addWidget(self.region_button)
 
         # Добавляем контейнер на панель инструментов
@@ -375,10 +439,10 @@ class MainWindow(QMainWindow):
                 color = str(region.color)
                 ET.SubElement(regions_elem, "region", x=str(x), y=str(y), width=str(width), height=str(height), id=id, color=color)
 
-            if self.field_widget.robot_position:
+            if self.field_widget.robot_model:
                 robot_elem = ET.SubElement(root, "robots")
-                x = self.field_widget.robot_position.pos().x()
-                y = self.field_widget.robot_position.pos().y()
+                x = self.field_widget.robot_model.pos().x()
+                y = self.field_widget.robot_model.pos().y()
                 ET.SubElement(robot_elem, "robot", position=f"{x}:{y}")
 
             # Преобразуем ElementTree в строку

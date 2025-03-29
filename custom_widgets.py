@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve, pyqtSignal, pyqtProperty, QSize
 from PyQt6.QtGui import QColor, QPainter, QPainterPath, QIcon
+from styles import ButtonStyles
 
 import logging
 
@@ -31,15 +32,22 @@ class EditableLineEdit(QWidget):
         
         # Текстовое поле
         self.text_field = QLineEdit(self)
+        self.text_field.setStyleSheet(f"""
+            background-color: {ButtonStyles.SECONDARY_DARK};
+            color: {ButtonStyles.TEXT_COLOR};
+            border: 1px solid {ButtonStyles.BORDER_COLOR};
+            border-radius: 3px;
+            padding: 3px;
+        """)
         self.text_field.textChanged.connect(self._handle_text_changed)
         self.layout.addWidget(self.text_field)
         
         # Кнопка подтверждения (галочка)
         self.confirm_button = FlatRoundButton(self)
         self.confirm_button.setText("✓")
-        self.confirm_button.setStyleSheet("""
-            background-color: #4CAF50;
-            color: white;
+        self.confirm_button.setStyleSheet(f"""
+            background-color: {ButtonStyles.SUCCESS_COLOR};
+            color: {ButtonStyles.TEXT_HIGHLIGHT};
             border-radius: 4px;
         """)
         self.confirm_button.clicked.connect(self._confirm_changes)
@@ -48,9 +56,9 @@ class EditableLineEdit(QWidget):
         # Кнопка отмены (крестик)
         self.cancel_button = FlatRoundButton(self)
         self.cancel_button.setText("✕")
-        self.cancel_button.setStyleSheet("""
-            background-color: #F44336;
-            color: white;
+        self.cancel_button.setStyleSheet(f"""
+            background-color: {ButtonStyles.ERROR_COLOR};
+            color: {ButtonStyles.TEXT_HIGHLIGHT};
             border-radius: 4px;
         """)
         self.cancel_button.clicked.connect(self._cancel_changes)
