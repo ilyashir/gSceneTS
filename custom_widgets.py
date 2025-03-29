@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve, pyqtSignal, pyqtProperty, QSize
 from PyQt6.QtGui import QColor, QPainter, QPainterPath, QIcon
-from styles import ButtonStyles
+from styles import AppStyles
 
 import logging
 
@@ -19,11 +19,12 @@ class EditableLineEdit(QWidget):
     editingCanceled = pyqtSignal()  # Сигнал при отмене редактирования
     editingStarted = pyqtSignal()   # Сигнал при начале редактирования
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, is_dark_theme=True):
         super().__init__(parent)
         self._original_value = ""
         self._is_edited = False
         self._linked_object = None  # Ссылка на связанный объект
+        self._is_dark_theme = is_dark_theme
         
         # Основной layout
         self.layout = QHBoxLayout(self)
@@ -32,35 +33,18 @@ class EditableLineEdit(QWidget):
         
         # Текстовое поле
         self.text_field = QLineEdit(self)
-        self.text_field.setStyleSheet(f"""
-            background-color: {ButtonStyles.SECONDARY_DARK};
-            color: {ButtonStyles.TEXT_COLOR};
-            border: 1px solid {ButtonStyles.BORDER_COLOR};
-            border-radius: 3px;
-            padding: 3px;
-        """)
         self.text_field.textChanged.connect(self._handle_text_changed)
         self.layout.addWidget(self.text_field)
         
         # Кнопка подтверждения (галочка)
         self.confirm_button = FlatRoundButton(self)
         self.confirm_button.setText("✓")
-        self.confirm_button.setStyleSheet(f"""
-            background-color: {ButtonStyles.SUCCESS_COLOR};
-            color: {ButtonStyles.TEXT_HIGHLIGHT};
-            border-radius: 4px;
-        """)
         self.confirm_button.clicked.connect(self._confirm_changes)
         self.layout.addWidget(self.confirm_button)
         
         # Кнопка отмены (крестик)
         self.cancel_button = FlatRoundButton(self)
         self.cancel_button.setText("✕")
-        self.cancel_button.setStyleSheet(f"""
-            background-color: {ButtonStyles.ERROR_COLOR};
-            color: {ButtonStyles.TEXT_HIGHLIGHT};
-            border-radius: 4px;
-        """)
         self.cancel_button.clicked.connect(self._cancel_changes)
         self.layout.addWidget(self.cancel_button)
         
@@ -85,6 +69,42 @@ class EditableLineEdit(QWidget):
         self.cancel_animation = QPropertyAnimation(self.cancel_opacity_effect, b"opacity")
         self.cancel_animation.setDuration(300)
         self.cancel_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        
+        # Обновляем стили после создания всех необходимых объектов
+        self.update_styles(is_dark_theme)
+        
+    def update_styles(self, is_dark_theme=True):
+        """Обновляет стили виджета в зависимости от темы"""
+        self._is_dark_theme = is_dark_theme
+        colors = AppStyles._get_theme_colors(is_dark_theme)
+        
+        # Стиль для текстового поля
+        self.text_field.setStyleSheet(f"""
+            background-color: {colors['secondary_dark']};
+            color: {colors['text']};
+            border: 1px solid {colors['border']};
+            border-radius: 3px;
+            padding: 3px;
+        """)
+        
+        # Стиль для кнопки подтверждения
+        self.confirm_button.setStyleSheet(f"""
+            background-color: {colors['success']};
+            color: {colors['text_highlight']};
+            border-radius: 4px;
+        """)
+        
+        # Стиль для кнопки отмены
+        self.cancel_button.setStyleSheet(f"""
+            background-color: {colors['error']};
+            color: {colors['text_highlight']};
+            border-radius: 4px;
+        """)
+        
+    def set_theme(self, is_dark_theme=True):
+        """Устанавливает тему для виджета"""
+        if self._is_dark_theme != is_dark_theme:
+            self.update_styles(is_dark_theme)
     
     def text(self):
         """Возвращает текущий текст в поле ввода."""

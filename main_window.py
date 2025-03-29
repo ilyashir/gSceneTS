@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QMainWindow, QToolBar, QToolButton, QPushButton, QLineEdit, QWidget, QHBoxLayout, QVBoxLayout, QLabel,
-    QCheckBox, QSpacerItem, QSizePolicy, QFileDialog, QDockWidget, QSpinBox, QDoubleSpinBox
+    QCheckBox, QSpacerItem, QSizePolicy, QFileDialog, QDockWidget, QSpinBox, QDoubleSpinBox, QButtonGroup, QStatusBar, QFrame
 )
 from PyQt6.QtGui import QIcon
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 from xml.dom import minidom 
 from PyQt6.QtWidgets import QMessageBox
 import logging
-from styles import ButtonStyles
+from styles import AppStyles
 from config import config
 
 # Настройка логгера
@@ -30,27 +30,59 @@ class MainWindow(QMainWindow):
         self.grid_size = config.get("grid", "size")
         self.snap_to_grid_default = config.get("grid", "snap_to_grid")
         
+        # Определяем текущую тему
+        self.is_dark_theme = config.get("appearance", "theme") == "dark"
+        
         self.setWindowTitle(app_name)
         self.resize(1200, 800)  # Устанавливаем начальный размер
         self.showMaximized()  # Открыть на весь экран
         
-        # Применяем Cursor стиль к главному окну
-        self.setStyleSheet(ButtonStyles.CURSOR_MAIN_WINDOW)
+        # Применяем текущую тему к главному окну
+        self.apply_theme()
+        
+        # Создаем панель для координат и переключателя темы
+        self.coords_panel = QWidget()
+        coords_layout = QHBoxLayout()
+        coords_layout.setContentsMargins(5, 5, 5, 5)
         
         # Создаем виджет для отображения координат
-        self.coords_label = QLabel("Mouse Coords: (0, 0)", self)
-        self.coords_label.setStyleSheet(ButtonStyles.CURSOR_COORDS_LABEL)
+        self.coords_label = QLabel("X: 0, Y: 0", self)
+        self.coords_label.setStyleSheet(AppStyles.get_coords_label_style(self.is_dark_theme))
+        coords_layout.addWidget(self.coords_label)
+        
+        # Добавляем растягивающий элемент, чтобы переключатель был справа
+        coords_layout.addStretch()
+        
+        # Создаем переключатель темы
+        self.theme_switch = QPushButton("🌙" if not self.is_dark_theme else "☀️", self)
+        self.theme_switch.setStyleSheet(AppStyles.get_theme_switch_style(self.is_dark_theme))
+        self.theme_switch.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.theme_switch.clicked.connect(self.toggle_theme)
+        self.theme_switch.setToolTip("Переключить тему")
+        coords_layout.addWidget(self.theme_switch)
+        
+        self.coords_panel.setLayout(coords_layout)
 
         # Создаем окно свойств
         self.properties_window = PropertiesWindow()
+        # Устанавливаем тему для окна свойств
+        if hasattr(self.properties_window, 'set_theme'):
+            self.properties_window.set_theme(self.is_dark_theme)
+        else:
+            self.properties_window.setStyleSheet(
+                AppStyles.DARK_PROPERTIES_WINDOW if self.is_dark_theme else AppStyles.LIGHT_PROPERTIES_WINDOW
+            )
         self.properties_dock = QDockWidget("Свойства", self)
         self.properties_dock.setWidget(self.properties_window)
+        self.properties_dock.setStyleSheet(
+            AppStyles.DARK_PROPERTIES_WINDOW if self.is_dark_theme else AppStyles.LIGHT_PROPERTIES_WINDOW
+        )
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.properties_dock)
 
         # Создаем контейнер для координат и FieldWidget
         container = QWidget()
         layout = QVBoxLayout()
-        layout.addWidget(self.coords_label)  # Добавляем метку с координатами
+        layout.addWidget(self.coords_panel)  # Добавляем панель с координатами и переключателем
         
         # Добавляем окно с полем с параметрами из конфигурации
         self.field_widget = FieldWidget(self.properties_window, 
@@ -76,25 +108,25 @@ class MainWindow(QMainWindow):
         # Подключаем сигналы изменения ID от окна свойств
         self.properties_window.wall_id_changed.connect(self.field_widget.update_wall_id)
         self.properties_window.region_id_changed.connect(self.field_widget.update_region_id)
-        # Подключаем сигналы
+        # Подключаем сигналы изменения координат мыши
         self.field_widget.mouse_coords_updated.connect(self.update_coords_label)
 
         # Создаем кнопку для скрытия/открытия окна свойств
         self.toggle_properties_button = QToolButton(self)
         self.toggle_properties_button.setIcon(QIcon("images/icon.webp"))  # Укажите путь к иконке
         self.toggle_properties_button.setToolTip("Toggle Properties")
-        self.toggle_properties_button.setStyleSheet(ButtonStyles.CURSOR_TOGGLE_BUTTON)
-        self.toggle_properties_button.clicked.connect(self.toggle_properties_window)
-        
+        self.toggle_properties_button.setStyleSheet(AppStyles.get_toggle_button_style(self.is_dark_theme))
+        self.toggle_properties_button.clicked.connect(self.toggle_properties_panel)        
         # Устанавливаем курсор для кнопки
         self.toggle_properties_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.toggle_properties_button.setToolTip("Показать/скрыть панель свойств")
 
         # Создаем правую панель инструментов и добавляем кнопку
         self.right_toolbar = QToolBar("Right Toolbar", self)
         self.right_toolbar.addWidget(self.toggle_properties_button)
         self.addToolBar(Qt.ToolBarArea.RightToolBarArea, self.right_toolbar)
         
-        # Основная панель инструментов слева
+        # Основная левая панель инструментов
         self.toolbar = QToolBar()
         self.toolbar.setMinimumWidth(180)  # Минимальная ширина панели инструментов
         self.addToolBar(Qt.ToolBarArea.LeftToolBarArea, self.toolbar)
@@ -107,10 +139,10 @@ class MainWindow(QMainWindow):
         snap_to_grid_layout = QHBoxLayout()
         snap_to_grid_layout.setContentsMargins(10, 0, 0, 0)  # Добавляем отступ слева
         
-        self.snap_to_grid_checkbox = QCheckBox("Привязываться к сетке", self)
-        self.snap_to_grid_checkbox.setChecked(self.snap_to_grid_default)  # Значение из конфига
+        self.snap_to_grid_checkbox = QCheckBox("Привязаться к сетке", self)
+        self.snap_to_grid_checkbox.setStyleSheet(AppStyles.DARK_CHECKBOX_STYLE if self.is_dark_theme else AppStyles.LIGHT_CHECKBOX_STYLE)
+        self.snap_to_grid_checkbox.setChecked(self.field_widget.snap_to_grid_enabled)
         self.snap_to_grid_checkbox.stateChanged.connect(self.toggle_snap_to_grid)
-        self.snap_to_grid_checkbox.setStyleSheet(ButtonStyles.CHECKBOX_STYLE)
         self.snap_to_grid_checkbox.setCursor(Qt.CursorShape.PointingHandCursor)
         
         snap_to_grid_layout.addWidget(self.snap_to_grid_checkbox)
@@ -121,9 +153,24 @@ class MainWindow(QMainWindow):
         self.create_mode_buttons()
         self.create_drawing_buttons()
         
+        # Добавляем разделитель перед кнопкой генерации XML
+        separator_container = QWidget()
+        separator_layout = QVBoxLayout()
+        separator_layout.setContentsMargins(5, 10, 5, 10)  # Добавляем отступы сверху и снизу
+        
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        separator.setMinimumHeight(2)  # Увеличиваем высоту линии
+        separator.setStyleSheet(f"background-color: {AppStyles.BORDER_COLOR if self.is_dark_theme else AppStyles.LIGHT_BORDER_COLOR};")
+        
+        separator_layout.addWidget(separator)
+        separator_container.setLayout(separator_layout)
+        self.toolbar.addWidget(separator_container)
+        
         # Кнопка для генерации XML
-        generate_button = QPushButton("Generate XML")
-        generate_button.setStyleSheet(ButtonStyles.ACCENT_BUTTON)
+        generate_button = QPushButton("Сгенерировать XML")
+        generate_button.setStyleSheet(AppStyles.get_accent_button_style(self.is_dark_theme))
         generate_button.clicked.connect(self.generate_xml)
         generate_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.toolbar.addWidget(generate_button)
@@ -135,36 +182,29 @@ class MainWindow(QMainWindow):
         self.setup_cursors()
     
     def setup_cursors(self):
-        """Устанавливает курсоры для всех кнопок и элементов интерфейса"""
+        """Устанавливает курсоры для всех элементов интерфейса"""
         # Устанавливаем курсоры для всех кнопок
-        for button in self.findChildren(QPushButton):
-            if button.isEnabled():
-                button.setCursor(Qt.CursorShape.PointingHandCursor)
-        
-        # Устанавливаем курсоры для всех ToolButton
-        for button in self.findChildren(QToolButton):
-            if button.isEnabled():
-                button.setCursor(Qt.CursorShape.PointingHandCursor)
+        for button in self.findChildren(QPushButton) + self.findChildren(QToolButton):
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
         
         # Устанавливаем курсоры для чекбоксов
         for checkbox in self.findChildren(QCheckBox):
-            if checkbox.isEnabled():
-                checkbox.setCursor(Qt.CursorShape.PointingHandCursor)
+            checkbox.setCursor(Qt.CursorShape.PointingHandCursor)
         
-        # Устанавливаем курсоры для полей ввода
-        for edit in self.findChildren(QLineEdit):
-            edit.setCursor(Qt.CursorShape.IBeamCursor)
+        # Устанавливаем курсоры для SpinBox
+        for spinbox in self.findChildren(QSpinBox) + self.findChildren(QDoubleSpinBox):
+            # Получаем кнопки внутри спинбокса
+            for child in spinbox.findChildren(QWidget):
+                if 'Button' in child.__class__.__name__:
+                    child.setCursor(Qt.CursorShape.PointingHandCursor)
         
-        # Устанавливаем курсоры для спинбоксов
-        for spinbox in self.findChildren(QSpinBox):
-            spinbox.setCursor(Qt.CursorShape.IBeamCursor)
-        
-        for spinbox in self.findChildren(QDoubleSpinBox):
-            spinbox.setCursor(Qt.CursorShape.IBeamCursor)
-    
+        # Устанавливаем для properties_window
+        if hasattr(self, 'properties_window'):
+            self.properties_window.setup_cursors()
+
     def update_coords_label(self, x, y):
         # Обновляет текст в QLabel с координатами мыши.
-        self.coords_label.setText(f"Mouse Coords: ({x:.2f}, {y:.2f})")
+        self.coords_label.setText(f"Координаты мыши: X: {x:.2f}, Y: {y:.2f}")
 
     def toggle_snap_to_grid(self, state):
         """Включает или выключает привязку к сетке."""
@@ -173,7 +213,7 @@ class MainWindow(QMainWindow):
         # Сохраняем настройку в конфиг
         config.set("grid", "snap_to_grid", enabled)
     
-    def toggle_properties_window(self):
+    def toggle_properties_panel(self):
         """Скрывает или показывает окно свойств."""
         if self.properties_dock.isVisible():
             self.properties_dock.hide()
@@ -189,6 +229,7 @@ class MainWindow(QMainWindow):
 
         # Лейбл "Размер сцены"
         size_label = QLabel("Размер сцены")
+        size_label.setStyleSheet(AppStyles.get_mode_label_style(self.is_dark_theme))
         size_layout.addWidget(size_label)
 
         # Виджет для лейблов полей ввода
@@ -230,7 +271,7 @@ class MainWindow(QMainWindow):
         
         # Кнопка для применения изменений   
         self.apply_button = QPushButton("Применить", self)
-        self.apply_button.setStyleSheet(ButtonStyles.ACCENT_BUTTON)
+        self.apply_button.setStyleSheet(AppStyles.get_accent_button_style(self.is_dark_theme))
         self.apply_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.apply_button.clicked.connect(self.apply_size_changes)
         size_layout.addWidget(self.apply_button)
@@ -268,75 +309,99 @@ class MainWindow(QMainWindow):
         # Создаем контейнер для кнопок режимов
         mode_container = QWidget()
         mode_layout = QVBoxLayout()  # Изменяем на вертикальный макет для лучшего вида
-        mode_layout.setSpacing(8)
-        mode_layout.setContentsMargins(5, 10, 5, 10)
-        mode_container.setLayout(mode_layout)
+        mode_layout.setSpacing(5)
+        mode_layout.setContentsMargins(5, 0, 5, 0)
         
-        # Заголовок
-        mode_label = QLabel("Режим работы")
-        mode_label.setStyleSheet(f"color: {ButtonStyles.TEXT_COLOR}; font-weight: bold;")
-        mode_layout.addWidget(mode_label)
-
+        # Заголовок "Режим"
+        self.mode_label = QLabel("Режим")
+        self.mode_label.setStyleSheet(AppStyles.get_mode_label_style(self.is_dark_theme))
+        mode_layout.addWidget(self.mode_label)
+        
+        # Группа кнопок для переключения режимов
+        mode_buttons_group = QButtonGroup(self)
+        
         # Кнопка режима наблюдателя
         self.observer_button = QPushButton("Наблюдатель")
         self.observer_button.setCheckable(True)
-        self.observer_button.setStyleSheet(ButtonStyles.MODE_BUTTON)
+        self.observer_button.setChecked(True)  # Выбран по умолчанию
+        self.observer_button.setStyleSheet(self.get_mode_button_style())
         self.observer_button.clicked.connect(lambda: self.set_mode("observer"))
         self.observer_button.setCursor(Qt.CursorShape.PointingHandCursor)
         mode_layout.addWidget(self.observer_button)
-
-        # Кнопка режима рисования
-        self.drawing_button = QPushButton("Рисование")
-        self.drawing_button.setCheckable(True)
-        self.drawing_button.setStyleSheet(ButtonStyles.MODE_BUTTON)
-        self.drawing_button.clicked.connect(lambda: self.set_mode("drawing"))
-        self.drawing_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        mode_layout.addWidget(self.drawing_button)
-
+        mode_buttons_group.addButton(self.observer_button)
+        
         # Кнопка режима редактирования
         self.edit_button = QPushButton("Редактирование")
         self.edit_button.setCheckable(True)
-        self.edit_button.setStyleSheet(ButtonStyles.MODE_BUTTON)
+        self.edit_button.setStyleSheet(self.get_mode_button_style())
         self.edit_button.clicked.connect(lambda: self.set_mode("edit"))
         self.edit_button.setCursor(Qt.CursorShape.PointingHandCursor)
         mode_layout.addWidget(self.edit_button)
-
+        mode_buttons_group.addButton(self.edit_button)
+        
+        # Кнопка режима рисования
+        self.drawing_button = QPushButton("Рисование")
+        self.drawing_button.setCheckable(True)
+        self.drawing_button.setStyleSheet(self.get_mode_button_style())
+        self.drawing_button.clicked.connect(lambda: self.set_mode("drawing"))
+        self.drawing_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        mode_layout.addWidget(self.drawing_button)
+        mode_buttons_group.addButton(self.drawing_button)
+        
+        # Устанавливаем макет для контейнера
+        mode_container.setLayout(mode_layout)
+        
         # Добавляем контейнер на панель инструментов
         self.toolbar.addWidget(mode_container)
-
-    def create_drawing_buttons(self):
-        # Создаем контейнер для кнопок рисования
-        drawing_container = QWidget()
-        drawing_layout = QVBoxLayout()  # Изменяем на вертикальный макет для лучшего вида
-        drawing_layout.setSpacing(8)
-        drawing_layout.setContentsMargins(5, 10, 5, 10)
-        drawing_container.setLayout(drawing_layout)
         
-        # Заголовок
-        drawing_label = QLabel("Инструменты")
-        drawing_label.setStyleSheet(f"color: {ButtonStyles.TEXT_COLOR}; font-weight: bold;")
-        drawing_layout.addWidget(drawing_label)
-
+    def create_drawing_buttons(self):
+        # Создаем контейнер для инструментов рисования
+        drawing_container = QWidget()
+        drawing_layout = QVBoxLayout()  # Изменяем на вертикальный макет
+        drawing_layout.setSpacing(5)
+        drawing_layout.setContentsMargins(5, 0, 5, 0)
+        
+        # Заголовок "Рисовать"
+        self.drawing_label = QLabel("Рисовать")
+        self.drawing_label.setStyleSheet(AppStyles.get_mode_label_style(self.is_dark_theme))
+        drawing_layout.addWidget(self.drawing_label)
+        
+        # Группа кнопок для инструментов рисования
+        drawing_buttons_group = QButtonGroup(self)
+        
         # Кнопка для рисования стен
         self.wall_button = QPushButton("Стена")
         self.wall_button.setCheckable(True)
-        self.wall_button.setStyleSheet(ButtonStyles.TOOL_BUTTON)
+        self.wall_button.setStyleSheet(self.get_tool_button_style())
         self.wall_button.clicked.connect(lambda: self.set_drawing_type("wall"))
         self.wall_button.setEnabled(False)
         self.wall_button.setCursor(Qt.CursorShape.PointingHandCursor)
         drawing_layout.addWidget(self.wall_button)
-
+        drawing_buttons_group.addButton(self.wall_button)
+        
         # Кнопка для рисования регионов
         self.region_button = QPushButton("Регион")
         self.region_button.setCheckable(True)
-        self.region_button.setStyleSheet(ButtonStyles.TOOL_BUTTON)
+        self.region_button.setStyleSheet(self.get_tool_button_style())
         self.region_button.clicked.connect(lambda: self.set_drawing_type("region"))
         self.region_button.setEnabled(False)
         self.region_button.setCursor(Qt.CursorShape.PointingHandCursor)
         drawing_layout.addWidget(self.region_button)
-
+        drawing_buttons_group.addButton(self.region_button)
+        
+        # Устанавливаем макет для контейнера
+        drawing_container.setLayout(drawing_layout)
+        
         # Добавляем контейнер на панель инструментов
         self.toolbar.addWidget(drawing_container)
+    
+    def get_mode_button_style(self):
+        """Возвращает стиль кнопок режима в зависимости от темы"""
+        return AppStyles.get_mode_button_style(self.is_dark_theme)
+    
+    def get_tool_button_style(self):
+        """Возвращает стиль кнопок инструментов в зависимости от темы"""
+        return AppStyles.get_tool_button_style(self.is_dark_theme)
 
     def set_mode(self, mode):
         """Устанавливает режим работы."""
@@ -373,7 +438,7 @@ class MainWindow(QMainWindow):
             self.region_button.setEnabled(False)
             self.field_widget.set_drawing_mode(None)
             self.field_widget.set_edit_mode(True)
-
+    
     def set_drawing_type(self, drawing_type):
         """Устанавливает тип рисования (стена или регион)."""
         logger.debug(f"Setting drawing type to: {drawing_type}")
@@ -394,28 +459,6 @@ class MainWindow(QMainWindow):
         else:
             logger.debug("Clearing drawing mode")
             self.field_widget.set_drawing_mode(None)
-
-    def get_button_style(self):
-        return """
-            QToolButton {
-                background-color: #f0f0f0;
-                border: 1px solid #999;
-                border-radius: 5px;
-                padding: 5px;
-            }
-            QToolButton:hover {
-                background-color: #e0e0e0;
-            }
-            QToolButton:checked {
-                background-color: #4CAF50;
-                color: white;
-                border: 2px solid #2E7D32;
-            }
-            QToolButton:disabled {
-                background-color: #cccccc;
-                color: #666666;
-            }
-        """
 
     def generate_xml(self):
         try:
@@ -462,9 +505,106 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {e}")
 
-    def init_ui(self):
-        # ... остальной код ...
+    def apply_theme(self):
+        """Применяет текущую тему к приложению"""
+        if self.is_dark_theme:
+            # Темная тема
+            self.setStyleSheet(AppStyles.DARK_MAIN_WINDOW)
+            if hasattr(self, 'properties_window'):
+                if hasattr(self.properties_window, 'set_theme'):
+                    self.properties_window.set_theme(True)
+                else:
+                    self.properties_window.setStyleSheet(AppStyles.DARK_PROPERTIES_WINDOW)
+            # Применяем тему к полю сцены
+            if hasattr(self, 'field_widget') and hasattr(self.field_widget, 'set_theme'):
+                self.field_widget.set_theme(True)
+            # Применяем стиль к QDockWidget
+            if hasattr(self, 'properties_dock'):
+                self.properties_dock.setStyleSheet(AppStyles.DARK_PROPERTIES_WINDOW)
+            if hasattr(self, 'coords_label'):
+                self.coords_label.setStyleSheet(AppStyles.DARK_COORDS_LABEL)
+            if hasattr(self, 'theme_switch'):
+                self.theme_switch.setStyleSheet(AppStyles.get_theme_switch_style(True))
+                self.theme_switch.setText("☀️")  # Солнце для переключения на светлую тему
+            
+            # Обновляем стиль чекбокса
+            if hasattr(self, 'snap_to_grid_checkbox'):
+                self.snap_to_grid_checkbox.setStyleSheet(AppStyles.DARK_CHECKBOX_STYLE)
+            
+            # Обновляем стили заголовков и кнопок режимов
+            if hasattr(self, 'observer_button'):
+                self.observer_button.setStyleSheet(self.get_mode_button_style())
+                self.drawing_button.setStyleSheet(self.get_mode_button_style())
+                self.edit_button.setStyleSheet(self.get_mode_button_style())
+            
+            # Обновляем стили заголовков
+            if hasattr(self, 'mode_label'):
+                self.mode_label.setStyleSheet(AppStyles.get_mode_label_style(True))
+            
+            # Обновляем стили кнопок инструментов
+            if hasattr(self, 'wall_button'):
+                self.wall_button.setStyleSheet(self.get_tool_button_style())
+                self.region_button.setStyleSheet(self.get_tool_button_style())
+                
+            # Обновляем стиль заголовка инструментов
+            if hasattr(self, 'drawing_label'):
+                self.drawing_label.setStyleSheet(AppStyles.get_mode_label_style(True))
+        else:
+            # Светлая тема
+            self.setStyleSheet(AppStyles.LIGHT_MAIN_WINDOW)
+            if hasattr(self, 'properties_window'):
+                if hasattr(self.properties_window, 'set_theme'):
+                    self.properties_window.set_theme(False)
+                else:
+                    self.properties_window.setStyleSheet(AppStyles.LIGHT_PROPERTIES_WINDOW)
+            # Применяем тему к полю сцены
+            if hasattr(self, 'field_widget') and hasattr(self.field_widget, 'set_theme'):
+                self.field_widget.set_theme(False)
+            # Применяем стиль к QDockWidget
+            if hasattr(self, 'properties_dock'):
+                self.properties_dock.setStyleSheet(AppStyles.LIGHT_PROPERTIES_WINDOW)
+            if hasattr(self, 'coords_label'):
+                self.coords_label.setStyleSheet(AppStyles.LIGHT_COORDS_LABEL)
+            if hasattr(self, 'theme_switch'):
+                self.theme_switch.setStyleSheet(AppStyles.get_theme_switch_style(False))
+                self.theme_switch.setText("🌙")  # Луна для переключения на темную тему
+            
+            # Обновляем стиль чекбокса
+            if hasattr(self, 'snap_to_grid_checkbox'):
+                self.snap_to_grid_checkbox.setStyleSheet(AppStyles.LIGHT_CHECKBOX_STYLE)
+            
+            # Обновляем стили заголовков и кнопок режимов
+            if hasattr(self, 'observer_button'):
+                self.observer_button.setStyleSheet(self.get_mode_button_style())
+                self.drawing_button.setStyleSheet(self.get_mode_button_style())
+                self.edit_button.setStyleSheet(self.get_mode_button_style())
+            
+            # Обновляем стили заголовков
+            if hasattr(self, 'mode_label'):
+                self.mode_label.setStyleSheet(AppStyles.get_mode_label_style(False))
+            
+            # Обновляем стили кнопок инструментов
+            if hasattr(self, 'wall_button'):
+                self.wall_button.setStyleSheet(self.get_tool_button_style())
+                self.region_button.setStyleSheet(self.get_tool_button_style())
+                
+            # Обновляем стиль заголовка инструментов
+            if hasattr(self, 'drawing_label'):
+                self.drawing_label.setStyleSheet(AppStyles.get_mode_label_style(False))
+            
+        # Сохраняем состояние темы в конфиг
+        config.set("appearance", "dark_theme", str(self.is_dark_theme))
+
+    def toggle_theme(self):
+        """Переключает тему между светлой и темной"""
+        self.is_dark_theme = not self.is_dark_theme
         
-        # Обновляем стиль для меток
-        self.coords_label.setStyleSheet(ButtonStyles.COORDS_LABEL)
-        self.status_label.setStyleSheet(ButtonStyles.STATUS_LABEL)
+        # Сохраняем настройку в конфиг
+        config.set("appearance", "theme", "dark" if self.is_dark_theme else "light")
+        config.set("appearance", "theme_name", "Темный стиль" if self.is_dark_theme else "Светлый стиль")
+        
+        # Применяем тему
+        self.apply_theme()
+        
+        # Обновляем курсоры
+        self.setup_cursors()

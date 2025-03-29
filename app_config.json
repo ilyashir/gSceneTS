@@ -4,8 +4,9 @@
         "version": "1.0.0"
     },
     "appearance": {
-        "theme": "dark",
-        "theme_name": "Темный стиль"
+        "theme": "light",
+        "theme_name": "Светлый стиль",
+        "dark_theme": "False"
     },
     "language": {
         "current": "ru",

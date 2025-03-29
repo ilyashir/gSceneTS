@@ -1,4 +1,4 @@
- # Python
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -21,7 +21,14 @@ wheels/
 *.egg
 
 #xml
-*.xml
+# Раскомментируйте строку ниже, если хотите исключить все XML файлы
+# Или добавьте исключения для конкретных XML файлов, которые нужно отслеживать
+ *.xml
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
 
 # Virtual Environment
 venv/
@@ -35,4 +42,20 @@ ENV/
 *.swo
 
 # Logs
-*.log 
+*.log
+
+# Qt specific
+*.pro.user
+*.qmlproject.user
+*.qmlc
+*.jsc
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+*.qm
+*.autosave
+
+# Системные файлы
+.DS_Store
+Thumbs.db
+desktop.ini 

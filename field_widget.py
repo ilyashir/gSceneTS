@@ -9,7 +9,7 @@ from PyQt6.QtSvg import QSvgRenderer
 from robot import Robot
 from wall import Wall
 from region import Region
-from styles import ButtonStyles
+from styles import AppStyles
 
 import logging
 
@@ -43,7 +43,7 @@ class FieldWidget(QGraphicsView):
         self.setMouseTracking(True)
         
         # Применяем стиль из styles.py
-        self.setStyleSheet(ButtonStyles.CURSOR_SCENE_STYLE)
+        self.setStyleSheet(AppStyles.get_scene_style(True))
         
         # Белый фон для сцены
         self.scene().setBackgroundBrush(QBrush(QColor("white")))
@@ -744,3 +744,7 @@ class FieldWidget(QGraphicsView):
                 self.properties_updated.emit(self.selected_item)
                 return False
         return False
+
+    def set_theme(self, is_dark_theme=True):
+        """Устанавливает тему для сцены"""
+        self.setStyleSheet(AppStyles.get_scene_style(is_dark_theme))

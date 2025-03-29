@@ -1,15 +1,17 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
     QPushButton, QCheckBox, QGroupBox, QSpinBox, QDoubleSpinBox,
-    QMessageBox
+    QMessageBox, QToolButton, QFormLayout, QColorDialog
 )
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QColor
 import logging
 from robot import Robot
 from wall import Wall
 from region import Region
 from custom_widgets import EditableLineEdit
-from styles import ButtonStyles
+from styles import AppStyles
+from math import degrees, radians
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +31,10 @@ class PropertiesWindow(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Свойства")
-        self.setMinimumWidth(340)
+        self.setMinimumWidth(380)
         
-        # Применяем стиль Cursor к окну свойств
-        self.setStyleSheet(ButtonStyles.CURSOR_PROPERTIES_WINDOW)
+        # Применяем стиль
+        self.setStyleSheet(AppStyles.DARK_PROPERTIES_WINDOW)
         
         # Создаем основной layout
         layout = QVBoxLayout()
@@ -62,24 +64,21 @@ class PropertiesWindow(QWidget):
         self.setup_cursors()
     
     def setup_cursors(self):
-        """Устанавливает курсоры для элементов управления в окне свойств"""
-        # Для полей ввода
-        for edit in self.findChildren(QLineEdit):
-            edit.setCursor(Qt.CursorShape.IBeamCursor)
+        """Устанавливает курсоры для всех элементов интерфейса в окне свойств"""
+        # Устанавливаем курсоры для всех кнопок
+        for button in self.findChildren(QPushButton) + self.findChildren(QToolButton):
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
         
-        # Для редактируемых текстовых полей
-        for edit in self.findChildren(EditableLineEdit):
-            edit.setCursor(Qt.CursorShape.IBeamCursor)
-            # В EditableLineEdit есть внутренние кнопки, установим для них курсор
-            for button in edit.findChildren(QPushButton):
-                button.setCursor(Qt.CursorShape.PointingHandCursor)
+        # Устанавливаем курсоры для чекбоксов
+        for checkbox in self.findChildren(QCheckBox):
+            checkbox.setCursor(Qt.CursorShape.PointingHandCursor)
         
-        # Для спинбоксов
-        for spinbox in self.findChildren(QSpinBox):
-            spinbox.setCursor(Qt.CursorShape.IBeamCursor)
-        
-        for spinbox in self.findChildren(QDoubleSpinBox):
-            spinbox.setCursor(Qt.CursorShape.IBeamCursor)
+        # Устанавливаем курсоры для SpinBox
+        for spinbox in self.findChildren(QSpinBox) + self.findChildren(QDoubleSpinBox):
+            # Получаем кнопки внутри спинбокса
+            for child in spinbox.findChildren(QWidget):
+                if 'Button' in child.__class__.__name__:
+                    child.setCursor(Qt.CursorShape.PointingHandCursor)
     
     def create_robot_properties(self):
         group = QGroupBox("Свойства робота")
@@ -91,7 +90,7 @@ class PropertiesWindow(QWidget):
         self.robot_id = EditableLineEdit()
         self.robot_id.setReadOnly(True)  # Только для чтения
         # Используем темный фон, как у других полей
-        self.robot_id.setStyleSheet(f"background-color: {ButtonStyles.SECONDARY_DARK}; color: {ButtonStyles.TEXT_COLOR}; border: 1px solid {ButtonStyles.BORDER_COLOR}; border-radius: 3px; padding: 3px;")
+        self.robot_id.setStyleSheet(f"background-color: {AppStyles.SECONDARY_DARK}; color: {AppStyles.TEXT_COLOR}; border: 1px solid {AppStyles.BORDER_COLOR}; border-radius: 3px; padding: 3px;")
         id_layout.addWidget(self.robot_id)
         layout.addLayout(id_layout)
         
@@ -131,7 +130,7 @@ class PropertiesWindow(QWidget):
         id_layout.addWidget(QLabel("ID:"))
         self.wall_id = EditableLineEdit()
         self.wall_id.valueChanged.connect(lambda text, obj: self.on_wall_id_changed(text, obj))
-        self.wall_id.setStyleSheet(f"background-color: {ButtonStyles.SECONDARY_DARK}; color: {ButtonStyles.TEXT_COLOR}; border: 1px solid {ButtonStyles.BORDER_COLOR}; border-radius: 3px; padding: 3px;")
+        self.wall_id.setStyleSheet(f"background-color: {AppStyles.SECONDARY_DARK}; color: {AppStyles.TEXT_COLOR}; border: 1px solid {AppStyles.BORDER_COLOR}; border-radius: 3px; padding: 3px;")
         id_layout.addWidget(self.wall_id)
         layout.addLayout(id_layout)
         
@@ -188,7 +187,7 @@ class PropertiesWindow(QWidget):
         id_layout.addWidget(QLabel("ID:"))
         self.region_id = EditableLineEdit()
         self.region_id.valueChanged.connect(lambda text, obj: self.on_region_id_changed(text, obj))
-        self.region_id.setStyleSheet(f"background-color: {ButtonStyles.SECONDARY_DARK}; color: {ButtonStyles.TEXT_COLOR}; border: 1px solid {ButtonStyles.BORDER_COLOR}; border-radius: 3px; padding: 3px;")
+        self.region_id.setStyleSheet(f"background-color: {AppStyles.SECONDARY_DARK}; color: {AppStyles.TEXT_COLOR}; border: 1px solid {AppStyles.BORDER_COLOR}; border-radius: 3px; padding: 3px;")
         id_layout.addWidget(self.region_id)
         layout.addLayout(id_layout)
         
@@ -397,3 +396,35 @@ class PropertiesWindow(QWidget):
     def clear_properties(self):
         """Очищает все поля свойств."""
         self.hide_all_groups()
+
+    def set_theme(self, is_dark_theme=True):
+        """Устанавливает тему для окна свойств и всех его элементов"""
+        # Основной стиль окна свойств
+        self.setStyleSheet(AppStyles.get_properties_style(is_dark_theme))
+        
+        # Получаем цвета из темы для полей ID и цвета
+        colors = AppStyles._get_theme_colors(is_dark_theme)
+        id_style = f"""
+            background-color: {colors['secondary_dark']}; 
+            color: {colors['text']}; 
+            border: 1px solid {colors['border']}; 
+            border-radius: 3px; 
+            padding: 3px;
+        """
+        
+        # Обновляем EditableLineEdit виджеты
+        edit_widgets = [
+            ('robot_id', self.robot_id if hasattr(self, 'robot_id') else None),
+            ('wall_id', self.wall_id if hasattr(self, 'wall_id') else None),
+            ('region_id', self.region_id if hasattr(self, 'region_id') else None),
+            ('region_color', self.region_color if hasattr(self, 'region_color') else None)
+        ]
+        
+        for name, widget in edit_widgets:
+            if widget:
+                # Обновляем CSS стиль
+                widget.setStyleSheet(id_style)
+                
+                # Если виджет поддерживает set_theme, вызываем его метод
+                if hasattr(widget, 'set_theme'):
+                    widget.set_theme(is_dark_theme)
