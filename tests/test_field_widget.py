@@ -2,7 +2,7 @@ import sys
 import os
 import pytest
 from PyQt6.QtCore import Qt, QPointF, QRectF
-from PyQt6.QtWidgets import QApplication, QGraphicsScene
+from PyQt6.QtWidgets import QApplication, QGraphicsScene, QMessageBox
 from PyQt6.QtTest import QTest
 
 # Добавляем корневую директорию проекта в sys.path
@@ -155,9 +155,10 @@ class TestFieldWidget:
         
         # Обновляем ID стены на уникальный
         new_id = "w_unique_test_id"
-        field_widget.update_wall_id(new_id)
+        result = field_widget.update_wall_id(new_id)
         
         # Проверяем, что ID стены обновился
+        assert result is True
         assert wall.id == new_id
         assert old_id not in Wall._existing_ids
         assert new_id in Wall._existing_ids
@@ -172,7 +173,8 @@ class TestFieldWidget:
         assert field_widget.selected_item == second_wall
         
         # Пытаемся установить для второй стены тот же ID
-        field_widget.update_wall_id(new_id)
+        result = field_widget.update_wall_id(new_id)
         
         # ID второй стены не должен измениться, так как ID должен быть уникальным
+        assert result is False
         assert second_wall.id == second_wall_old_id 

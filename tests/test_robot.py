@@ -3,9 +3,10 @@ import os
 import pytest
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QColor
+import math
 
 # Добавляем корневую директорию проекта в sys.path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 
 from robot import Robot
 
@@ -30,15 +31,15 @@ class TestRobot:
         """Тест вращения робота"""
         robot = Robot(QPointF(0, 0))
         
-        # Проверяем, что начальное вращение - 0 градусов
-        assert robot.rotation() == 0
+        # У робота нет метода rotation(), вместо этого есть direction
+        assert robot.direction == 0
         
         # Устанавливаем новый угол поворота
         new_rotation = 45
-        robot.setRotation(new_rotation)
+        robot.set_direction(new_rotation)
         
         # Проверяем, что поворот изменился
-        assert robot.rotation() == new_rotation
+        assert robot.direction == new_rotation
     
     def test_robot_highlight(self):
         """Тест выделения робота"""
@@ -48,4 +49,50 @@ class TestRobot:
         robot.set_highlight(True)
         
         # Отключаем подсветку
-        robot.set_highlight(False) 
+        robot.set_highlight(False)
+    
+    def test_robot_init(self):
+        """Тест инициализации робота с правильными параметрами"""
+        # Создаем робота
+        pos = QPointF(150, 200)
+        robot = Robot(pos)
+        robot.set_direction(45)
+        
+        # Проверяем атрибуты
+        assert robot.id == "robot1"  # Фиксированный ID
+        assert robot.pos().x() == 150
+        assert robot.pos().y() == 200
+        assert robot.direction == 45
+    
+    def test_robot_update_position(self):
+        """Тест обновления позиции робота"""
+        # Создаем робота
+        robot = Robot(QPointF(0, 0))
+        
+        # Обновляем позицию
+        new_pos = QPointF(75, 125)
+        robot.setPos(new_pos)
+        
+        # Проверяем новую позицию
+        assert robot.pos().x() == 75
+        assert robot.pos().y() == 125
+    
+    def test_robot_update_direction(self):
+        """Тест обновления направления робота"""
+        # Создаем робота
+        robot = Robot(QPointF(0, 0))
+        
+        # Обновляем направление
+        robot.set_direction(90)
+        
+        # Проверяем новое направление
+        assert robot.direction == 90
+        
+    def test_robot_negative_direction(self):
+        """Тест отрицательного направления робота"""
+        # Создаем робота с отрицательным направлением
+        robot = Robot(QPointF(0, 0))
+        robot.set_direction(-45)
+        
+        # Проверяем, что направление правильно обрабатывается
+        assert robot.direction == -45 
