@@ -265,11 +265,14 @@ class FieldWidget(QGraphicsView):
         height = rect.height()
         logger.debug(f"Adding region at {rect.topLeft()} with width={width}, height={height}")
 
-        region = Region(rect.topLeft(), width, height)
+        # Создаем регион с правильными размерами
+        region = Region(QPointF(0, 0), width, height)
+        # Устанавливаем позицию региона для правильного отображения в системе координат
+        region.setPos(rect.topLeft())
         self.objects_layer.addToGroup(region)
         self.regions.append(region)
         self.select_item(region) 
-        logger.debug(f"Region added: {region}")
+        logger.debug(f"Region added: {region}, position: {region.pos()}, rect: {region.rect()}")
 
     def init_robot(self, pos):
         logger.debug(f"Setting robot position to {pos}")
@@ -626,12 +629,31 @@ class FieldWidget(QGraphicsView):
     def update_robot_position(self, x, y):
         """Обновляет позицию робота."""
         if self.robot_model:  # вместо self.robot_position
+            # Создаем временный объект для проверки границ сцены
+            temp_robot = Robot(QPointF(x, y))
+            if not self.check_object_within_scene(temp_robot):
+                logger.warning(f"Robot position update to ({x}, {y}) rejected - would be out of scene bounds")
+                # Показываем предупреждение о выходе за границы сцены
+                QMessageBox.warning(
+                    None,
+                    "Ошибка",
+                    f"Робот выйдет за границы сцены. Пожалуйста, укажите другие координаты.",
+                    QMessageBox.StandardButton.Ok
+                )
+                # Обновляем свойства с правильной позицией
+                self.properties_updated.emit(self.robot_model)
+                return False
+            
+            # Если проверка пройдена, обновляем позицию
             self.robot_model.setPos(x, y)
+            return True
     
     def update_robot_rotation(self, rotation):
         """Обновляет поворот робота."""
         if self.robot_model:  # вместо self.robot_position
             self.robot_model.setRotation(rotation)
+            return True
+        return False
     
     def update_wall_point1(self, x1, y1):
         """Обновляет первую точку стены."""
@@ -644,10 +666,37 @@ class FieldWidget(QGraphicsView):
             # Проверяем пересечение с роботом, передавая координаты
             if self.wall_intersects_robot(x1, y1, x2, y2):
                 logger.debug(f"Wall would intersect with robot, canceling update")
-                return
+                # Показываем предупреждение о пересечении с роботом
+                QMessageBox.warning(
+                    None,
+                    "Ошибка",
+                    "Стена пересекается с роботом. Пожалуйста, укажите другие координаты.",
+                    QMessageBox.StandardButton.Ok
+                )
+                # Обновляем свойства с правильными координатами
+                self.properties_updated.emit(self.selected_item)
+                return False
+            
+            # Создаем временную стену для проверки границ сцены
+            temp_wall = Wall(QPointF(x1, y1), QPointF(x2, y2))
+            if not self.check_object_within_scene(temp_wall):
+                logger.warning(f"Wall point1 update to ({x1}, {y1}) rejected - would be out of scene bounds")
+                # Показываем предупреждение о выходе за границы сцены
+                QMessageBox.warning(
+                    None,
+                    "Ошибка",
+                    "Стена выйдет за границы сцены. Пожалуйста, укажите другие координаты.",
+                    QMessageBox.StandardButton.Ok
+                )
+                # Обновляем свойства с правильными координатами
+                self.properties_updated.emit(self.selected_item)
+                return False
                 
+            # Если все проверки пройдены, обновляем стену
             with self.selected_item.updating():
                 self.selected_item.setLine(x1, y1, x2, y2)
+            return True
+        return False
     
     def update_wall_point2(self, x2, y2):
         """Обновляет вторую точку стены."""
@@ -660,32 +709,103 @@ class FieldWidget(QGraphicsView):
             # Проверяем пересечение с роботом, передавая координаты
             if self.wall_intersects_robot(x1, y1, x2, y2):
                 logger.debug(f"Wall would intersect with robot, canceling update")
-                return
+                # Показываем предупреждение о пересечении с роботом
+                QMessageBox.warning(
+                    None,
+                    "Ошибка",
+                    "Стена пересекается с роботом. Пожалуйста, укажите другие координаты.",
+                    QMessageBox.StandardButton.Ok
+                )
+                # Обновляем свойства с правильными координатами
+                self.properties_updated.emit(self.selected_item)
+                return False
+            
+            # Создаем временную стену для проверки границ сцены
+            temp_wall = Wall(QPointF(x1, y1), QPointF(x2, y2))
+            if not self.check_object_within_scene(temp_wall):
+                logger.warning(f"Wall point2 update to ({x2}, {y2}) rejected - would be out of scene bounds")
+                # Показываем предупреждение о выходе за границы сцены
+                QMessageBox.warning(
+                    None,
+                    "Ошибка",
+                    "Стена выйдет за границы сцены. Пожалуйста, укажите другие координаты.",
+                    QMessageBox.StandardButton.Ok
+                )
+                # Обновляем свойства с правильными координатами
+                self.properties_updated.emit(self.selected_item)
+                return False
                 
+            # Если все проверки пройдены, обновляем стену
             with self.selected_item.updating():
                 self.selected_item.setLine(x1, y1, x2, y2)
+            return True
+        return False
     
     def update_wall_size(self, width):
         """Обновляет размер стены."""
         logger.debug(f"Updating wall size to {width}")
         if self.selected_item and isinstance(self.selected_item, Wall):
-            self.selected_item.set_stroke_width(width)            
+            self.selected_item.set_stroke_width(width)
+            return True
+        return False
     
     def update_region_position(self, x, y):
         """Обновляет позицию региона."""
         if self.selected_item and isinstance(self.selected_item, Region):
+            # Создаем временный регион для проверки границ сцены
+            rect = self.selected_item.rect()
+            temp_region = Region(QPointF(x, y), rect.width(), rect.height())
+            
+            if not self.check_object_within_scene(temp_region):
+                logger.warning(f"Region position update to ({x}, {y}) rejected - would be out of scene bounds")
+                # Показываем предупреждение о выходе за границы сцены
+                QMessageBox.warning(
+                    None,
+                    "Ошибка",
+                    "Регион выйдет за границы сцены. Пожалуйста, укажите другие координаты.",
+                    QMessageBox.StandardButton.Ok
+                )
+                # Обновляем свойства с правильной позицией
+                self.properties_updated.emit(self.selected_item)
+                return False
+            
+            # Если проверка пройдена, обновляем позицию
             self.selected_item.setPos(x, y)
+            return True
+        return False
     
     def update_region_size(self, width, height):
         """Обновляет размер региона."""
         if self.selected_item and isinstance(self.selected_item, Region):
+            # Создаем временный регион для проверки границ сцены
+            pos = self.selected_item.pos()
+            temp_region = Region(pos, width, height)
+            
+            if not self.check_object_within_scene(temp_region):
+                logger.warning(f"Region size update to ({width}, {height}) rejected - would be out of scene bounds")
+                # Показываем предупреждение о выходе за границы сцены
+                QMessageBox.warning(
+                    None,
+                    "Ошибка",
+                    "Регион выйдет за границы сцены. Пожалуйста, укажите другие размеры.",
+                    QMessageBox.StandardButton.Ok
+                )
+                # Обновляем свойства с правильными размерами
+                self.properties_updated.emit(self.selected_item)
+                return False
+            
+            # Если проверка пройдена, обновляем размер
             rect = self.selected_item.rect()
             self.selected_item.setRect(rect.x(), rect.y(), width, height)
+            return True
+        return False
     
     def update_region_color(self, color):
         """Обновляет цвет региона."""
         if self.selected_item and isinstance(self.selected_item, Region):
             self.selected_item.set_color(color)
+            return True
+        return False
 
     def set_grid_snap(self, enabled):
         """Включает/выключает привязку к сетке."""
