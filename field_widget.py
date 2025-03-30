@@ -545,6 +545,8 @@ class FieldWidget(QGraphicsView):
                         return
                 
                 self.dragging_item.setPos(new_pos)
+                # Обновляем свойства в окне свойств в режиме реального времени
+                self.properties_window.update_properties(self.dragging_item)
             elif isinstance(self.dragging_item, Wall):
                 # Вычисляем смещение относительно точки захвата
                 dx = pos.x() - self.grab_point.x()
@@ -570,6 +572,8 @@ class FieldWidget(QGraphicsView):
                             new_pos_x2,
                             new_pos_y2
                         )
+                    # Обновляем свойства в окне свойств в режиме реального времени
+                    self.properties_window.update_properties(self.dragging_item)
             return
         elif self.edit_mode and self.selected_marker:            
             wall = self.selected_marker.parentItem()
@@ -619,7 +623,10 @@ class FieldWidget(QGraphicsView):
             if self.edit_mode and self.selected_marker:
                 logger.debug("Clearing selected marker")
                 self.selected_marker = None
-            elif hasattr(self, 'dragging_item'):
+            elif hasattr(self, 'dragging_item') and self.dragging_item:
+                # Обновляем свойства в окне свойств после завершения перетаскивания
+                logger.debug(f"Updating properties after dragging for: {self.dragging_item}")
+                self.properties_window.update_properties(self.dragging_item)
                 self.dragging_item = None  # Сбрасываем перетаскиваемый объект
 
             elif self.drawing_mode == "region" and self.temp_region:
