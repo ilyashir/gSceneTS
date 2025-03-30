@@ -10,13 +10,14 @@ This document outlines the planned development path for the project, including u
 - [ ] Implement scene scaling with mouse wheel / Реализовать масштабирование сцены колесиком мыши
 - [ ] Improve XML import/export with additional validation / Улучшить импорт/экспорт XML с дополнительной валидацией
 - [ ] Add keyboard shortcuts for common actions / Добавить горячие клавиши для типовых действий
-- [ ] Add scene constraints validation when changing object parameters in the properties window / Добавить проверку ограничений сцены при изменении параметров объекта в окне свойств
+- [*] Add scene constraints validation when changing object parameters in the properties window / Добавить проверку ограничений сцены при изменении параметров объекта в окне свойств
 
 ### Improvements / Улучшения
 - [ ] Enhance the properties window with more intuitive controls / Улучшить окно свойств, сделав элементы управления более интуитивными
 - [ ] Optimize performance for large scenes / Оптимизировать производительность для больших сцен
 - [ ] Implement undo/redo functionality / Реализовать функциональность отмены/повтора действий
 - [ ] Change robot rotation to rotate around its center / Изменить поворот робота: должен вращаться вокруг своего центра
+- [*] Style scrollbars with semi-transparent appearance and auto-hide functionality / Стилизовать полосы прокрутки с полупрозрачным видом и функцией автоскрытия
 
 ### Testing / Тестирование
 - [ ] Add more UI interaction tests / Добавить больше тестов взаимодействия с интерфейсом
