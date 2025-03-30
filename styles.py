@@ -439,6 +439,46 @@ class AppStyles:
             background-color: white;
             border: 1px solid {colors['border']};
         }}
+        
+        QGraphicsView QScrollBar:horizontal {{
+            height: 10px;
+            background: transparent;
+            margin: 0px;
+            border-radius: 5px;
+        }}
+        
+        QGraphicsView QScrollBar:vertical {{
+            width: 10px;
+            background: transparent;
+            margin: 0px;
+            border-radius: 5px;
+        }}
+        
+        QGraphicsView QScrollBar::handle:horizontal,
+        QGraphicsView QScrollBar::handle:vertical {{
+            background: rgba(100, 100, 100, 0.5);
+            border-radius: 5px;
+        }}
+        
+        QGraphicsView QScrollBar::handle:horizontal:hover,
+        QGraphicsView QScrollBar::handle:vertical:hover {{
+            background: rgba(100, 100, 100, 0.8);
+        }}
+        
+        QGraphicsView QScrollBar::add-line:horizontal,
+        QGraphicsView QScrollBar::sub-line:horizontal,
+        QGraphicsView QScrollBar::add-line:vertical,
+        QGraphicsView QScrollBar::sub-line:vertical {{
+            width: 0px;
+            height: 0px;
+        }}
+        
+        QGraphicsView QScrollBar::add-page:horizontal,
+        QGraphicsView QScrollBar::sub-page:horizontal,
+        QGraphicsView QScrollBar::add-page:vertical,
+        QGraphicsView QScrollBar::sub-page:vertical {{
+            background: transparent;
+        }}
     """
     
     @classmethod

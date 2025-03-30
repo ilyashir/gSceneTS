@@ -48,6 +48,10 @@ class FieldWidget(QGraphicsView):
         # Белый фон для сцены
         self.scene().setBackgroundBrush(QBrush(QColor("white")))
         
+        # Настройка полос прокрутки - изначально скроем их
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        
         self.grid_size = grid_size  # размер графической сетки из конфигурации
         self.snap_to_grid_enabled = True  # Привязка к сетке включена по умолчанию
 
@@ -83,6 +87,10 @@ class FieldWidget(QGraphicsView):
         self.draw_grid()
         self.draw_axes()
         self.init_robot(QPointF(0, 0))  # Робот по умолчанию в (0, 0)
+        
+        # Устанавливаем размер сцены и настраиваем полосы прокрутки
+        self.scene().setSceneRect(-self.scene_width/2, -self.scene_height/2, self.scene_width, self.scene_height)
+        self.updateScrollBars()
 
     # отрисовка сетки
     def draw_grid(self):
@@ -322,6 +330,10 @@ class FieldWidget(QGraphicsView):
         logger.debug("Drawing grid and axes...")
         self.draw_grid()
         self.draw_axes()
+        
+        # Обновляем размер сцены и настраиваем полосы прокрутки
+        self.scene().setSceneRect(-self.scene_width/2, -self.scene_height/2, self.scene_width, self.scene_height)
+        self.updateScrollBars()
 
         logger.debug("Scene size updated successfully.") 
 
@@ -875,3 +887,28 @@ class FieldWidget(QGraphicsView):
     def set_theme(self, is_dark_theme=True):
         """Устанавливает тему для сцены"""
         self.setStyleSheet(AppStyles.get_scene_style(is_dark_theme))
+
+    def resizeEvent(self, event):
+        """Обработчик изменения размера окна"""
+        super().resizeEvent(event)
+        # При изменении размера виджета обновляем состояние полос прокрутки
+        self.updateScrollBars()
+        
+    def updateScrollBars(self):
+        """Обновляет видимость полос прокрутки в зависимости от размеров сцены и виджета"""
+        view_rect = self.viewport().rect()
+        scene_rect = self.sceneRect()
+        
+        # Преобразуем границы сцены в координаты виджета
+        scene_rect_mapped = self.mapFromScene(scene_rect).boundingRect()
+        
+        # Если сцена полностью помещается в видимую область - скрываем полосы прокрутки
+        if view_rect.contains(scene_rect_mapped):
+            self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            logger.debug("Scene fits in view - hiding scrollbars")
+        else:
+            # Иначе показываем полосы прокрутки по необходимости
+            self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+            self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+            logger.debug("Scene doesn't fit in view - showing scrollbars")
