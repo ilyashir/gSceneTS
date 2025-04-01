@@ -91,6 +91,9 @@ class FieldWidget(QGraphicsView):
         self._max_scale = 3.0
         self._scale_step = 0.5
 
+        # Ссылка на менеджер скроллбаров, который будет установлен из main_window.py
+        self._scroll_manager = None
+
         self.draw_grid()
         self.draw_axes()
         self.init_robot(QPointF(0, 0))  # Робот по умолчанию в (0, 0)
@@ -340,8 +343,18 @@ class FieldWidget(QGraphicsView):
         # Обновляем размер сцены
         self.scene().setSceneRect(-self.scene_width/2, -self.scene_height/2, self.scene_width, self.scene_height)
 
+        # Обновляем видимость скроллбаров после изменения размера сцены
+        self.update_scrollbars_visibility()
+
         logger.debug("Scene size updated successfully.")
         logger.debug(f"Scene size set to: {width}x{height}")
+
+    def update_scrollbars_visibility(self):
+        """Обновляет видимость скроллбаров в зависимости от размера сцены и текущего масштаба"""
+        if hasattr(self, '_scroll_manager') and self._scroll_manager:
+            # Вызываем метод из менеджера, который сначала проверит необходимость скроллбаров
+            # и затем покажет только те, которые нужны
+            self._scroll_manager._showScrollbars()
 
     def redraw_grid(self):
         """Перерисовывает сетку и оси"""
@@ -946,6 +959,9 @@ class FieldWidget(QGraphicsView):
             self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() + int(delta.x()))
             self.verticalScrollBar().setValue(self.verticalScrollBar().value() + int(delta.y()))
             
+            # Обновляем видимость скроллбаров после изменения масштаба и прокрутки
+            self.update_scrollbars_visibility()
+            
             # Сообщаем об изменении масштаба
             logger.debug(f"Scale changed to: {self._scale_factor}")
             
@@ -954,6 +970,9 @@ class FieldWidget(QGraphicsView):
         else:
             # Если Ctrl не зажат, используем стандартную прокрутку
             super().wheelEvent(event)
+            
+            # Обновляем видимость скроллбаров после прокрутки
+            self.update_scrollbars_visibility()
     
     def scale_view(self, new_scale):
         """Масштабирует представление до указанного значения"""
@@ -969,6 +988,9 @@ class FieldWidget(QGraphicsView):
         
         # Применяем новый масштаб
         self.setTransform(QTransform().scale(self._scale_factor, self._scale_factor))
+        
+        # Обновляем видимость скроллбаров
+        self.update_scrollbars_visibility()
         
         logger.debug(f"View scaled to: {self._scale_factor}")
     

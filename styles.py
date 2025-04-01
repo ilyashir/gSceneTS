@@ -445,27 +445,75 @@ class AppStyles:
     def get_theme_switch_style(cls, is_dark_theme=True):
         """Генерирует стиль для кнопки переключения темы"""
         colors = cls._get_theme_colors(is_dark_theme)
-        background = '#1E1E1E' if is_dark_theme else '#F3F3F3'
         return f"""
-        QPushButton {{
-            background-color: {background};
-            color: {colors['text']};
-            border: 1px solid {colors['border']};
-            border-radius: 10px;
-            padding: 0px 3px;
-            margin: 2px;
-            min-width: 20px;
-            max-width: 20px;
-            min-height: 20px;
-            max-height: 20px;
-            font-size: 14px;
-            text-align: center;
-        }}
-        QPushButton:hover {{
-            background-color: {colors['primary']};
-            color: white;
-        }}
-    """
+            QPushButton {{
+                background-color: {colors['secondary_dark']};
+                color: {colors['text']};
+                border: 1px solid {colors['border']};
+                border-radius: 15px;
+                padding: 5px;
+                font-size: 16px;
+                min-width: 30px;
+                min-height: 30px;
+            }}
+            QPushButton:hover {{
+                background-color: {colors['primary']};
+            }}
+        """
+        
+    @classmethod
+    def get_scale_button_style(cls, is_dark_theme=True):
+        """Генерирует стиль для кнопок масштабирования"""
+        colors = cls._get_theme_colors(is_dark_theme)
+        button_bg = "#4a4a4a" if is_dark_theme else "#e0e0e0"
+        border_color = colors['border']
+        hover_bg = "#555555" if is_dark_theme else "#d0d0d0"
+        pressed_bg = "#333333" if is_dark_theme else "#c0c0c0"
+        disabled_bg = "#3a3a3a" if is_dark_theme else "#f0f0f0"
+        
+        return f"""
+            QToolButton {{
+                background-color: {button_bg};
+                border: 1px solid {border_color};
+                border-radius: 4px;
+                padding: 4px;
+                min-width: 30px;
+                min-height: 30px;
+                font-size: 16px;
+                font-weight: bold;
+                color: {colors['text']};
+            }}
+            QToolButton:hover {{
+                background-color: {hover_bg};
+            }}
+            QToolButton:pressed {{
+                background-color: {pressed_bg};
+            }}
+            QToolButton:disabled {{
+                color: gray;
+                background-color: {disabled_bg};
+            }}
+        """
+        
+    @classmethod
+    def get_scale_display_style(cls, is_dark_theme=True):
+        """Генерирует стиль для поля отображения текущего масштаба"""
+        colors = cls._get_theme_colors(is_dark_theme)
+        field_bg = "#2d2d2d" if is_dark_theme else "#f5f5f5"
+        border_color = colors['border']
+        
+        return f"""
+            QLineEdit {{
+                background-color: {field_bg};
+                border: 1px solid {border_color};
+                border-radius: 4px;
+                padding: 4px;
+                min-height: 30px;
+                font-size: 14px;
+                font-weight: bold;
+                color: {colors['text']};
+            }}
+        """
 
 
 # Создание констант после определения класса

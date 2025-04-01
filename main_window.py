@@ -101,6 +101,10 @@ class MainWindow(QMainWindow):
             use_dark_theme=False,  # Темная тема
             auto_hide=True        # Автоскрытие
         )
+        
+        # Сохраняем ссылку на менеджер скроллбаров в FieldWidget
+        if hasattr(self.field_widget, '_scroll_manager'):
+            self.field_widget._scroll_manager = getattr(self.field_widget, '_scroll_manager')
 
         layout.addWidget(self.field_widget)
     
@@ -316,7 +320,7 @@ class MainWindow(QMainWindow):
         # Контейнер для кнопок масштабирования
         scale_buttons = QWidget()
         scale_buttons_layout = QHBoxLayout()
-        scale_buttons_layout.setSpacing(5)
+        scale_buttons_layout.setSpacing(8)  # Увеличиваем расстояние между кнопками
         scale_buttons_layout.setContentsMargins(0, 0, 0, 0)
         scale_buttons.setLayout(scale_buttons_layout)
         
@@ -325,15 +329,17 @@ class MainWindow(QMainWindow):
         self.zoom_out_button.setText("-")
         self.zoom_out_button.setToolTip("Уменьшить (или Ctrl+колесико мыши вниз)")
         self.zoom_out_button.clicked.connect(self.field_widget.zoomOut)
+        self.zoom_out_button.setStyleSheet(AppStyles.get_scale_button_style(self.is_dark_theme))
         scale_buttons_layout.addWidget(self.zoom_out_button)
         
         # Поле для отображения текущего масштаба
         self.scale_display = QLineEdit()
-        self.scale_display.setMaximumWidth(50)
+        self.scale_display.setMaximumWidth(60)  # Делаем чуть шире
         self.scale_display.setReadOnly(True)
         self.scale_display.setText("1.0")
         self.scale_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.scale_display.setToolTip("Для изменения масштаба используйте Ctrl+колесико мыши")
+        self.scale_display.setStyleSheet(AppStyles.get_scale_display_style(self.is_dark_theme))
         scale_buttons_layout.addWidget(self.scale_display)
         
         # Кнопка увеличения масштаба
@@ -341,6 +347,7 @@ class MainWindow(QMainWindow):
         self.zoom_in_button.setText("+")
         self.zoom_in_button.setToolTip("Увеличить (или Ctrl+колесико мыши вверх)")
         self.zoom_in_button.clicked.connect(self.field_widget.zoomIn)
+        self.zoom_in_button.setStyleSheet(AppStyles.get_scale_button_style(self.is_dark_theme))
         scale_buttons_layout.addWidget(self.zoom_in_button)
         
         # Кнопка сброса масштаба
@@ -348,12 +355,13 @@ class MainWindow(QMainWindow):
         self.reset_zoom_button.setText("1:1")
         self.reset_zoom_button.setToolTip("Сбросить масштаб")
         self.reset_zoom_button.clicked.connect(self.field_widget.resetScale)
+        self.reset_zoom_button.setStyleSheet(AppStyles.get_scale_button_style(self.is_dark_theme))
         scale_buttons_layout.addWidget(self.reset_zoom_button)
         
         scale_layout.addWidget(scale_buttons)
         
         # Добавляем подсказку о масштабировании
-        scale_hint = QLabel("(Ctrl+колесико мыши для масштабирования)")
+        scale_hint = QLabel("(Ctrl+колесико мыши)")
         scale_hint.setStyleSheet("font-size: 8pt; color: gray;")
         scale_layout.addWidget(scale_hint)
         
@@ -645,6 +653,13 @@ class MainWindow(QMainWindow):
             # Обновляем стиль заголовка инструментов
             if hasattr(self, 'drawing_label'):
                 self.drawing_label.setStyleSheet(AppStyles.get_mode_label_style(True))
+                
+            # Обновляем стили кнопок масштабирования
+            if hasattr(self, 'zoom_in_button'):
+                self.zoom_in_button.setStyleSheet(AppStyles.get_scale_button_style(True))
+                self.zoom_out_button.setStyleSheet(AppStyles.get_scale_button_style(True))
+                self.reset_zoom_button.setStyleSheet(AppStyles.get_scale_button_style(True))
+                self.scale_display.setStyleSheet(AppStyles.get_scale_display_style(True))
         else:
             # Светлая тема
             self.setStyleSheet(AppStyles.LIGHT_MAIN_WINDOW)
@@ -687,6 +702,13 @@ class MainWindow(QMainWindow):
             # Обновляем стиль заголовка инструментов
             if hasattr(self, 'drawing_label'):
                 self.drawing_label.setStyleSheet(AppStyles.get_mode_label_style(False))
+                
+            # Обновляем стили кнопок масштабирования
+            if hasattr(self, 'zoom_in_button'):
+                self.zoom_in_button.setStyleSheet(AppStyles.get_scale_button_style(False))
+                self.zoom_out_button.setStyleSheet(AppStyles.get_scale_button_style(False))
+                self.reset_zoom_button.setStyleSheet(AppStyles.get_scale_button_style(False))
+                self.scale_display.setStyleSheet(AppStyles.get_scale_display_style(False))
             
         # Сохраняем состояние темы в конфиг
         config.set("appearance", "dark_theme", str(self.is_dark_theme))
