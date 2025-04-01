@@ -16,7 +16,6 @@ dependencies = [
     "PyQt6-sip>=13.4.0",
     "pytest>=7.0.0",
     "pytest-qt==4.2.0",
-    "transparent-scrollbar-pyqt>=0.5.0",
 ]
 
 [project.optional-dependencies]
@@ -26,5 +25,4 @@ dev = ["pytest>=7.0.0"]
 packages = ["utils"]
 package-data = {"utils" = ["transparent_scrollbar/*.py"]}
 
-[tool.setuptools.dependency-links]
-transparent-scrollbar-pyqt = "git+https://github.com/ilyashir/transparent-scrollbar-pyqt.git@v0.5.0#subdirectory=transparent_scrollbar_pkg" 
+# Зависимость transparent-scrollbar-pyqt указана в setup.py через dependency_links
