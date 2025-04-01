@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import QMessageBox
 import logging
 from styles import AppStyles
 from config import config
-from transparent_scrollbar import apply_scrollbars_to_graphics_view
+from utils.transparent_scrollbar import apply_scrollbars_to_graphics_view
 from utils.keyboard_shortcuts import AppShortcutsManager
 
 # Настройка логгера
