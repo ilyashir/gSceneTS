@@ -1,7 +1,6 @@
 from PyQt6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QGraphicsLineItem, QGraphicsRectItem,
-    QGraphicsEllipseItem, QInputDialog, QGraphicsPixmapItem, QGraphicsTextItem,
-    QGraphicsItemGroup, QGraphicsItem, QMessageBox, QFrame, QScrollArea
+    QGraphicsTextItem, QGraphicsItemGroup, QGraphicsItem, QMessageBox
 )
 from PyQt6.QtGui import QPainter, QPixmap, QPen, QBrush, QColor, QImage, QTransform
 from PyQt6.QtCore import Qt, QPointF, QRectF, QLineF, pyqtSignal
@@ -86,13 +85,18 @@ class FieldWidget(QGraphicsView):
         self.scene_width = scene_width  # размеры сцены из конфигурации
         self.scene_height = scene_height
 
+        # Инициализация масштаба
+        self._scale_factor = 1.0
+        self._min_scale = 0.5
+        self._max_scale = 3.0
+        self._scale_step = 0.5
+
         self.draw_grid()
         self.draw_axes()
         self.init_robot(QPointF(0, 0))  # Робот по умолчанию в (0, 0)
         
-        # Устанавливаем размер сцены и настраиваем полосы прокрутки
+        # Устанавливаем размер сцены
         self.scene().setSceneRect(-self.scene_width/2, -self.scene_height/2, self.scene_width, self.scene_height)
-        # self.updateScrollBars()
 
     # отрисовка сетки
     def draw_grid(self):
@@ -333,11 +337,29 @@ class FieldWidget(QGraphicsView):
         self.draw_grid()
         self.draw_axes()
         
-        # Обновляем размер сцены и настраиваем полосы прокрутки
+        # Обновляем размер сцены
         self.scene().setSceneRect(-self.scene_width/2, -self.scene_height/2, self.scene_width, self.scene_height)
-        # self.updateScrollBars()
 
-        logger.debug("Scene size updated successfully.") 
+        logger.debug("Scene size updated successfully.")
+        logger.debug(f"Scene size set to: {width}x{height}")
+
+    def redraw_grid(self):
+        """Перерисовывает сетку и оси"""
+        # Убираем старую сетку со сцены
+        for item in self.grid_layer.childItems():
+            self.grid_layer.removeFromGroup(item)
+            self.scene().removeItem(item)  # Удаляем элементы из сцены
+
+        # Убираем старые оси координат со сцены
+        for item in self.axes_layer.childItems():
+            self.axes_layer.removeFromGroup(item)
+            self.scene().removeItem(item)  # Удаляем элементы из сцены    
+            
+        # Перерисовываем сетку и оси
+        self.draw_grid()
+        self.draw_axes()
+        
+        logger.debug("Grid redrawn")
 
     def check_objects_within_bounds(self, width, height):
         for wall in self.walls:
@@ -889,3 +911,82 @@ class FieldWidget(QGraphicsView):
     def set_theme(self, is_dark_theme=True):
         """Устанавливает тему для сцены"""
         self.setStyleSheet(AppStyles.get_scene_style(is_dark_theme))
+
+    def wheelEvent(self, event):
+        """Обработка события колесика мыши для масштабирования и прокрутки"""
+        # Проверяем, зажата ли клавиша Ctrl
+        is_ctrl_pressed = event.modifiers() & Qt.KeyboardModifier.ControlModifier
+        
+        # Если Ctrl зажат, выполняем масштабирование
+        if is_ctrl_pressed:
+            # Получаем текущее положение курсора в координатах сцены
+            view_pos = event.position()
+            scene_pos = self.mapToScene(int(view_pos.x()), int(view_pos.y()))
+            
+            # Определяем направление прокрутки
+            scroll_direction = 1 if event.angleDelta().y() > 0 else -1
+            
+            # Изменяем масштаб
+            old_scale = self._scale_factor
+            if scroll_direction > 0:
+                # Увеличиваем масштаб
+                self.scale_view(self._scale_factor + self._scale_step)
+            else:
+                # Уменьшаем масштаб
+                self.scale_view(self._scale_factor - self._scale_step)
+                
+            # Если масштаб не изменился, используем стандартную прокрутку
+            if self._scale_factor == old_scale:
+                super().wheelEvent(event)
+                return
+                
+            # Корректируем положение сцены, чтобы точка под курсором осталась на месте
+            new_pos = self.mapFromScene(scene_pos)
+            delta = QPointF(new_pos.x() - view_pos.x(), new_pos.y() - view_pos.y())
+            self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() + int(delta.x()))
+            self.verticalScrollBar().setValue(self.verticalScrollBar().value() + int(delta.y()))
+            
+            # Сообщаем об изменении масштаба
+            logger.debug(f"Scale changed to: {self._scale_factor}")
+            
+            # Подавляем стандартную обработку события
+            event.accept()
+        else:
+            # Если Ctrl не зажат, используем стандартную прокрутку
+            super().wheelEvent(event)
+    
+    def scale_view(self, new_scale):
+        """Масштабирует представление до указанного значения"""
+        # Ограничиваем масштаб минимальным и максимальным значениями
+        new_scale = max(min(new_scale, self._max_scale), self._min_scale)
+        
+        # Если масштаб не изменился, ничего не делаем
+        if new_scale == self._scale_factor:
+            return
+            
+        # Сохраняем новый масштаб
+        self._scale_factor = new_scale
+        
+        # Применяем новый масштаб
+        self.setTransform(QTransform().scale(self._scale_factor, self._scale_factor))
+        
+        logger.debug(f"View scaled to: {self._scale_factor}")
+    
+    def resetScale(self):
+        """Сбрасывает масштаб к стандартному (1.0)"""
+        self.scale_view(1.0)
+        logger.debug("Scale reset to 1.0")
+    
+    def zoomIn(self):
+        """Увеличивает масштаб на один шаг"""
+        self.scale_view(self._scale_factor + self._scale_step)
+        logger.debug(f"Zoomed in to: {self._scale_factor}")
+    
+    def zoomOut(self):
+        """Уменьшает масштаб на один шаг"""
+        self.scale_view(self._scale_factor - self._scale_step)
+        logger.debug(f"Zoomed out to: {self._scale_factor}")
+    
+    def currentScale(self):
+        """Возвращает текущий масштаб"""
+        return self._scale_factor

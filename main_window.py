@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QCheckBox, QSpacerItem, QSizePolicy, QFileDialog, QDockWidget, QSpinBox, QDoubleSpinBox, QButtonGroup, QStatusBar, QFrame
 )
 from PyQt6.QtGui import QIcon
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from field_widget import FieldWidget
 from properties_window import PropertiesWindow
 import xml.etree.ElementTree as ET
@@ -296,6 +296,89 @@ class MainWindow(QMainWindow):
 
         # Добавляем виджет на панель инструментов
         self.toolbar.addWidget(size_widget)
+        
+        # Создаем панель масштабирования
+        self.createScalePanel()
+
+    def createScalePanel(self):
+        """Создает панель с элементами управления масштабом"""
+        scale_widget = QWidget()
+        scale_layout = QVBoxLayout()
+        scale_layout.setSpacing(5)
+        scale_layout.setContentsMargins(5, 0, 5, 0)
+        scale_widget.setLayout(scale_layout)
+        
+        # Заголовок "Масштаб"
+        scale_label = QLabel("Масштаб")
+        scale_label.setStyleSheet(AppStyles.get_mode_label_style(self.is_dark_theme))
+        scale_layout.addWidget(scale_label)
+        
+        # Контейнер для кнопок масштабирования
+        scale_buttons = QWidget()
+        scale_buttons_layout = QHBoxLayout()
+        scale_buttons_layout.setSpacing(5)
+        scale_buttons_layout.setContentsMargins(0, 0, 0, 0)
+        scale_buttons.setLayout(scale_buttons_layout)
+        
+        # Кнопка уменьшения масштаба
+        self.zoom_out_button = QToolButton()
+        self.zoom_out_button.setText("-")
+        self.zoom_out_button.setToolTip("Уменьшить (или Ctrl+колесико мыши вниз)")
+        self.zoom_out_button.clicked.connect(self.field_widget.zoomOut)
+        scale_buttons_layout.addWidget(self.zoom_out_button)
+        
+        # Поле для отображения текущего масштаба
+        self.scale_display = QLineEdit()
+        self.scale_display.setMaximumWidth(50)
+        self.scale_display.setReadOnly(True)
+        self.scale_display.setText("1.0")
+        self.scale_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.scale_display.setToolTip("Для изменения масштаба используйте Ctrl+колесико мыши")
+        scale_buttons_layout.addWidget(self.scale_display)
+        
+        # Кнопка увеличения масштаба
+        self.zoom_in_button = QToolButton()
+        self.zoom_in_button.setText("+")
+        self.zoom_in_button.setToolTip("Увеличить (или Ctrl+колесико мыши вверх)")
+        self.zoom_in_button.clicked.connect(self.field_widget.zoomIn)
+        scale_buttons_layout.addWidget(self.zoom_in_button)
+        
+        # Кнопка сброса масштаба
+        self.reset_zoom_button = QToolButton()
+        self.reset_zoom_button.setText("1:1")
+        self.reset_zoom_button.setToolTip("Сбросить масштаб")
+        self.reset_zoom_button.clicked.connect(self.field_widget.resetScale)
+        scale_buttons_layout.addWidget(self.reset_zoom_button)
+        
+        scale_layout.addWidget(scale_buttons)
+        
+        # Добавляем подсказку о масштабировании
+        scale_hint = QLabel("(Ctrl+колесико мыши для масштабирования)")
+        scale_hint.setStyleSheet("font-size: 8pt; color: gray;")
+        scale_layout.addWidget(scale_hint)
+        
+        # Добавляем отступ
+        spacer_widget = QWidget()
+        spacer_widget.setFixedHeight(30)
+        scale_layout.addWidget(spacer_widget)
+        
+        # Добавляем виджет на панель инструментов
+        self.toolbar.addWidget(scale_widget)
+        
+        # Таймер для обновления отображения масштаба
+        self.scale_update_timer = QTimer()
+        self.scale_update_timer.setInterval(100)  # Обновляем каждые 100 мс
+        self.scale_update_timer.timeout.connect(self.updateScaleDisplay)
+        self.scale_update_timer.start()
+
+    def updateScaleDisplay(self):
+        """Обновляет отображение текущего масштаба"""
+        current_scale = self.field_widget.currentScale()
+        self.scale_display.setText(f"{current_scale:.1f}")
+        
+        # Обновляем состояние кнопок масштабирования
+        self.zoom_in_button.setEnabled(current_scale < self.field_widget._max_scale)
+        self.zoom_out_button.setEnabled(current_scale > self.field_widget._min_scale)
 
     def apply_size_changes(self):
         """Обработчик нажатия кнопки 'Применить'."""
