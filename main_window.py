@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import QMessageBox
 import logging
 from styles import AppStyles
 from config import config
+from transparent_scrollbar import apply_scrollbars_to_graphics_view
 
 # Настройка логгера
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -88,7 +89,19 @@ class MainWindow(QMainWindow):
         self.field_widget = FieldWidget(self.properties_window, 
                                         scene_width=self.scene_width, 
                                         scene_height=self.scene_height,
-                                        grid_size=self.grid_size)       
+                                        grid_size=self.grid_size)
+
+        vsb, hsb = apply_scrollbars_to_graphics_view(
+            self.field_widget,
+            bg_alpha=5,          # Прозрачность фона
+            handle_alpha=100,     # Прозрачность ползунка
+            hover_alpha=170,      # Прозрачность при наведении
+            pressed_alpha=200,    # Прозрачность при нажатии
+            scroll_bar_width=15,  # Ширина скроллбара
+            use_dark_theme=False,  # Темная тема
+            auto_hide=True        # Автоскрытие
+        )
+
         layout.addWidget(self.field_widget)
     
         container.setLayout(layout)
