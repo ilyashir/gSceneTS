@@ -37,5 +37,8 @@ setup(
         "console_scripts": [
             "gscene=main:main",
         ],
+        "gui_scripts": [
+            "gscene-gui=main:main",
+        ],
     },
 ) 
