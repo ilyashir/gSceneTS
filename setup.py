@@ -35,7 +35,7 @@ setup(
     # Запускаемый скрипт
     entry_points={
         "console_scripts": [
-            "gscene=app:main",
+            "gscene=main:main",
         ],
     },
 ) 
