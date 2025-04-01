@@ -13,6 +13,7 @@ import logging
 from styles import AppStyles
 from config import config
 from transparent_scrollbar import apply_scrollbars_to_graphics_view
+from utils.keyboard_shortcuts import AppShortcutsManager
 
 # Настройка логгера
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -197,6 +198,15 @@ class MainWindow(QMainWindow):
         
         # Устанавливаем курсоры для всех элементов интерфейса
         self.setup_cursors()
+        
+        # Инициализируем и настраиваем менеджер горячих клавиш
+        self.shortcuts_manager = AppShortcutsManager(self)
+        self.shortcuts_manager.setup_all_shortcuts()
+        
+        # Создаем раздел в панели инструментов для кнопки показа горячих клавиш
+        self.add_shortcuts_help_button()
+        
+        logger.debug("Главное окно инициализировано")
     
     def setup_cursors(self):
         """Устанавливает курсоры для всех элементов интерфейса"""
@@ -660,6 +670,11 @@ class MainWindow(QMainWindow):
                 self.zoom_out_button.setStyleSheet(AppStyles.get_scale_button_style(True))
                 self.reset_zoom_button.setStyleSheet(AppStyles.get_scale_button_style(True))
                 self.scale_display.setStyleSheet(AppStyles.get_scale_display_style(True))
+                
+            # Обновляем стиль кнопки горячих клавиш
+            for btn in self.findChildren(QPushButton):
+                if btn.text() == "Горячие клавиши":
+                    btn.setStyleSheet(AppStyles.get_accent_button_style(True))
         else:
             # Светлая тема
             self.setStyleSheet(AppStyles.LIGHT_MAIN_WINDOW)
@@ -709,6 +724,11 @@ class MainWindow(QMainWindow):
                 self.zoom_out_button.setStyleSheet(AppStyles.get_scale_button_style(False))
                 self.reset_zoom_button.setStyleSheet(AppStyles.get_scale_button_style(False))
                 self.scale_display.setStyleSheet(AppStyles.get_scale_display_style(False))
+                
+            # Обновляем стиль кнопки горячих клавиш
+            for btn in self.findChildren(QPushButton):
+                if btn.text() == "Горячие клавиши":
+                    btn.setStyleSheet(AppStyles.get_accent_button_style(False))
             
         # Сохраняем состояние темы в конфиг
         config.set("appearance", "dark_theme", str(self.is_dark_theme))
@@ -726,3 +746,27 @@ class MainWindow(QMainWindow):
         
         # Обновляем курсоры
         self.setup_cursors()
+        
+    def add_shortcuts_help_button(self):
+        """Добавляет кнопку для отображения списка горячих клавиш"""
+        # Добавляем разделитель перед кнопкой помощи
+        separator_container = QWidget()
+        separator_layout = QVBoxLayout()
+        separator_layout.setContentsMargins(5, 10, 5, 10)
+        
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        separator.setMinimumHeight(2)
+        separator.setStyleSheet(f"background-color: {AppStyles.BORDER_COLOR if self.is_dark_theme else AppStyles.LIGHT_BORDER_COLOR};")
+        
+        separator_layout.addWidget(separator)
+        separator_container.setLayout(separator_layout)
+        self.toolbar.addWidget(separator_container)
+        
+        # Кнопка для отображения списка горячих клавиш
+        shortcuts_button = QPushButton("Горячие клавиши")
+        shortcuts_button.setStyleSheet(AppStyles.get_accent_button_style(self.is_dark_theme))
+        shortcuts_button.clicked.connect(self.shortcuts_manager.show_shortcuts_dialog)
+        shortcuts_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.toolbar.addWidget(shortcuts_button)

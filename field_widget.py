@@ -1012,3 +1012,31 @@ class FieldWidget(QGraphicsView):
     def currentScale(self):
         """Возвращает текущий масштаб"""
         return self._scale_factor
+
+    def delete_wall(self, wall):
+        """Удаляет стену со сцены"""
+        if wall in self.walls:
+            self.scene().removeItem(wall)
+            self.walls.remove(wall)
+            logger.debug(f"Удалена стена {wall.id}")
+    
+    def delete_region(self, region):
+        """Удаляет регион со сцены"""
+        if region in self.regions:
+            self.scene().removeItem(region)
+            self.regions.remove(region)
+            logger.debug(f"Удален регион {region.id}")
+            
+    def delete_selected_item(self):
+        """
+        Удаляет выбранный элемент на сцене.
+        Временная заглушка.
+        """
+        logger.debug("Попытка удалить элемент (заглушка)")
+        if self.selected_item:
+            logger.debug(f"Тип выбранного элемента: {type(self.selected_item)}")
+            
+            # Заглушка для отладки - просто снимаем выделение
+            # TODO: реализовать полноценное удаление
+            self.deselect_item()
+            logger.debug("Снято выделение с объекта (заглушка)")
