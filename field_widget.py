@@ -10,8 +10,6 @@ from robot import Robot
 from wall import Wall
 from region import Region
 from styles import AppStyles
-# Импортируем пакет с прозрачными скроллбарами
-from transparent_scrollbar import apply_scrollbars_to_graphics_view, GraphicsViewVerticalScrollBar, GraphicsViewHorizontalScrollBar
 
 import logging
 
