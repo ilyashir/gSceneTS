@@ -1,19 +1,19 @@
 from PyQt6.QtWidgets import (
     QMainWindow, QToolBar, QToolButton, QPushButton, QLineEdit, QWidget, QHBoxLayout, QVBoxLayout, QLabel,
-    QCheckBox, QSpacerItem, QSizePolicy, QFileDialog, QDockWidget, QSpinBox, QDoubleSpinBox, QButtonGroup, QStatusBar, QFrame
+    QCheckBox, QSpacerItem, QSizePolicy, QFileDialog, QDockWidget, QSpinBox, QDoubleSpinBox, QButtonGroup, QStatusBar, QFrame, QMessageBox
 )
-from PyQt6.QtGui import QIcon
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer
+from PyQt6.QtGui import QIcon, QAction
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QPointF
 from field_widget import FieldWidget
 from properties_window import PropertiesWindow
 import xml.etree.ElementTree as ET
 from xml.dom import minidom 
-from PyQt6.QtWidgets import QMessageBox
 import logging
 from styles import AppStyles
 from config import config
 from utils.transparent_scrollbar import apply_scrollbars_to_graphics_view
 from utils.keyboard_shortcuts import AppShortcutsManager
+from utils.xml_handler import XMLHandler, XMLValidationError  # Импортируем новый обработчик XML
 
 # Настройка логгера
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -206,6 +206,9 @@ class MainWindow(QMainWindow):
         # Создаем раздел в панели инструментов для кнопки показа горячих клавиш
         self.add_shortcuts_help_button()
         
+        # Создаем меню приложения
+        self.create_menubar()
+        
         logger.debug("Главное окно инициализировано")
     
     def setup_cursors(self):
@@ -255,9 +258,9 @@ class MainWindow(QMainWindow):
         size_widget.setLayout(size_layout)
 
         # Лейбл "Размер сцены"
-        size_label = QLabel("Размер сцены")
-        size_label.setStyleSheet(AppStyles.get_mode_label_style(self.is_dark_theme))
-        size_layout.addWidget(size_label)
+        self.size_label = QLabel("Размер сцены")
+        self.size_label.setStyleSheet(AppStyles.get_mode_label_style(self.is_dark_theme))
+        size_layout.addWidget(self.size_label)
 
         # Виджет для лейблов полей ввода
         input_labels_widget = QWidget()
@@ -323,9 +326,9 @@ class MainWindow(QMainWindow):
         scale_widget.setLayout(scale_layout)
         
         # Заголовок "Масштаб"
-        scale_label = QLabel("Масштаб")
-        scale_label.setStyleSheet(AppStyles.get_mode_label_style(self.is_dark_theme))
-        scale_layout.addWidget(scale_label)
+        self.scale_label = QLabel("Масштаб")
+        self.scale_label.setStyleSheet(AppStyles.get_mode_label_style(self.is_dark_theme))
+        scale_layout.addWidget(self.scale_label)
         
         # Контейнер для кнопок масштабирования
         scale_buttons = QWidget()
@@ -576,37 +579,17 @@ class MainWindow(QMainWindow):
 
     def generate_xml(self):
         try:
-            root = ET.Element("root")
-            world = ET.SubElement(root, "world")
-
-            walls_elem = ET.SubElement(world, "walls")
-            for wall in self.field_widget.walls:
-                begin = f"{wall.line().x1()}:{wall.line().y1()}"
-                end = f"{wall.line().x2()}:{wall.line().y2()}"
-                id = f"{wall.id}"
-                ET.SubElement(walls_elem, "wall", begin=begin, end=end, id=id)
-
-            regions_elem = ET.SubElement(world, "regions")
-            for region in self.field_widget.regions:
-                x = region.rect().x()
-                y = region.rect().y()
-                width = region.rect().width()
-                height = region.rect().height()
-                id = str(region.id)
-                color = str(region.color)
-                ET.SubElement(regions_elem, "region", x=str(x), y=str(y), width=str(width), height=str(height), id=id, color=color)
-
-            if self.field_widget.robot_model:
-                robot_elem = ET.SubElement(root, "robots")
-                x = self.field_widget.robot_model.pos().x()
-                y = self.field_widget.robot_model.pos().y()
-                ET.SubElement(robot_elem, "robot", position=f"{x}:{y}")
-
-            # Преобразуем ElementTree в строку
-            xml_str = ET.tostring(root, encoding="utf-8", xml_declaration=True)
-
-            # Форматируем XML с помощью minidom
-            formatted_xml = minidom.parseString(xml_str).toprettyxml(indent="    ")
+            # Создаем экземпляр XMLHandler с текущими размерами сцены
+            scene_width = self.field_widget.scene_width
+            scene_height = self.field_widget.scene_height
+            xml_handler = XMLHandler(scene_width=scene_width, scene_height=scene_height)
+            
+            # Генерируем XML с валидацией
+            formatted_xml = xml_handler.generate_xml(
+                walls=self.field_widget.walls,
+                regions=self.field_widget.regions,
+                robot_model=self.field_widget.robot_model
+            )
 
             # Записываем форматированный XML в файл
             file_name, _ = QFileDialog.getSaveFileName(self, "Save XML File", "", "XML Files (*.xml)")
@@ -614,10 +597,14 @@ class MainWindow(QMainWindow):
                 with open(file_name, "w", encoding="utf-8") as file:
                     file.write(formatted_xml)
 
-                QMessageBox.information(self, "Success", "XML file generated successfully.")
+                QMessageBox.information(self, "Успех", "XML файл успешно сгенерирован.")
         
+        except XMLValidationError as e:
+            logger.error(f"Ошибка валидации XML: {e}")
+            QMessageBox.warning(self, "Предупреждение", f"Ошибка валидации XML: {e}")
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"An error occurred: {e}")
+            logger.error(f"Ошибка при генерации XML: {e}", exc_info=True)
+            QMessageBox.critical(self, "Ошибка", f"Произошла ошибка: {e}")
 
     def apply_theme(self):
         """Применяет текущую тему к приложению"""
@@ -654,6 +641,8 @@ class MainWindow(QMainWindow):
             # Обновляем стили заголовков
             if hasattr(self, 'mode_label'):
                 self.mode_label.setStyleSheet(AppStyles.get_mode_label_style(True))
+                self.scale_label.setStyleSheet(AppStyles.get_mode_label_style(True))
+                self.size_label.setStyleSheet(AppStyles.get_mode_label_style(True))
             
             # Обновляем стили кнопок инструментов
             if hasattr(self, 'wall_button'):
@@ -708,6 +697,8 @@ class MainWindow(QMainWindow):
             # Обновляем стили заголовков
             if hasattr(self, 'mode_label'):
                 self.mode_label.setStyleSheet(AppStyles.get_mode_label_style(False))
+                self.scale_label.setStyleSheet(AppStyles.get_mode_label_style(False))
+                self.size_label.setStyleSheet(AppStyles.get_mode_label_style(False))
             
             # Обновляем стили кнопок инструментов
             if hasattr(self, 'wall_button'):
@@ -770,3 +761,252 @@ class MainWindow(QMainWindow):
         shortcuts_button.clicked.connect(self.shortcuts_manager.show_shortcuts_dialog)
         shortcuts_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.toolbar.addWidget(shortcuts_button)
+
+    def create_menubar(self):
+        """Создает меню приложения"""
+        menubar = self.menuBar()
+
+        # Меню "Файл"
+        file_menu = menubar.addMenu("Файл")
+        
+        # Действие "Сохранить как XML"
+        save_xml_action = QAction("Сохранить как XML", self)
+        save_xml_action.triggered.connect(self.generate_xml)
+        file_menu.addAction(save_xml_action)
+        
+        # Действие "Импортировать XML"
+        import_xml_action = QAction("Импортировать XML", self)
+        import_xml_action.triggered.connect(self.import_xml)
+        file_menu.addAction(import_xml_action)
+        
+        # Разделитель
+        file_menu.addSeparator()
+        
+        # Действие "Выход"
+        exit_action = QAction("Выход", self)
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+        
+        # Меню "Вид"
+        view_menu = menubar.addMenu("Вид")
+        
+        # Действие "Переключить тему"
+        toggle_theme_action = QAction("Переключить тему", self)
+        toggle_theme_action.triggered.connect(self.toggle_theme)
+        view_menu.addAction(toggle_theme_action)
+        
+        # Действие "Показать горячие клавиши"
+        shortcuts_action = QAction("Показать горячие клавиши", self)
+        shortcuts_action.triggered.connect(self.shortcuts_manager.show_shortcuts_dialog)
+        view_menu.addAction(shortcuts_action)
+        
+        # Меню "Помощь"
+        help_menu = menubar.addMenu("Помощь")
+        
+        # Действие "О программе"
+        about_action = QAction("О программе", self)
+        about_action.triggered.connect(self.show_about_dialog)
+        help_menu.addAction(about_action)
+
+    def show_about_dialog(self):
+        """Показывает диалог 'О программе'"""
+        QMessageBox.about(
+            self,
+            "О программе",
+            "<h3>gScene — Графический редактор сцены TRIK</h3>"
+            "<p>Версия 0.2.5</p>"
+            "<p>Редактор сцены для визуализации и создания виртуальных сред для роботов TRIK.</p>"
+            "<p>&copy; 2023-2024</p>"
+        )
+
+    def import_xml(self):
+        """Импортирует XML-файл и загружает его содержимое в сцену"""
+        try:
+            # Просим пользователя выбрать XML-файл
+            file_name, _ = QFileDialog.getOpenFileName(self, "Открыть XML файл", "", "XML Files (*.xml)")
+            if not file_name:
+                return  # Пользователь отменил выбор
+            
+            # Считываем содержимое файла
+            with open(file_name, 'r', encoding='utf-8') as f:
+                xml_content = f.read()
+            
+            # Спрашиваем пользователя, нужно ли очистить текущую сцену
+            should_clear = QMessageBox.question(
+                self, 
+                "Импорт XML", 
+                "Очистить текущую сцену перед загрузкой новых данных?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes
+            ) == QMessageBox.StandardButton.Yes
+            
+            # Если не нужно очищать сцену, загружаем XML без очистки
+            # (наш метод load_xml всегда очищает сцену, поэтому обрабатываем здесь)
+            if not should_clear:
+                # Создаем экземпляр XMLHandler с текущими размерами сцены
+                scene_width = self.field_widget.scene_width
+                scene_height = self.field_widget.scene_height
+                xml_handler = XMLHandler(scene_width=scene_width, scene_height=scene_height)
+                
+                # Загружаем и парсим XML-файл
+                scene_data = xml_handler.parse_xml(xml_content)
+                
+                # Обновляем размеры сцены, если они определены в XML
+                if "scene_width" in scene_data and "scene_height" in scene_data:
+                    self.field_widget.set_scene_size(scene_data["scene_width"], scene_data["scene_height"])
+                
+                # Добавляем стены из XML
+                walls_added = 0
+                for wall_data in scene_data["walls"]:
+                    begin_point = QPointF(wall_data["begin"][0], wall_data["begin"][1])
+                    end_point = QPointF(wall_data["end"][0], wall_data["end"][1])
+                    wall = self.field_widget.add_wall(
+                        p1=begin_point,
+                        p2=end_point,
+                        wall_id=wall_data["id"]
+                    )
+                    if wall:
+                        walls_added += 1
+                
+                # Добавляем регионы из XML
+                regions_added = 0
+                for region_data in scene_data["regions"]:
+                    rect = region_data["rect"]
+                    # Создаем список точек из QRectF для Region
+                    points = [
+                        QPointF(rect.topLeft()),
+                        QPointF(rect.topRight()),
+                        QPointF(rect.bottomRight()),
+                        QPointF(rect.bottomLeft())
+                    ]
+                    region = self.field_widget.place_region(
+                        points=points,
+                        region_id=region_data["id"],
+                        color=region_data["color"]
+                    )
+                    if region:
+                        regions_added += 1
+                
+                # Добавляем робота из XML, если он есть и на сцене нет робота
+                robot_added = False
+                if scene_data["robot"] and not self.field_widget.robot_model:
+                    # Игнорируем robot_id, так как для робота используется фиксированный ID
+                    robot = self.field_widget.place_robot(
+                        position=scene_data["robot"]["position"],
+                        name=scene_data["robot"].get("name", ""),
+                        direction=scene_data["robot"].get("direction", 0)
+                    )
+                    if robot:
+                        robot_added = True
+                
+                # Обновляем сцену
+                self.field_widget.update()
+                
+                # Информируем пользователя об успешном импорте
+                QMessageBox.information(
+                    self, 
+                    "Импорт завершен", 
+                    f"Импорт успешно завершен:\n"
+                    f"- Добавлено стен: {walls_added}\n"
+                    f"- Добавлено регионов: {regions_added}\n"
+                    f"- {'Робот добавлен' if robot_added else 'Робот уже был на сцене или не найден в файле'}"
+                )
+            else:
+                # Загружаем XML с очисткой сцены
+                success = self.load_xml(xml_content)
+                
+                if success:
+                    # Информируем пользователя об успешном импорте
+                    QMessageBox.information(
+                        self, 
+                        "Импорт завершен", 
+                        "Импорт XML-файла успешно завершен."
+                    )
+            
+        except XMLValidationError as e:
+            logger.error(f"Ошибка валидации XML: {e}")
+            QMessageBox.warning(self, "Ошибка валидации", f"Ошибка при проверке XML: {e}")
+        except Exception as e:
+            logger.error(f"Ошибка импорта: {e}", exc_info=True)
+            QMessageBox.critical(self, "Ошибка", f"Произошла ошибка при импорте XML: {e}")
+
+    def load_xml(self, xml_content):
+        """
+        Загружает XML из строки и создает соответствующие объекты на сцене.
+        
+        Args:
+            xml_content: Содержимое XML в виде строки
+            
+        Returns:
+            bool: True, если загрузка прошла успешно, False в противном случае
+        """
+        try:
+            # Создаем экземпляр XMLHandler с текущими размерами сцены
+            scene_width = self.field_widget.scene_width
+            scene_height = self.field_widget.scene_height
+            xml_handler = XMLHandler(scene_width=scene_width, scene_height=scene_height)
+            
+            # Парсим XML
+            scene_data = xml_handler.parse_xml(xml_content)
+            
+            # Обновляем размеры сцены, если они определены в XML
+            if "scene_width" in scene_data and "scene_height" in scene_data:
+                self.field_widget.set_scene_size(scene_data["scene_width"], scene_data["scene_height"])
+            
+            # Очищаем сцену перед загрузкой новых данных
+            self.field_widget.clear_scene()
+            
+            # Добавляем стены из XML
+            for wall_data in scene_data["walls"]:
+                begin_point = QPointF(wall_data["begin"][0], wall_data["begin"][1])
+                end_point = QPointF(wall_data["end"][0], wall_data["end"][1])
+                wall = self.field_widget.add_wall(
+                    p1=begin_point,
+                    p2=end_point,
+                    wall_id=wall_data["id"]
+                )
+                if not wall:
+                    logger.warning(f"Не удалось добавить стену: {wall_data}")
+            
+            # Добавляем регионы из XML
+            for region_data in scene_data["regions"]:
+                rect = region_data["rect"]
+                # Создаем список точек из QRectF для Region
+                points = [
+                    QPointF(rect.topLeft()),
+                    QPointF(rect.topRight()),
+                    QPointF(rect.bottomRight()),
+                    QPointF(rect.bottomLeft())
+                ]
+                region = self.field_widget.place_region(
+                    points=points,
+                    region_id=region_data["id"],
+                    color=region_data["color"]
+                )
+                if not region:
+                    logger.warning(f"Не удалось добавить регион: {region_data}")
+            
+            # Добавляем робота из XML, если он есть
+            if scene_data["robot"]:
+                # Игнорируем robot_id, так как для робота используется фиксированный ID
+                robot = self.field_widget.place_robot(
+                    position=scene_data["robot"]["position"],
+                    name=scene_data["robot"].get("name", ""),
+                    direction=scene_data["robot"].get("direction", 0)
+                )
+                if not robot:
+                    logger.warning(f"Не удалось добавить робота: {scene_data['robot']}")
+                    
+            # Обновляем сцену
+            self.field_widget.update()
+            
+            return True
+            
+        except XMLValidationError as e:
+            logger.error(f"Ошибка валидации XML: {e}")
+            QMessageBox.warning(self, "Ошибка валидации", f"Ошибка при проверке XML: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Ошибка загрузки XML: {e}", exc_info=True)
+            QMessageBox.critical(self, "Ошибка", f"Произошла ошибка при загрузке XML: {e}")
+            return False

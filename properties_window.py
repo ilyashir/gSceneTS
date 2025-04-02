@@ -275,7 +275,7 @@ class PropertiesWindow(QWidget):
         """Показывает свойства робота."""
         self.hide_groups()
         self.robot_group.show()
-        self.robot_id.setText(robot_id)
+        self.robot_id.setText(str(robot_id))  # Преобразуем robot_id в строку
         self.robot_x.setValue(x)
         self.robot_y.setValue(y)
         self.robot_rotation.setValue(rotation)
@@ -295,7 +295,7 @@ class PropertiesWindow(QWidget):
         
         self.hide_groups()
         self.wall_group.show()
-        self.wall_id.setText(wall_id)
+        self.wall_id.setText(str(wall_id))  # Преобразуем wall_id в строку
         
         # Связываем объект с полем ID, используя локальную копию
         logger.debug(f"Setting linked object to: {wall_item}")
@@ -328,7 +328,7 @@ class PropertiesWindow(QWidget):
         
         self.hide_groups()
         self.region_group.show()
-        self.region_id.setText(region_id)
+        self.region_id.setText(str(region_id))  # Преобразуем region_id в строку
         
         # Связываем объект с полем ID, используя локальную копию
         logger.debug(f"Setting linked object to: {region_item}")
@@ -364,7 +364,7 @@ class PropertiesWindow(QWidget):
             self.show_robot_properties(
                 int(pos.x()),
                 int(pos.y()),
-                int(item.rotation()),
+                int(item.direction),
                 item.id
             )
 
@@ -381,14 +381,15 @@ class PropertiesWindow(QWidget):
             )
 
         elif isinstance(item, Region):
-            rect = item.rect()
+            # Используем path() и boundingRect() для получения размеров региона
+            bounds = item.path().boundingRect()
             pos = item.pos()
             logger.debug(f"Calling show_region_properties for item: {item}")
             self.show_region_properties(
                 int(pos.x()),
                 int(pos.y()),
-                int(rect.width()),
-                int(rect.height()),
+                int(bounds.width()),
+                int(bounds.height()),
                 item.color,
                 item.id
             )

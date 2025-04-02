@@ -1,0 +1,17 @@
+<?xml version="1.0" ?>
+<root version="1.0">
+  <world width="1300" height="1000"/>
+  <walls>
+    <wall id="1" begin="-500.0:-150.0" end="50.0:-250.0"/>
+    <wall id="2" begin="150.0:-150.0" end="300.0:250.0"/>
+    <wall id="3" begin="100.0:350.0" end="-350.0:50.0"/>
+  </walls>
+  <regions>
+    <region id="1" x="-500.0" y="50.0" width="350.0" height="350.0" color="#80ff0000"/>
+    <region id="2" x="50.0" y="-50.0" width="300.0" height="450.0" color="#80ff0000"/>
+    <region id="3" x="150.0" y="-350.0" width="300.0" height="150.0" color="#80ff0000"/>
+  </regions>
+  <robots>
+    <robot id="1" position="0.0:0.0" direction="0"/>
+  </robots>
+</root>

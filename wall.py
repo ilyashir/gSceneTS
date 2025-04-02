@@ -11,11 +11,24 @@ class Wall(QGraphicsLineItem):
     _next_id = 1  # Счетчик для генерации уникальных ID
     _existing_ids = set()  # Множество для хранения всех существующих ID
 
-    def __init__(self, start, end):
-        super().__init__(start.x(), start.y(), end.x(), end.y())
-        self.id = f"w{Wall._next_id}"  # Генерация уникального ID
-        Wall._next_id += 1  # Увеличиваем счетчик
-        Wall._existing_ids.add(self.id)  # Добавляем ID в множество существующих
+    def __init__(self, p1, p2, wall_id=None, width=10, color="#ff0000"):
+        """
+        Инициализация стены.
+        
+        Args:
+            p1: Начальная точка стены (QPointF)
+            p2: Конечная точка стены (QPointF)
+            wall_id: Идентификатор стены (если None, будет сгенерирован)
+            width: Толщина стены (по умолчанию 10)
+            color: Цвет стены в HEX-формате
+        """
+        super().__init__(p1.x(), p1.y(), p2.x(), p2.y())
+        if wall_id:
+            self.id = wall_id
+        else:
+            self.id = f"w{Wall._next_id}"
+            Wall._next_id += 1
+        Wall._existing_ids.add(self.id)
 
         self.highlight_rect = None  # Прямоугольник для выделения
         self._updating = False  # Флаг для отслеживания состояния обновления
@@ -23,7 +36,7 @@ class Wall(QGraphicsLineItem):
         # Настройка внешнего вида стены
         self.brick_width = 10  # Ширина кирпича
         self.brick_height = 5  # Высота кирпича
-        self.brick_color = QColor("#b22222")  # Цвет кирпича (кирпично-красный)
+        self.brick_color = QColor(color)  # Цвет кирпича (кирпично-красный)
         self.mortar_color = QColor("#8b4513")  # Цвет раствора между кирпичами
 
         # Создаем паттерн для кирпичной стены
@@ -31,7 +44,7 @@ class Wall(QGraphicsLineItem):
 
         # Атрибуты стены
         self.stroke_color = "#ff000000"  # Цвет обводки (по умолчанию черный)
-        self.stroke_width = 10  # Ширина обводки (по умолчанию 10)
+        self.stroke_width = width  # Ширина обводки (по умолчанию 10)
 
         # Настройка пера
         self.normal_pen = QPen(QColor(self.stroke_color), self.stroke_width)  # Паттерн для линии
@@ -54,10 +67,10 @@ class Wall(QGraphicsLineItem):
         self.setPen(self.normal_pen)
 
         # Добавляем маркеры на концах стены
-        self.start_marker = QGraphicsEllipseItem(start.x() - self.stroke_width // 2 - 1, start.y() - self.stroke_width // 2 - 1, self.stroke_width + 2, self.stroke_width + 2, self)
+        self.start_marker = QGraphicsEllipseItem(p1.x() - self.stroke_width // 2 - 1, p1.y() - self.stroke_width // 2 - 1, self.stroke_width + 2, self.stroke_width + 2, self)
         self.start_marker.setBrush(QBrush(Qt.GlobalColor.red))
         self.start_marker.setData(0, "wall_marker")
-        self.end_marker = QGraphicsEllipseItem(end.x() - self.stroke_width // 2 - 1, end.y() - self.stroke_width // 2 - 1, self.stroke_width + 2, self.stroke_width  + 2, self)
+        self.end_marker = QGraphicsEllipseItem(p2.x() - self.stroke_width // 2 - 1, p2.y() - self.stroke_width // 2 - 1, self.stroke_width + 2, self.stroke_width  + 2, self)
         self.end_marker.setBrush(QBrush(Qt.GlobalColor.red))
         self.end_marker.setData(0, "wall_marker") 
 

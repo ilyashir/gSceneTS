@@ -8,15 +8,16 @@ This document outlines the planned development path for the project, including u
 
 ### Features / Функции
 - [x] Implement scene scaling with mouse wheel / Реализовать масштабирование сцены колесиком мыши
-- [ ] Improve XML import/export with additional validation / Улучшить импорт/экспорт XML с дополнительной валидацией
-- [X] Add keyboard shortcuts for common actions / Добавить горячие клавиши для типовых действий
+- [x] Improve XML import/export with additional validation / Улучшить импорт/экспорт XML с дополнительной валидацией
+- [x] Add keyboard shortcuts for common actions / Добавить горячие клавиши для типовых действий
 - [x] Add scene constraints validation when changing object parameters in the properties window / Добавить проверку ограничений сцены при изменении параметров объекта в окне свойств
+- [x] Add application menu with access to all functions / Добавить меню приложения с доступом ко всем функциям
 
 ### Improvements / Улучшения
 - [ ] Enhance the properties window with more intuitive controls / Улучшить окно свойств, сделав элементы управления более интуитивными
 - [ ] Optimize performance for large scenes / Оптимизировать производительность для больших сцен
 - [ ] Implement undo/redo functionality / Реализовать функциональность отмены/повтора действий
-- [ ] Change robot rotation to rotate around its center / Изменить поворот робота: должен вращаться вокруг своего центра
+- [x] Change robot rotation to rotate around its center / Изменить поворот робота: должен вращаться вокруг своего центра
 - [x] Style scrollbars with semi-transparent appearance and auto-hide functionality / Стилизовать полосы прокрутки с полупрозрачным видом и функцией автоскрытия
 
 ### Testing / Тестирование
@@ -31,7 +32,7 @@ This document outlines the planned development path for the project, including u
 - [ ] Add ability to draw lines on the scene / Добавить возможность рисовать линии на сцене
 - [ ] Add option to display regions on top of other objects in edit mode for easier movement / Добавить в режиме редактирования возможность отображать регионы поверх остальных объектов для перемещения
 - [ ] Add "Realistic Physics" section with 3 checkpoints / Добавить раздел "Реалистичная физика" с 3мя чекпоинтами
-- [ ] Add application menu with access to all functions / Добавить меню приложения с доступом ко всем функциям
+- [ ] Update menu style and add new functionality / Обновить стиль меню и добавить новую функциональность
 
 ### Improvements / Улучшения
 - [ ] Refactor codebase for better maintainability / Рефакторинг кодовой базы для улучшения сопровождаемости

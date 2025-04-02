@@ -261,35 +261,94 @@ class FieldWidget(QGraphicsView):
 
         return False  # Линия не пересекает прямоугольник
 
-    def add_wall(self, start, end):
-        logger.debug(f"Adding wall from {start} to {end}")
-        if self.wall_intersects_robot(start.x(), start.y(), end.x(), end.y()):
-            logger.debug(f"ERR robot intersects")
-            return False
-        wall = Wall(start, end)
+    def add_wall(self, p1, p2, wall_id=None):
+        """
+        Добавляет стену на сцену с заданными координатами и идентификатором.
+        
+        Args:
+            p1: Начальная точка стены (QPointF)
+            p2: Конечная точка стены (QPointF)
+            wall_id: Идентификатор стены (если None, будет сгенерирован)
+            
+        Returns:
+            Wall: Добавленная стена или None, если добавление не удалось
+        """
+        logger.debug(f"Добавление стены: {p1} - {p2}, id={wall_id}")
+        
+        # Проверяем пересечение с роботом
+        if self.wall_intersects_robot(p1.x(), p1.y(), p2.x(), p2.y()):
+            logger.warning("Стена пересекается с роботом - отмена добавления")
+            return None
+            
+        # Создаем новую стену
+        wall = Wall(p1, p2, wall_id)
+        
+        # Проверяем, находится ли стена в пределах сцены
+        if not self.check_object_within_scene(wall):
+            logger.warning("Стена выходит за границы сцены - отмена добавления")
+            return None
+            
+        # Добавляем стену на сцену
         self.objects_layer.addToGroup(wall)
         self.walls.append(wall)
-        self.select_item(wall)         
-
-    def add_region(self, start, end):
+        
+        # Настраиваем обработку событий для стены
+        wall.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+        wall.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
+        
+        logger.debug(f"Стена успешно добавлена с id={wall.id}")
+        
+        # Автоматически выделяем созданную стену
+        self.select_item(wall)
+        
+        return wall
+        
+    def add_region(self, rect, region_id=None, color=None):
         """
-        Добавляет регион на сцену.
-        :param start: Начальная точка (QPointF).
-        :param end: Конечная точка (QPointF).
+        Добавляет регион на сцену с заданными параметрами.
+        
+        Args:
+            rect: Прямоугольник региона (QRectF)
+            region_id: Идентификатор региона (если None, будет сгенерирован)
+            color: Цвет региона (если None, будет использован цвет по умолчанию)
+            
+        Returns:
+            Region: Добавленный регион или None, если добавление не удалось
         """
-        rect = QRectF(start, end).normalized()
-        width = rect.width()
-        height = rect.height()
-        logger.debug(f"Adding region at {rect.topLeft()} with width={width}, height={height}")
-
-        # Создаем регион с правильными размерами
-        region = Region(QPointF(0, 0), width, height)
-        # Устанавливаем позицию региона для правильного отображения в системе координат
-        region.setPos(rect.topLeft())
+        logger.debug(f"Добавление региона: {rect}, id={region_id}, color={color}")
+        
+        # Создаем точки для региона из прямоугольника
+        points = [
+            QPointF(rect.topLeft()),
+            QPointF(rect.topRight()),
+            QPointF(rect.bottomRight()),
+            QPointF(rect.bottomLeft())
+        ]
+        
+        # Создаем новый регион
+        region = Region(points, region_id, color=color if color else "#800000ff")
+        
+        # Проверяем, находится ли регион в пределах сцены
+        if not self.check_object_within_scene(region):
+            logger.warning("Регион выходит за границы сцены - отмена добавления")
+            return None
+            
+        # Добавляем регион на сцену через слой объектов
         self.objects_layer.addToGroup(region)
+        
+        # Сохраняем ссылку на регион в словаре для быстрого доступа
         self.regions.append(region)
-        self.select_item(region) 
-        logger.debug(f"Region added: {region}, position: {region.pos()}, rect: {region.rect()}")
+        
+        # Настраиваем обработку событий для региона
+        region.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+        region.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
+        
+        logger.debug(f"Регион успешно добавлен с id={region.id}")
+        
+        # Автоматически выделяем созданный регион
+        self.select_item(region)
+        
+        return region
 
     def init_robot(self, pos):
         logger.debug(f"Setting robot position to {pos}")
@@ -381,8 +440,12 @@ class FieldWidget(QGraphicsView):
                 return False
 
         for region in self.regions:
-            if (region.rect().x() < -width // 2 or region.rect().x() + region.rect().width() > width // 2 or
-                region.rect().y() < -height // 2 or region.rect().y() + region.rect().height() > height // 2):
+            rect = region.path().boundingRect()
+            pos = region.pos()
+            if (pos.x() + rect.x() < -width // 2 or 
+                pos.x() + rect.x() + rect.width() > width // 2 or
+                pos.y() + rect.y() < -height // 2 or 
+                pos.y() + rect.y() + rect.height() > height // 2):
                 return False
 
         if (self.robot_model.pos().x() < -width // 2 or self.robot_model.pos().x() + self.robot_model.boundingRect().width() > width // 2 or
@@ -407,8 +470,10 @@ class FieldWidget(QGraphicsView):
                 -self.scene_height / 2 <= line.y2() <= self.scene_height / 2
             )
         elif isinstance(item, Region):
-            # Для региона проверяем все углы прямоугольника
-            rect = item.rect()
+            # Для региона проверяем, что все точки находятся в пределах сцены
+            path = item.path()
+            # Получаем ограничивающий прямоугольник
+            rect = path.boundingRect()
             pos = item.pos()
             
             # Вычисляем координаты углов региона
@@ -524,7 +589,7 @@ class FieldWidget(QGraphicsView):
                     logger.debug(f"Region start: {self.region_start}")
                 else:
                     # Второй клик: создаем регион
-                    self.add_region(self.region_start, pos)
+                    self.add_region(QRectF(self.region_start, pos).normalized())
                     self.region_start = None  # Сбрасываем начальную точку
                     if self.temp_region:
                         self.scene().removeItem(self.temp_region)
@@ -579,15 +644,21 @@ class FieldWidget(QGraphicsView):
                         logger.debug(f"ERR robot would be out of bounds")
                         return
                 elif isinstance(self.dragging_item, Region):                        
-                    # Создаем временный регион для проверки
-                    rect = self.dragging_item.rect()
-                    temp_region = Region(new_pos, rect.width(), rect.height())
-                    # Копируем все свойства региона
-                    temp_region.setRect(rect)
-                    temp_region.setPos(new_pos)
+                    # Создаем временный путь для проверки границ региона
+                    path = self.dragging_item.path()
+                    bounds = path.boundingRect()
                     
-                    logger.debug(f"Current region: pos=({self.dragging_item.pos().x()}, {self.dragging_item.pos().y()}), rect=({rect.x()}, {rect.y()}, {rect.width()}, {rect.height()})")
-                    logger.debug(f"Temp region: pos=({new_pos.x()}, {new_pos.y()}), rect=({temp_region.rect().x()}, {temp_region.rect().y()}, {temp_region.rect().width()}, {temp_region.rect().height()})")
+                    # Создаем временный регион для проверки
+                    temp_points = [
+                        QPointF(new_pos.x() + bounds.x(), new_pos.y() + bounds.y()), 
+                        QPointF(new_pos.x() + bounds.x() + bounds.width(), new_pos.y() + bounds.y()),
+                        QPointF(new_pos.x() + bounds.x() + bounds.width(), new_pos.y() + bounds.y() + bounds.height()),
+                        QPointF(new_pos.x() + bounds.x(), new_pos.y() + bounds.y() + bounds.height())
+                    ]
+                    
+                    temp_region = Region(temp_points)
+                    
+                    logger.debug(f"Current region: pos=({self.dragging_item.pos().x()}, {self.dragging_item.pos().y()}), bounds=({bounds.x()}, {bounds.y()}, {bounds.width()}, {bounds.height()})")
                     
                     if not self.check_object_within_scene(temp_region):
                         logger.debug(f"ERR region would be out of bounds")
@@ -678,13 +749,20 @@ class FieldWidget(QGraphicsView):
                 self.properties_window.update_properties(self.dragging_item)
                 self.dragging_item = None  # Сбрасываем перетаскиваемый объект
 
-            elif self.drawing_mode == "region" and self.temp_region:
-                self.scene().removeItem(self.temp_region)
-                self.temp_region = None
+        super().mouseReleaseEvent(event)
 
     def update_robot_position(self, x, y):
-        """Обновляет позицию робота."""
-        if self.robot_model:  # вместо self.robot_position
+        """
+        Обновляет позицию робота.
+        
+        Args:
+            x: Новая координата X
+            y: Новая координата Y
+            
+        Returns:
+            bool: True, если обновление прошло успешно, False в противном случае
+        """
+        if self.robot_model:
             # Создаем временный объект для проверки границ сцены
             temp_robot = Robot(QPointF(x, y))
             if not self.check_object_within_scene(temp_robot):
@@ -703,14 +781,69 @@ class FieldWidget(QGraphicsView):
             # Если проверка пройдена, обновляем позицию
             self.robot_model.setPos(x, y)
             return True
+        return False
     
-    def update_robot_rotation(self, rotation):
-        """Обновляет поворот робота."""
-        if self.robot_model:  # вместо self.robot_position
-            self.robot_model.setRotation(rotation)
+    def update_robot_rotation(self, direction):
+        """
+        Обновляет направление робота.
+        
+        Args:
+            direction: Новое направление в градусах
+            
+        Returns:
+            bool: True, если обновление прошло успешно, False в противном случае
+        """
+        if self.robot_model:
+            self.robot_model.set_direction(direction)
             return True
         return False
     
+    def update_robot_id(self, new_id):
+        """
+        Обновляет ID робота.
+        
+        Args:
+            new_id: Новый ID робота
+            
+        Returns:
+            bool: True, если обновление прошло успешно, False в противном случае
+        """
+        if self.robot_model:
+            old_id = self.robot_model.id
+            # Используем метод set_id для установки нового ID
+            result = self.robot_model.set_id(new_id)
+            if result:
+                logger.debug(f"Robot ID changed from {old_id} to {new_id}")
+                # Обновляем свойства объекта с новым ID
+                self.properties_updated.emit(self.robot_model)
+                return True
+            else:
+                logger.warning(f"Failed to change robot ID from {old_id} to {new_id}")
+                QMessageBox.warning(
+                    None,
+                    "Ошибка",
+                    f"Не удалось изменить ID робота. Возможно, ID '{new_id}' уже используется.",
+                    QMessageBox.StandardButton.Ok
+                )
+                return False
+        return False
+    
+    def update_robot_name(self, name):
+        """
+        Обновляет имя робота.
+        
+        Args:
+            name: Новое имя робота
+            
+        Returns:
+            bool: True, если обновление прошло успешно, False в противном случае
+        """
+        if self.robot_model:
+            self.robot_model.set_name(name)
+            logger.debug(f"Robot name changed to {name}")
+            return True
+        return False
+
     def update_wall_point1(self, x1, y1):
         """Обновляет первую точку стены."""
         logger.debug(f"Updating wall point1 to {x1}, {y1}")
@@ -808,9 +941,19 @@ class FieldWidget(QGraphicsView):
     def update_region_position(self, x, y):
         """Обновляет позицию региона."""
         if self.selected_item and isinstance(self.selected_item, Region):
+            # Получаем boundingRect из пути региона
+            path_rect = self.selected_item.path().boundingRect()
+            
+            # Создаем точки для временного региона
+            points = [
+                QPointF(x + path_rect.x(), y + path_rect.y()),
+                QPointF(x + path_rect.x() + path_rect.width(), y + path_rect.y()),
+                QPointF(x + path_rect.x() + path_rect.width(), y + path_rect.y() + path_rect.height()),
+                QPointF(x + path_rect.x(), y + path_rect.y() + path_rect.height())
+            ]
+            
             # Создаем временный регион для проверки границ сцены
-            rect = self.selected_item.rect()
-            temp_region = Region(QPointF(x, y), rect.width(), rect.height())
+            temp_region = Region(points)
             
             if not self.check_object_within_scene(temp_region):
                 logger.warning(f"Region position update to ({x}, {y}) rejected - would be out of scene bounds")
@@ -833,9 +976,25 @@ class FieldWidget(QGraphicsView):
     def update_region_size(self, width, height):
         """Обновляет размер региона."""
         if self.selected_item and isinstance(self.selected_item, Region):
-            # Создаем временный регион для проверки границ сцены
+            # Получаем текущую позицию региона
             pos = self.selected_item.pos()
-            temp_region = Region(pos, width, height)
+            path_rect = self.selected_item.path().boundingRect()
+            
+            # Вычисляем коэффициенты масштабирования
+            scale_x = width / path_rect.width() if path_rect.width() > 0 else 1
+            scale_y = height / path_rect.height() if path_rect.height() > 0 else 1
+            
+            # Создаем точки для нового региона с измененным размером
+            # Учитываем текущую позицию региона
+            points = [
+                QPointF(pos.x(), pos.y()),
+                QPointF(pos.x() + width, pos.y()),
+                QPointF(pos.x() + width, pos.y() + height),
+                QPointF(pos.x(), pos.y() + height)
+            ]
+            
+            # Создаем временный регион для проверки границ сцены
+            temp_region = Region(points)
             
             if not self.check_object_within_scene(temp_region):
                 logger.warning(f"Region size update to ({width}, {height}) rejected - would be out of scene bounds")
@@ -850,9 +1009,21 @@ class FieldWidget(QGraphicsView):
                 self.properties_updated.emit(self.selected_item)
                 return False
             
-            # Если проверка пройдена, обновляем размер
-            rect = self.selected_item.rect()
-            self.selected_item.setRect(rect.x(), rect.y(), width, height)
+            # Если проверка пройдена, создаем новый регион с нужными размерами и заменяем старый
+            new_region = Region(points, self.selected_item.id, self.selected_item.color)
+            
+            # Удаляем старый регион из сцены
+            index = self.regions.index(self.selected_item)
+            self.scene().removeItem(self.selected_item)
+            self.regions.remove(self.selected_item)
+            
+            # Добавляем новый регион
+            self.objects_layer.addToGroup(new_region)
+            self.regions.insert(index, new_region)
+            
+            # Выделяем новый регион
+            self.select_item(new_region)
+            
             return True
         return False
     
@@ -1040,3 +1211,147 @@ class FieldWidget(QGraphicsView):
             # TODO: реализовать полноценное удаление
             self.deselect_item()
             logger.debug("Снято выделение с объекта (заглушка)")
+
+    def clear_scene(self):
+        """
+        Очищает сцену от всех объектов: стен, регионов и робота.
+        """
+        logger.debug("Очистка сцены...")
+        
+        # Удаляем все стены
+        for wall in self.walls[:]:
+            wall.remove_from_scene()
+            self.walls.remove(wall)
+            
+        # Удаляем все регионы
+        for region in self.regions[:]:
+            region.remove_from_scene()
+            self.regions.remove(region)
+            
+        # Удаляем робота
+        if self.robot_model:
+            self.scene().removeItem(self.robot_model)
+            # Сбрасываем экземпляр робота
+            Robot.reset_instance()
+            self.robot_model = None
+            
+        # Сбрасываем выделение
+        self.selected_item = None
+        self.selected_marker = None
+        
+        # Обновляем view
+        self.scene().update()
+        logger.debug("Сцена очищена")
+        
+        # Сигнализируем о снятии выделения
+        self.item_deselected.emit()
+
+    def place_robot(self, position, robot_id=None, name="", direction=0):
+        """
+        Размещает робота на сцене в указанной позиции.
+        
+        Args:
+            position: Позиция для размещения робота (QPointF)
+            robot_id: Идентификатор робота (игнорируется, т.к. робот один)
+            name: Имя робота
+            direction: Направление робота в градусах
+            
+        Returns:
+            Robot: Модель робота или None, если размещение не удалось
+        """
+        logger.debug(f"Размещение робота в позиции: {position}, name={name}, direction={direction}")
+        
+        # Проверяем, не пересекается ли позиция робота со стенами
+        for wall in self.walls:
+            # Вычисляем расстояние от центра робота до стены
+            line = wall.line()
+            distance = self.distance_to_line(position, line)
+            
+            # Если расстояние меньше радиуса робота, то это пересечение
+            if distance < 25:  # 25 - примерный радиус робота
+                logger.warning(f"Робот пересекается со стеной id={wall.id} - отмена размещения")
+                return None
+        
+        # Проверяем, находится ли робот в пределах сцены
+        # Создаем временного робота для проверки границ
+        temp_robot = Robot(position, name=name, direction=direction)
+        if not self.check_object_within_scene(temp_robot):
+            logger.warning("Робот выходит за границы сцены - отмена размещения")
+            # Сбрасываем экземпляр, т.к. его не удалось разместить
+            Robot.reset_instance()
+            self.robot_model = None
+            return None
+            
+        # Если у нас уже есть робот на сцене, удаляем его
+        if self.robot_model:
+            self.scene().removeItem(self.robot_model)
+            
+        # Создаем нового робота (или получаем существующий экземпляр)
+        self.robot_model = Robot(position, name=name, direction=direction)
+            
+        # Добавляем робота на сцену
+        self.scene().addItem(self.robot_model)
+        
+        # Настраиваем обработку событий для робота
+        self.robot_model.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+        self.robot_model.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
+        
+        logger.debug(f"Робот успешно размещен в позиции {position}, id={self.robot_model.id}")
+        return self.robot_model
+        
+    def distance_to_line(self, point, line):
+        """
+        Вычисляет расстояние от точки до линии.
+        
+        Args:
+            point: Точка (QPointF)
+            line: Линия (QLineF)
+            
+        Returns:
+            float: Расстояние от точки до линии
+        """
+        # Формула для расстояния от точки до линии
+        x0, y0 = point.x(), point.y()
+        x1, y1 = line.x1(), line.y1()
+        x2, y2 = line.x2(), line.y2()
+        
+        # Если точки отрезка совпадают, возвращаем расстояние до одной из них
+        if x1 == x2 and y1 == y2:
+            return ((x0 - x1) ** 2 + (y0 - y1) ** 2) ** 0.5
+            
+        # Вычисляем расстояние
+        numerator = abs((y2 - y1) * x0 - (x2 - x1) * y0 + x2 * y1 - y2 * x1)
+        denominator = ((y2 - y1) ** 2 + (x2 - x1) ** 2) ** 0.5
+        
+        return numerator / denominator
+
+    def place_region(self, points, region_id=None, color="#800000ff"):
+        """
+        Размещает регион на поле.
+        
+        Args:
+            points: Список точек QPointF, определяющих контур региона
+            region_id: Идентификатор региона (если None, будет сгенерирован автоматически)
+            color: Цвет заливки региона в формате HEX с альфа-каналом
+        
+        Returns:
+            Объект Region или None, если размещение не удалось
+        """
+        logger.debug(f"Placing region with id={region_id}, color={color}")
+        
+        # Проверяем, что у нас достаточно точек для формирования региона
+        if not points or len(points) < 3:
+            logger.warning("Недостаточно точек для создания региона (минимум 3 точки)")
+            return None
+        
+        # Создаем регион
+        region = Region(points, region_id, color)
+        
+        # Добавляем регион на сцену через слой объектов
+        self.objects_layer.addToGroup(region)
+        
+        # Сохраняем ссылку на регион
+        self.regions.append(region)
+        
+        logger.debug(f"Region placed successfully with id={region.id}")
+        return region
