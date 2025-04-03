@@ -231,7 +231,7 @@ class MainWindow(QMainWindow):
         # Устанавливаем для properties_window
         if hasattr(self, 'properties_window'):
             self.properties_window.setup_cursors()
-
+    
     def update_coords_label(self, x, y):
         # Обновляет текст в QLabel с координатами мыши.
         self.coords_label.setText(f"Координаты мыши: X: {x:.2f}, Y: {y:.2f}")
@@ -436,7 +436,7 @@ class MainWindow(QMainWindow):
         
         # Группа кнопок для переключения режимов
         mode_buttons_group = QButtonGroup(self)
-        
+
         # Кнопка режима наблюдателя
         self.observer_button = QPushButton("Наблюдатель")
         self.observer_button.setCheckable(True)
@@ -455,7 +455,7 @@ class MainWindow(QMainWindow):
         self.edit_button.setCursor(Qt.CursorShape.PointingHandCursor)
         mode_layout.addWidget(self.edit_button)
         mode_buttons_group.addButton(self.edit_button)
-        
+
         # Кнопка режима рисования
         self.drawing_button = QPushButton("Рисование")
         self.drawing_button.setCheckable(True)
@@ -467,10 +467,10 @@ class MainWindow(QMainWindow):
         
         # Устанавливаем макет для контейнера
         mode_container.setLayout(mode_layout)
-        
+
         # Добавляем контейнер на панель инструментов
         self.toolbar.addWidget(mode_container)
-        
+
     def create_drawing_buttons(self):
         # Создаем контейнер для инструментов рисования
         drawing_container = QWidget()
@@ -485,7 +485,7 @@ class MainWindow(QMainWindow):
         
         # Группа кнопок для инструментов рисования
         drawing_buttons_group = QButtonGroup(self)
-        
+
         # Кнопка для рисования стен
         self.wall_button = QPushButton("Стена")
         self.wall_button.setCheckable(True)
@@ -495,7 +495,7 @@ class MainWindow(QMainWindow):
         self.wall_button.setCursor(Qt.CursorShape.PointingHandCursor)
         drawing_layout.addWidget(self.wall_button)
         drawing_buttons_group.addButton(self.wall_button)
-        
+
         # Кнопка для рисования регионов
         self.region_button = QPushButton("Регион")
         self.region_button.setCheckable(True)
@@ -508,7 +508,7 @@ class MainWindow(QMainWindow):
         
         # Устанавливаем макет для контейнера
         drawing_container.setLayout(drawing_layout)
-        
+
         # Добавляем контейнер на панель инструментов
         self.toolbar.addWidget(drawing_container)
     
@@ -555,7 +555,7 @@ class MainWindow(QMainWindow):
             self.region_button.setEnabled(False)
             self.field_widget.set_drawing_mode(None)
             self.field_widget.set_edit_mode(True)
-    
+
     def set_drawing_type(self, drawing_type):
         """Устанавливает тип рисования (стена или регион)."""
         logger.debug(f"Setting drawing type to: {drawing_type}")
@@ -815,8 +815,8 @@ class MainWindow(QMainWindow):
             "О программе",
             "<h3>gScene — Графический редактор сцены TRIK</h3>"
             "<p>Версия 0.2.5</p>"
-            "<p>Редактор сцены для визуализации и создания виртуальных сред для роботов TRIK.</p>"
-            "<p>&copy; 2023-2024</p>"
+            "<p>Редактор сцены для создания виртуальных сцен для TRIK Studio.</p>"
+            "<p>&copy; 2025</p>"
         )
 
     def import_xml(self):

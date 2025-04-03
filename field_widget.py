@@ -2,7 +2,7 @@ from PyQt6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QGraphicsLineItem, QGraphicsRectItem,
     QGraphicsTextItem, QGraphicsItemGroup, QGraphicsItem, QMessageBox
 )
-from PyQt6.QtGui import QPainter, QPixmap, QPen, QBrush, QColor, QImage, QTransform
+from PyQt6.QtGui import QPainter, QPixmap, QPen, QBrush, QColor, QImage, QTransform, QPainterPath
 from PyQt6.QtCore import Qt, QPointF, QRectF, QLineF, pyqtSignal
 from PyQt6.QtSvg import QSvgRenderer
 from robot import Robot
@@ -28,7 +28,7 @@ class FieldWidget(QGraphicsView):
     # Сигнал для обновления свойств объекта
     properties_updated = pyqtSignal(object)
 
-    def __init__(self, properties_window, scene_width=1300, scene_height=1000, grid_size=50):
+    def __init__(self, properties_window, scene_width=1300, scene_height=800, grid_size=50):
         super().__init__()
         self.properties_window = properties_window
 
@@ -317,33 +317,52 @@ class FieldWidget(QGraphicsView):
         """
         logger.debug(f"Добавление региона: {rect}, id={region_id}, color={color}")
         
-        # Создаем точки для региона из прямоугольника
+        # Извлекаем позицию и размеры из прямоугольника
+        x = rect.x()
+        y = rect.y()
+        width = rect.width()
+        height = rect.height()
+        
+        # Создаем точки для региона используя (0,0) как базовую точку
+        # Потом мы установим позицию региона, чтобы правильно расположить его
         points = [
-            QPointF(rect.topLeft()),
-            QPointF(rect.topRight()),
-            QPointF(rect.bottomRight()),
-            QPointF(rect.bottomLeft())
+            QPointF(0, 0),
+            QPointF(width, 0),
+            QPointF(width, height),
+            QPointF(0, height)
         ]
         
         # Создаем новый регион
         region = Region(points, region_id, color=color if color else "#800000ff")
         
+        # Устанавливаем позицию региона
+        region.setPos(x, y)
+        
         # Проверяем, находится ли регион в пределах сцены
         if not self.check_object_within_scene(region):
             logger.warning("Регион выходит за границы сцены - отмена добавления")
+            
+            # Освобождаем ID региона, если он был создан
+            try:
+                if region.id in Region._existing_ids:
+                    Region._existing_ids.remove(region.id)
+                    logger.debug(f"Освободили ID {region.id} неудачно созданного региона")
+            except Exception as e:
+                logger.debug(f"Ошибка при освобождении ID: {e}")
+                
             return None
             
         # Добавляем регион на сцену через слой объектов
         self.objects_layer.addToGroup(region)
         
-        # Сохраняем ссылку на регион в словаре для быстрого доступа
+        # Сохраняем ссылку на регион в списке для быстрого доступа
         self.regions.append(region)
         
         # Настраиваем обработку событий для региона
         region.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         region.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
         
-        logger.debug(f"Регион успешно добавлен с id={region.id}")
+        logger.debug(f"Регион успешно добавлен с id={region.id}, позиция=({x}, {y}), размер=({width}, {height})")
         
         # Автоматически выделяем созданный регион
         self.select_item(region)
@@ -656,11 +675,24 @@ class FieldWidget(QGraphicsView):
                         QPointF(new_pos.x() + bounds.x(), new_pos.y() + bounds.y() + bounds.height())
                     ]
                     
-                    temp_region = Region(temp_points)
+                    # Создаем временный регион используя специальный метод
+                    temp_region = Region.create_temp_region(temp_points)
+                    temp_region_id = temp_region.id
                     
                     logger.debug(f"Current region: pos=({self.dragging_item.pos().x()}, {self.dragging_item.pos().y()}), bounds=({bounds.x()}, {bounds.y()}, {bounds.width()}, {bounds.height()})")
                     
-                    if not self.check_object_within_scene(temp_region):
+                    # Проверяем границы
+                    within_scene = self.check_object_within_scene(temp_region)
+                    
+                    # Освобождаем ID временного региона
+                    try:
+                        if temp_region_id in Region._existing_ids:
+                            Region._existing_ids.remove(temp_region_id)
+                            logger.debug(f"Освободили временный ID {temp_region_id}")
+                    except Exception as e:
+                        logger.debug(f"Ошибка при освобождении ID временного региона: {e}")
+                    
+                    if not within_scene:
                         logger.debug(f"ERR region would be out of bounds")
                         return
                 
@@ -953,7 +985,7 @@ class FieldWidget(QGraphicsView):
             ]
             
             # Создаем временный регион для проверки границ сцены
-            temp_region = Region(points)
+            temp_region = Region.create_temp_region(points)
             
             if not self.check_object_within_scene(temp_region):
                 logger.warning(f"Region position update to ({x}, {y}) rejected - would be out of scene bounds")
@@ -968,64 +1000,136 @@ class FieldWidget(QGraphicsView):
                 self.properties_updated.emit(self.selected_item)
                 return False
             
+            # Освобождаем ID временного региона
+            try:
+                if temp_region.id in Region._existing_ids:
+                    Region._existing_ids.remove(temp_region.id)
+            except Exception as e:
+                logger.debug(f"Ошибка при освобождении ID временного региона: {e}")
+            
             # Если проверка пройдена, обновляем позицию
             self.selected_item.setPos(x, y)
             return True
         return False
     
     def update_region_size(self, width, height):
-        """Обновляет размер региона."""
-        if self.selected_item and isinstance(self.selected_item, Region):
-            # Получаем текущую позицию региона
-            pos = self.selected_item.pos()
-            path_rect = self.selected_item.path().boundingRect()
+        """Обновляет размеры выбранного региона."""
+        if not self.selected_item or not isinstance(self.selected_item, Region):
+            return
+        
+        # Статическая переменная для отслеживания показа диалога
+        if not hasattr(self, '_showing_warning_dialog'):
+            self._showing_warning_dialog = False
+        
+        logger.debug(f"===== НАЧАЛО update_region_size: width={width}, height={height} =====")
+        
+        # Получаем текущие координаты (позицию) региона
+        pos = self.selected_item.pos()
+        x = pos.x()
+        y = pos.y()
+        
+        # Сохраняем текущий ID и цвет
+        current_id = self.selected_item.id
+        current_color = self.selected_item.color
+        
+        # Создаем временный регион для проверки границ
+        temp_points = [
+            QPointF(0, 0),
+            QPointF(width, 0),
+            QPointF(width, height),
+            QPointF(0, height)
+        ]
+        
+        # Создаем временный регион используя специальный метод
+        temp_region = Region.create_temp_region(temp_points)
+        temp_region_id = temp_region.id
+        temp_region.setPos(x, y)
+        
+        # Проверяем границы
+        within_scene = self.check_object_within_scene(temp_region)
+        
+        # Освобождаем ID временного региона
+        try:
+            if temp_region_id in Region._existing_ids:
+                Region._existing_ids.remove(temp_region_id)
+                logger.debug(f"Освободили временный ID {temp_region_id}")
+        except Exception as e:
+            logger.debug(f"Ошибка при освобождении ID временного региона: {e}")
+        
+        # Если новый регион выходит за границы сцены, показываем ошибку и не меняем размер
+        if not within_scene:
+            logger.warning(f"Регион с новыми размерами выходит за границы сцены - отмена изменения размера")
             
-            # Вычисляем коэффициенты масштабирования
-            scale_x = width / path_rect.width() if path_rect.width() > 0 else 1
-            scale_y = height / path_rect.height() if path_rect.height() > 0 else 1
-            
-            # Создаем точки для нового региона с измененным размером
-            # Учитываем текущую позицию региона
-            points = [
-                QPointF(pos.x(), pos.y()),
-                QPointF(pos.x() + width, pos.y()),
-                QPointF(pos.x() + width, pos.y() + height),
-                QPointF(pos.x(), pos.y() + height)
-            ]
-            
-            # Создаем временный регион для проверки границ сцены
-            temp_region = Region(points)
-            
-            if not self.check_object_within_scene(temp_region):
-                logger.warning(f"Region size update to ({width}, {height}) rejected - would be out of scene bounds")
-                # Показываем предупреждение о выходе за границы сцены
+            # Показываем предупреждение только если оно еще не отображается
+            if not self._showing_warning_dialog:
+                logger.warning(f"[ДИАЛОГ_1] Показываю предупреждение о выходе за границы в update_region_size")
+                self._showing_warning_dialog = True
+                
+                # Показываем сообщение один раз
                 QMessageBox.warning(
                     None,
                     "Ошибка",
-                    "Регион выйдет за границы сцены. Пожалуйста, укажите другие размеры.",
+                    f"Регион с новыми размерами выходит за границы сцены.",
                     QMessageBox.StandardButton.Ok
                 )
-                # Обновляем свойства с правильными размерами
-                self.properties_updated.emit(self.selected_item)
-                return False
+                
+                self._showing_warning_dialog = False
+            else:
+                logger.warning(f"Диалог уже отображается, пропускаем показ")
             
-            # Если проверка пройдена, создаем новый регион с нужными размерами и заменяем старый
-            new_region = Region(points, self.selected_item.id, self.selected_item.color)
+            # Обновляем значения в окне свойств до текущих значений
+            # Блокируем сигналы, чтобы не вызывать повторное обновление
+            self.properties_window.region_width.blockSignals(True)
+            self.properties_window.region_height.blockSignals(True)
             
-            # Удаляем старый регион из сцены
-            index = self.regions.index(self.selected_item)
-            self.scene().removeItem(self.selected_item)
-            self.regions.remove(self.selected_item)
+            # Устанавливаем текущие значения размеров
+            current_width = self.selected_item.path().boundingRect().width()
+            current_height = self.selected_item.path().boundingRect().height()
+            self.properties_window.region_width.setValue(int(current_width))
+            self.properties_window.region_height.setValue(int(current_height))
             
-            # Добавляем новый регион
-            self.objects_layer.addToGroup(new_region)
-            self.regions.insert(index, new_region)
+            # Разблокируем сигналы
+            self.properties_window.region_width.blockSignals(False)
+            self.properties_window.region_height.blockSignals(False)
             
-            # Выделяем новый регион
-            self.select_item(new_region)
-            
-            return True
-        return False
+            logger.debug(f"===== КОНЕЦ update_region_size (выход за границы) =====")
+            return
+        
+        # Освобождаем ID региона перед его удалением
+        try:
+            logging.debug(f"Освобождаем ID {current_id} из Region._existing_ids")
+            Region._existing_ids.remove(current_id)
+        except Exception as e:
+            logger.debug(f"Ошибка при освобождении ID: {e}")
+        
+        # Удаляем старый регион из списка и сцены
+        self.regions.remove(self.selected_item)
+        self.scene().removeItem(self.selected_item)
+        
+        # Создаем новый регион с теми же ID и цветом, используя (0,0) как базовую точку
+        new_points = [
+            QPointF(0, 0),
+            QPointF(width, 0),
+            QPointF(width, height),
+            QPointF(0, height)
+        ]
+        
+        # Создаем новый регион с теми же ID и цветом
+        new_region = Region(new_points, region_id=current_id, color=current_color)
+        
+        # Устанавливаем позицию региона
+        new_region.setPos(x, y)
+        
+        # Добавляем новый регион на сцену
+        self.objects_layer.addToGroup(new_region)
+        self.regions.append(new_region)
+        
+        # Обновляем выбранный элемент
+        self.selected_item = new_region
+        self.item_selected.emit(new_region)
+        
+        logger.debug(f"Регион обновлен с id={current_id}, позиция=({x}, {y}), размер=({width}, {height})")
+        logger.debug(f"===== КОНЕЦ update_region_size (успешно) =====")
     
     def update_region_color(self, color):
         """Обновляет цвет региона."""

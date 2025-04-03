@@ -10,6 +10,29 @@ class Region(QGraphicsPathItem):
     _next_id = 1  # Статический счетчик для генерации ID
     _existing_ids = set()  # Множество для отслеживания существующих ID
     
+    @staticmethod
+    def create_temp_region(points, color="#800000ff"):
+        """
+        Создает временный регион для проверки границ без увеличения счетчика next_id.
+        
+        Args:
+            points: Список точек региона (QPointF)
+            color: Цвет заливки региона в HEX-формате с альфа-каналом
+            
+        Returns:
+            Region: Временный экземпляр региона
+        """
+        # Сохраняем текущее значение счетчика
+        current_next_id = Region._next_id
+        
+        # Создаем временный регион с временным ID
+        temp_region = Region(points, region_id=f"temp_{current_next_id}", color=color)
+        
+        # Восстанавливаем счетчик
+        Region._next_id = current_next_id
+        
+        return temp_region
+    
     def __init__(self, points, region_id=None, color="#800000ff"):
         """
         Инициализация региона с заданными точками и ID.
@@ -30,6 +53,9 @@ class Region(QGraphicsPathItem):
             path.closeSubpath()
         self.setPath(path)
         
+        # Проверяем, является ли это временным регионом
+        is_temp = isinstance(region_id, str) and region_id.startswith('temp_')
+        
         # Генерация или проверка ID
         if region_id is None:
             # Автоматически генерируем ID
@@ -38,34 +64,38 @@ class Region(QGraphicsPathItem):
         else:
             # Используем предоставленный ID
             try:
-                if isinstance(region_id, str):
-                    if region_id.startswith('r'):
-                        num_id = int(region_id[1:])
-                        self._id = region_id  # Используем оригинальный ID с префиксом
-                    else:
-                        num_id = int(region_id)
+                # Обрабатываем временный ID
+                if is_temp:
+                    self._id = region_id
+                else:
+                    if isinstance(region_id, str):
+                        if region_id.startswith('r'):
+                            num_id = int(region_id[1:])
+                            self._id = region_id  # Используем оригинальный ID с префиксом
+                        else:
+                            num_id = int(region_id)
+                            self._id = f"r{num_id}"  # Добавляем префикс
+                    elif isinstance(region_id, int):
+                        num_id = region_id
                         self._id = f"r{num_id}"  # Добавляем префикс
-                elif isinstance(region_id, int):
-                    num_id = region_id
-                    self._id = f"r{num_id}"  # Добавляем префикс
-                else:
-                    raise ValueError(f"Неподдерживаемый тип ID: {type(region_id)}")
-                
-                # Проверяем, что ID положительный
-                if num_id <= 0:
-                    logger.warning(f"Отрицательный или нулевой ID '{region_id}', будет сгенерирован новый")
-                    self._id = f"r{Region._next_id}"
-                    Region._next_id += 1
-                else:
-                    # Проверяем уникальность ID
-                    if self._id in Region._existing_ids:
-                        logger.warning(f"ID '{self._id}' уже используется, будет сгенерирован новый")
+                    else:
+                        raise ValueError(f"Неподдерживаемый тип ID: {type(region_id)}")
+                    
+                    # Проверяем, что ID положительный
+                    if num_id <= 0:
+                        logger.warning(f"Отрицательный или нулевой ID '{region_id}', будет сгенерирован новый")
                         self._id = f"r{Region._next_id}"
                         Region._next_id += 1
                     else:
-                        # Обновляем счетчик, если заданный ID больше текущего
-                        if num_id >= Region._next_id:
-                            Region._next_id = num_id + 1
+                        # Проверяем уникальность ID
+                        if self._id in Region._existing_ids:
+                            logger.warning(f"ID '{self._id}' уже используется, будет сгенерирован новый")
+                            self._id = f"r{Region._next_id}"
+                            Region._next_id += 1
+                        else:
+                            # Обновляем счетчик, если заданный ID больше текущего
+                            if not is_temp and num_id >= Region._next_id:
+                                Region._next_id = num_id + 1
             except (ValueError, TypeError) as e:
                 logger.warning(f"Некорректный ID '{region_id}': {e}, будет сгенерирован новый")
                 self._id = f"r{Region._next_id}"
@@ -85,7 +115,9 @@ class Region(QGraphicsPathItem):
         # Флаг для отслеживания изменений
         self._updating = False
         
-        logger.debug(f"Регион создан с id={self.id}")
+        # Записываем в лог только для не-временных регионов
+        if not is_temp:
+            logger.debug(f"Регион создан с id={self.id}")
     
     @contextmanager
     def updating(self):

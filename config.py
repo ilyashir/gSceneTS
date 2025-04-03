@@ -37,7 +37,7 @@ class Config:
         },
         "scene": {
             "default_width": 1300,
-            "default_height": 1000
+            "default_height": 900
         }
     }
     

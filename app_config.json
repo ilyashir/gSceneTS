@@ -4,9 +4,9 @@
         "version": "1.0.0"
     },
     "appearance": {
-        "theme": "dark",
-        "theme_name": "Темный стиль",
-        "dark_theme": "True"
+        "theme": "light",
+        "theme_name": "Светлый стиль",
+        "dark_theme": "False"
     },
     "language": {
         "current": "ru",
@@ -14,10 +14,10 @@
     },
     "grid": {
         "size": 50,
-        "snap_to_grid": false
+        "snap_to_grid": true
     },
     "scene": {
         "default_width": 1300,
-        "default_height": 1000
+        "default_height": 900
     }
 }

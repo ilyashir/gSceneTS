@@ -210,14 +210,18 @@ class PropertiesWindow(QWidget):
         size_layout = QHBoxLayout()
         size_layout.addWidget(QLabel("Ширина:"))
         self.region_width = QSpinBox()
-        self.region_width.setRange(1, 1000)
-        self.region_width.valueChanged.connect(lambda w: self.region_size_changed.emit(w, self.region_height.value()))
+        self.region_width.setRange(1, 9999)
+        # Используем editingFinished вместо valueChanged
+        logger.debug(f"Подключаем сигнал editingFinished для region_width")
+        self.region_width.editingFinished.connect(lambda: self.on_region_size_editing_finished())
         size_layout.addWidget(self.region_width)
         
         size_layout.addWidget(QLabel("Высота:"))
         self.region_height = QSpinBox()
-        self.region_height.setRange(1, 1000)
-        self.region_height.valueChanged.connect(lambda h: self.region_size_changed.emit(self.region_width.value(), h))
+        self.region_height.setRange(1, 9999)
+        # Используем editingFinished вместо valueChanged
+        logger.debug(f"Подключаем сигнал editingFinished для region_height")
+        self.region_height.editingFinished.connect(lambda: self.on_region_size_editing_finished())
         size_layout.addWidget(self.region_height)
         layout.addLayout(size_layout)
         
@@ -314,6 +318,77 @@ class PropertiesWindow(QWidget):
         self.wall_y2.blockSignals(False)
         self.wall_width.blockSignals(False)
     
+    def add_property(self, name, value, callback=None):
+        """Добавляет свойство в окно свойств."""
+        layout = QHBoxLayout()
+        label = QLabel(name)
+        layout.addWidget(label)
+        
+        if isinstance(value, (int, float)):
+            spinbox = QSpinBox()
+            spinbox.setRange(-10000, 10000)
+            spinbox.setValue(int(value))
+            if callback:
+                spinbox.valueChanged.connect(callback)
+            layout.addWidget(spinbox)
+        elif isinstance(value, str):
+            line_edit = QLineEdit(value)
+            if callback:
+                line_edit.textChanged.connect(callback)
+            layout.addWidget(line_edit)
+        else:
+            widget = value
+            layout.addWidget(widget)
+            
+        self.region_group.layout().addLayout(layout)
+
+    def update_region_size(self, width, height):
+        """Обновляет размеры региона."""
+        logger.debug(f"[PropertiesWindow] ===== НАЧАЛО update_region_size: width={width}, height={height} =====")
+        
+        if not self.current_item or not isinstance(self.current_item, Region):
+            logger.debug(f"[PropertiesWindow] Нет выбранного региона, выход из update_region_size")
+            return
+            
+        logger.debug(f"[PropertiesWindow] Отправляем сигнал region_size_changed ({width}, {height})")
+        self.region_size_changed.emit(width, height)
+        
+        logger.debug(f"[PropertiesWindow] ===== КОНЕЦ update_region_size =====")
+    
+    def on_region_size_editing_finished(self):
+        """Обработчик события завершения редактирования размеров региона."""
+        width = self.region_width.value()
+        height = self.region_height.value()
+        logger.debug(f"[PropertiesWindow] ===== ВЫЗВАН on_region_size_editing_finished: width={width}, height={height} =====")
+        
+        # Проверяем, изменились ли размеры
+        if self.current_item and isinstance(self.current_item, Region):
+            current_width = int(self.current_item.path().boundingRect().width())
+            current_height = int(self.current_item.path().boundingRect().height())
+            
+            if width != current_width or height != current_height:
+                logger.debug(f"[PropertiesWindow] Размеры изменились: {current_width}x{current_height} -> {width}x{height}")
+                # Вызываем метод update_region_size
+                self.update_region_size(width, height)
+            else:
+                logger.debug(f"[PropertiesWindow] Размеры не изменились: {width}x{height}, пропускаем обновление")
+        else:
+            logger.debug(f"[PropertiesWindow] Нет текущего региона или объект не региона")
+    
+    def update_region_position_x(self, x):
+        """Обновляет X-координату региона."""
+        if not self.current_item or not isinstance(self.current_item, Region):
+            return
+        pos = self.current_item.pos()
+        self.region_position_changed.emit(x, pos.y())
+
+    def update_region_position_y(self, y):
+        """Обновляет Y-координату региона."""
+        if not self.current_item or not isinstance(self.current_item, Region):
+            return
+        pos = self.current_item.pos()
+        self.region_position_changed.emit(pos.x(), y)
+
     def show_region_properties(self, x, y, width, height, color, region_id):
         """Показывает свойства региона."""
         # Блокируем сигналы
@@ -381,15 +456,11 @@ class PropertiesWindow(QWidget):
             )
 
         elif isinstance(item, Region):
-            # Используем path() и boundingRect() для получения размеров региона
-            bounds = item.path().boundingRect()
-            pos = item.pos()
-            logger.debug(f"Calling show_region_properties for item: {item}")
             self.show_region_properties(
-                int(pos.x()),
-                int(pos.y()),
-                int(bounds.width()),
-                int(bounds.height()),
+                int(item.pos().x()),
+                int(item.pos().y()),
+                int(item.path().boundingRect().width()),
+                int(item.path().boundingRect().height()),
                 item.color,
                 item.id
             )
