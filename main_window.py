@@ -239,7 +239,9 @@ class MainWindow(QMainWindow):
     def toggle_snap_to_grid(self, state):
         """Включает или выключает привязку к сетке."""
         enabled = state == Qt.CheckState.Checked.value
-        self.field_widget.snap_to_grid_enabled = enabled
+        # Используем метод set_grid_snap вместо прямого изменения свойства,
+        # чтобы корректно эмитировать сигнал grid_snap_changed
+        self.field_widget.set_grid_snap(enabled)
         # Сохраняем настройку в конфиг
         config.set("grid", "snap_to_grid", enabled)
     
@@ -446,7 +448,7 @@ class MainWindow(QMainWindow):
         self.observer_button.setCursor(Qt.CursorShape.PointingHandCursor)
         mode_layout.addWidget(self.observer_button)
         mode_buttons_group.addButton(self.observer_button)
-        
+
         # Кнопка режима редактирования
         self.edit_button = QPushButton("Редактирование")
         self.edit_button.setCheckable(True)

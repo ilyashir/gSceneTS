@@ -27,6 +27,8 @@ class FieldWidget(QGraphicsView):
     item_deselected = pyqtSignal()
     # Сигнал для обновления свойств объекта
     properties_updated = pyqtSignal(object)
+    # Сигнал изменения режима привязки к сетке
+    grid_snap_changed = pyqtSignal(bool)
 
     def __init__(self, properties_window, scene_width=1300, scene_height=800, grid_size=50):
         super().__init__()
@@ -36,7 +38,7 @@ class FieldWidget(QGraphicsView):
         self.item_selected.connect(self.properties_window.update_properties)
         self.item_deselected.connect(self.properties_window.clear_properties)
         self.properties_updated.connect(self.properties_window.update_properties)
-        
+
         self.setScene(QGraphicsScene(self))
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.setMouseTracking(True)
@@ -244,7 +246,7 @@ class FieldWidget(QGraphicsView):
         :return: True, если линия пересекает прямоугольник, иначе False.
         """
         # Получаем стороны прямоугольника
-        top = QLineF(rect.topLeft(), rect.topRight())           
+        top = QLineF(rect.topLeft(), rect.topRight())
         right = QLineF(rect.topRight(), rect.bottomRight())
         bottom = QLineF(rect.bottomLeft(), rect.bottomRight())
         left = QLineF(rect.topLeft(), rect.bottomLeft())
@@ -299,8 +301,8 @@ class FieldWidget(QGraphicsView):
         logger.debug(f"Стена успешно добавлена с id={wall.id}")
         
         # Автоматически выделяем созданную стену
-        self.select_item(wall)
-        
+        self.select_item(wall)         
+
         return wall
         
     def add_region(self, rect, region_id=None, color=None):
@@ -365,8 +367,8 @@ class FieldWidget(QGraphicsView):
         logger.debug(f"Регион успешно добавлен с id={region.id}, позиция=({x}, {y}), размер=({width}, {height})")
         
         # Автоматически выделяем созданный регион
-        self.select_item(region)
-        
+        self.select_item(region) 
+
         return region
 
     def init_robot(self, pos):
@@ -424,7 +426,7 @@ class FieldWidget(QGraphicsView):
         # Обновляем видимость скроллбаров после изменения размера сцены
         self.update_scrollbars_visibility()
 
-        logger.debug("Scene size updated successfully.")
+        logger.debug("Scene size updated successfully.") 
         logger.debug(f"Scene size set to: {width}x{height}")
 
     def update_scrollbars_visibility(self):
@@ -469,7 +471,7 @@ class FieldWidget(QGraphicsView):
 
         if (self.robot_model.pos().x() < -width // 2 or self.robot_model.pos().x() + self.robot_model.boundingRect().width() > width // 2 or
             self.robot_model.pos().y() < -height // 2 or self.robot_model.pos().y() + self.robot_model.boundingRect().height() > height // 2):
-            return False
+                return False
 
         return True
     
@@ -483,11 +485,11 @@ class FieldWidget(QGraphicsView):
             # Для стены проверяем обе точки
             line = item.line()
             return (
-                -self.scene_width / 2 <= line.x1() <= self.scene_width / 2 and
-                -self.scene_width / 2 <= line.x2() <= self.scene_width / 2 and
-                -self.scene_height / 2 <= line.y1() <= self.scene_height / 2 and
-                -self.scene_height / 2 <= line.y2() <= self.scene_height / 2
-            )
+                    -self.scene_width / 2 <= line.x1() <= self.scene_width / 2 and
+                    -self.scene_width / 2 <= line.x2() <= self.scene_width / 2 and
+                    -self.scene_height / 2 <= line.y1() <= self.scene_height / 2 and
+                    -self.scene_height / 2 <= line.y2() <= self.scene_height / 2
+                )
         elif isinstance(item, Region):
             # Для региона проверяем, что все точки находятся в пределах сцены
             path = item.path()
@@ -719,11 +721,11 @@ class FieldWidget(QGraphicsView):
                 else:
                     with self.dragging_item.updating():
                         self.dragging_item.setLine(
-                            new_pos_x1,
-                            new_pos_y1,
-                            new_pos_x2,
-                            new_pos_y2
-                        )
+                                new_pos_x1,
+                                new_pos_y1,
+                                new_pos_x2,
+                                new_pos_y2
+                            )
                     # Обновляем свойства в окне свойств в режиме реального времени
                     self.properties_window.update_properties(self.dragging_item)
             return
@@ -875,7 +877,7 @@ class FieldWidget(QGraphicsView):
             logger.debug(f"Robot name changed to {name}")
             return True
         return False
-
+    
     def update_wall_point1(self, x1, y1):
         """Обновляет первую точку стены."""
         logger.debug(f"Updating wall point1 to {x1}, {y1}")
@@ -966,7 +968,7 @@ class FieldWidget(QGraphicsView):
         """Обновляет размер стены."""
         logger.debug(f"Updating wall size to {width}")
         if self.selected_item and isinstance(self.selected_item, Wall):
-            self.selected_item.set_stroke_width(width)
+            self.selected_item.set_stroke_width(width)            
             return True
         return False
     
@@ -1140,7 +1142,11 @@ class FieldWidget(QGraphicsView):
 
     def set_grid_snap(self, enabled):
         """Включает/выключает привязку к сетке."""
-        self.snap_to_grid_enabled = enabled
+        if self.snap_to_grid_enabled != enabled:
+            self.snap_to_grid_enabled = enabled
+            # Эмитируем сигнал об изменении режима привязки к сетке
+            logger.debug(f"Изменение режима привязки к сетке: {enabled}")
+            self.grid_snap_changed.emit(enabled)
     
     def set_grid_size(self, size):
         """Устанавливает размер сетки."""

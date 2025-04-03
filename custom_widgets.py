@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QLineEdit, QPushButton,
-    QGraphicsOpacityEffect, QLabel
+    QGraphicsOpacityEffect, QLabel, QColorDialog
 )
 from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve, pyqtSignal, pyqtProperty, QSize
 from PyQt6.QtGui import QColor, QPainter, QPainterPath, QIcon
@@ -234,4 +234,220 @@ class FlatRoundButton(QPushButton):
         
         # Рисуем текст
         painter.setPen(Qt.GlobalColor.white)
-        painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self.text()) 
+        painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self.text())
+
+
+# Создаем локализованный диалог выбора цвета
+class RussianColorDialog(QColorDialog):
+    """Локализованный на русский язык диалог выбора цвета"""
+    
+    def __init__(self, initial_color=None, parent=None):
+        super().__init__(initial_color, parent)
+        self.setWindowTitle("Выберите цвет")
+        self.setOption(QColorDialog.ColorDialogOption.ShowAlphaChannel, True)
+        logger.debug("Создан локализованный диалог выбора цвета RussianColorDialog")
+        
+    def showEvent(self, event):
+        """Переопределяем метод показа окна, чтобы локализовать элементы интерфейса"""
+        super().showEvent(event)
+        logger.debug("Вызван метод showEvent для RussianColorDialog")
+        
+        # Переводим кнопки
+        buttons = self.findChildren(QPushButton)
+        logger.debug(f"Найдено кнопок: {len(buttons)}")
+        for button in buttons:
+            logger.debug(f"Кнопка с текстом: '{button.text()}'")
+            if button.text() == "&OK" or button.text() == "OK":
+                button.setText("ОК")
+                logger.debug("Заменено на 'ОК'")
+            elif button.text() == "&Cancel" or button.text() == "Cancel":
+                button.setText("Отмена")
+                logger.debug("Заменено на 'Отмена'")
+            elif button.text() == "&Pick Screen Color":
+                button.setText("Взять цвет с экрана")
+                logger.debug("Заменено на 'Взять цвет с экрана'")
+            elif button.text() == "&Add to Custom Colors":
+                button.setText("Добавить в пользовательские цвета")
+                logger.debug("Заменено на 'Добавить в пользовательские цвета'")
+        
+        # Переводим метки
+        labels = self.findChildren(QLabel)
+        logger.debug(f"Найдено меток: {len(labels)}")
+        for label in labels:
+            logger.debug(f"Метка с текстом: '{label.text()}'")
+            if label.text() == "&Basic colors" or label.text() == "Basic colors":
+                label.setText("Основные цвета")
+                logger.debug("Заменено на 'Основные цвета'")
+            elif label.text() == "&Custom colors" or label.text() == "Custom colors":
+                label.setText("Пользовательские цвета")
+                logger.debug("Заменено на 'Пользовательские цвета'")
+            elif label.text() == "Hu&e:" or label.text() == "Hue:":
+                label.setText("Тон:")
+                logger.debug("Заменено на 'Тон:'")
+            elif label.text() == "&Sat:" or label.text() == "Sat:":
+                label.setText("Насыщ:")
+                logger.debug("Заменено на 'Насыщ:'")
+            elif label.text() == "&Val:" or label.text() == "Val:":
+                label.setText("Знач:")
+                logger.debug("Заменено на 'Знач:'")
+            elif label.text() == "&Red:" or label.text() == "Red:":
+                label.setText("Красный:")
+                logger.debug("Заменено на 'Красный:'")
+            elif label.text() == "&Green:" or label.text() == "Green:":
+                label.setText("Зеленый:")
+                logger.debug("Заменено на 'Зеленый:'")
+            elif label.text() == "Bl&ue:" or label.text() == "Blue:":
+                label.setText("Синий:")
+                logger.debug("Заменено на 'Синий:'")
+            elif label.text() == "A&lpha channel:" or label.text() == "Alpha channel:":
+                label.setText("Прозрачность:")
+                logger.debug("Заменено на 'Прозрачность:'")
+            elif label.text() == "&HTML:" or label.text() == "HTML:":
+                label.setText("HTML:")
+                logger.debug("Заменено на 'HTML:'")
+            
+        # Дополнительный способ локализации - обновляем кнопки и метки по их объектному имени
+        # Qt иногда использует другие виджеты для отображения текста
+        for obj in self.findChildren(QWidget):
+            if hasattr(obj, 'setText'):
+                try:
+                    current_text = obj.text() if hasattr(obj, 'text') else ""
+                    logger.debug(f"Проверяем текст виджета: '{current_text}', класс: {obj.__class__.__name__}")
+                    
+                    # Локализация текста
+                    if "&Basic colors" in current_text or "Basic colors" in current_text:
+                        obj.setText("Основные цвета")
+                    elif "&Custom colors" in current_text or "Custom colors" in current_text:
+                        obj.setText("Пользовательские цвета")
+                    elif "Hu&e:" in current_text or "Hue:" in current_text:
+                        obj.setText("Тон:")
+                    elif "&Sat:" in current_text or "Sat:" in current_text:
+                        obj.setText("Насыщ:")
+                    elif "&Val:" in current_text or "Val:" in current_text:
+                        obj.setText("Знач:")
+                    elif "&Red:" in current_text or "Red:" in current_text:
+                        obj.setText("Красный:")
+                    elif "&Green:" in current_text or "Green:" in current_text:
+                        obj.setText("Зеленый:")
+                    elif "Bl&ue:" in current_text or "Blue:" in current_text:
+                        obj.setText("Синий:")
+                    elif "A&lpha channel:" in current_text or "Alpha:" in current_text or "Alpha channel:" in current_text:
+                        obj.setText("Прозрачность:")
+                    elif "&HTML:" in current_text or "HTML:" in current_text:
+                        obj.setText("HTML:")
+                    elif "&Pick Screen Color" in current_text:
+                        obj.setText("Взять цвет с экрана")
+                    elif "&Add to Custom Colors" in current_text:
+                        obj.setText("Добавить в пользовательские цвета")
+                except Exception as e:
+                    logger.debug(f"Ошибка при изменении текста: {e}")
+
+
+class ColorPickerButton(QPushButton):
+    """Кнопка для выбора цвета с отображением текущего выбранного цвета и поддержкой альфа-канала"""
+    
+    colorChanged = pyqtSignal(str)  # Сигнал при изменении цвета (строка с цветом)
+    
+    def __init__(self, color="#800000ff", parent=None, is_dark_theme=True):
+        super().__init__(parent)
+        self._color = color
+        self._is_dark_theme = is_dark_theme
+        self.setFixedSize(30, 30)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.clicked.connect(self.show_color_dialog)
+        self.update_style()
+        
+    def update_style(self):
+        """Обновляет стиль кнопки в соответствии с текущим цветом"""
+        # Получаем цвет для фона кнопки
+        qcolor = QColor(self._color)
+        qcolor_str = qcolor.name(QColor.NameFormat.HexArgb)
+        
+        # Получаем цвет границы в зависимости от темы
+        border_color = AppStyles.BORDER_COLOR if self._is_dark_theme else AppStyles.LIGHT_BORDER_COLOR
+        hover_border = "#BBBBBB" if self._is_dark_theme else "#555555"
+        
+        self.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {qcolor_str};
+                border: 1px solid {border_color};
+                border-radius: 4px;
+            }}
+            QPushButton:hover {{
+                border: 2px solid {hover_border};
+            }}
+        """)
+        
+    def show_color_dialog(self):
+        """Показывает диалог выбора цвета с поддержкой прозрачности"""
+        # Создаем объект QColor из текущего значения цвета с альфа-каналом
+        current_color = QColor(self._color)
+        
+        # Получаем цветовую тему для стилизации диалога
+        bg_color = AppStyles.SECONDARY_COLOR if self._is_dark_theme else AppStyles.LIGHT_SECONDARY_COLOR
+        text_color = AppStyles.TEXT_COLOR if self._is_dark_theme else AppStyles.LIGHT_TEXT_COLOR
+        input_bg = AppStyles.SECONDARY_DARK if self._is_dark_theme else AppStyles.LIGHT_SECONDARY_DARK
+        border_color = AppStyles.BORDER_COLOR if self._is_dark_theme else AppStyles.LIGHT_BORDER_COLOR
+        
+        # Используем локализованный диалог
+        dialog = RussianColorDialog(current_color, self)
+        
+        # Устанавливаем стиль
+        dialog.setStyleSheet(f"""
+            QColorDialog {{
+                background-color: {bg_color};
+                color: {text_color};
+            }}
+            QLabel {{
+                color: {text_color};
+            }}
+            QLineEdit {{
+                background-color: {input_bg};
+                color: {text_color};
+                border: 1px solid {border_color};
+                border-radius: 3px;
+                padding: 3px;
+            }}
+            QSpinBox, QDoubleSpinBox {{
+                background-color: {input_bg};
+                color: {text_color};
+                border: 1px solid {border_color};
+                border-radius: 3px;
+                padding: 2px;
+            }}
+            QPushButton {{
+                background-color: {input_bg};
+                color: {text_color};
+                border: 1px solid {border_color};
+                border-radius: 3px;
+                padding: 5px 10px;
+            }}
+            QPushButton:hover {{
+                background-color: {AppStyles.PRIMARY_COLOR if self._is_dark_theme else AppStyles.LIGHT_PRIMARY_COLOR};
+                color: white;
+            }}
+        """)
+        
+        # Отображаем диалог и обрабатываем результат
+        if dialog.exec() == QColorDialog.DialogCode.Accepted:
+            color = dialog.selectedColor()
+            if color.isValid():
+                # Формат с альфа-каналом #AARRGGBB
+                self.setColor(color.name(QColor.NameFormat.HexArgb))
+            
+    def color(self):
+        """Возвращает текущий цвет"""
+        return self._color
+        
+    def setColor(self, color):
+        """Устанавливает цвет кнопки"""
+        if self._color != color:
+            self._color = color
+            self.update_style()
+            self.colorChanged.emit(color)
+            
+    def set_theme(self, is_dark_theme):
+        """Устанавливает тему для виджета"""
+        if self._is_dark_theme != is_dark_theme:
+            self._is_dark_theme = is_dark_theme
+            self.update_style() 
