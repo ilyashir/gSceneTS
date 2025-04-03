@@ -284,10 +284,13 @@ class FieldWidget(QGraphicsView):
             
         # Создаем новую стену
         wall = Wall(p1, p2, wall_id)
+        wall_id = wall.id  # Сохраняем ID для возможной очистки
         
         # Проверяем, находится ли стена в пределах сцены
         if not self.check_object_within_scene(wall):
             logger.warning("Стена выходит за границы сцены - отмена добавления")
+            # Очищаем ID, так как стена не будет добавлена
+            Wall._existing_ids.remove(wall_id)
             return None
             
         # Добавляем стену на сцену
@@ -712,22 +715,17 @@ class FieldWidget(QGraphicsView):
                 logger.debug(f"to: {new_pos_x1, new_pos_y1, new_pos_x2, new_pos_y2}")
                 
                 # Создаем временную стену для проверки границ
-                temp_wall = Wall(QPointF(new_pos_x1, new_pos_y1), QPointF(new_pos_x2, new_pos_y2))
+                temp_wall = Wall(QPointF(new_pos_x1, new_pos_y1), QPointF(new_pos_x2, new_pos_y2), is_temp=True)
+                temp_wall_id = temp_wall.id
                 
                 # Обновляем саму линию стены, смещая обе точки, если нет пересечения с роботом
-                if self.wall_intersects_robot(new_pos_x1, new_pos_y1, new_pos_x2, new_pos_y2) or not self.check_object_within_scene(temp_wall):
-                    logger.debug(f"ERR robot intersects or wall would be out of bounds")
-                    return 
-                else:
+                if not self.wall_intersects_robot(new_pos_x1, new_pos_y1, new_pos_x2, new_pos_y2) and self.check_object_within_scene(temp_wall):
                     with self.dragging_item.updating():
-                        self.dragging_item.setLine(
-                                new_pos_x1,
-                                new_pos_y1,
-                                new_pos_x2,
-                                new_pos_y2
-                            )
-                    # Обновляем свойства в окне свойств в режиме реального времени
+                        self.dragging_item.setLine(new_pos_x1, new_pos_y1, new_pos_x2, new_pos_y2)
                     self.properties_window.update_properties(self.dragging_item)
+                    
+                # Очищаем временный ID
+                Wall.cleanup_temp_id(temp_wall_id)
             return
         elif self.edit_mode and self.selected_marker:            
             wall = self.selected_marker.parentItem()
@@ -901,8 +899,13 @@ class FieldWidget(QGraphicsView):
                 return False
             
             # Создаем временную стену для проверки границ сцены
-            temp_wall = Wall(QPointF(x1, y1), QPointF(x2, y2))
+            temp_wall = Wall(QPointF(x1, y1), QPointF(x2, y2), is_temp=True)
+            temp_wall_id = temp_wall.id
+            
             if not self.check_object_within_scene(temp_wall):
+                # Очищаем временный ID
+                Wall.cleanup_temp_id(temp_wall_id)
+                
                 logger.warning(f"Wall point1 update to ({x1}, {y1}) rejected - would be out of scene bounds")
                 # Показываем предупреждение о выходе за границы сцены
                 QMessageBox.warning(
@@ -914,6 +917,9 @@ class FieldWidget(QGraphicsView):
                 # Обновляем свойства с правильными координатами
                 self.properties_updated.emit(self.selected_item)
                 return False
+            
+            # Очищаем временный ID
+            Wall.cleanup_temp_id(temp_wall_id)
                 
             # Если все проверки пройдены, обновляем стену
             with self.selected_item.updating():
@@ -944,8 +950,13 @@ class FieldWidget(QGraphicsView):
                 return False
             
             # Создаем временную стену для проверки границ сцены
-            temp_wall = Wall(QPointF(x1, y1), QPointF(x2, y2))
+            temp_wall = Wall(QPointF(x1, y1), QPointF(x2, y2), is_temp=True)
+            temp_wall_id = temp_wall.id
+            
             if not self.check_object_within_scene(temp_wall):
+                # Очищаем временный ID
+                Wall.cleanup_temp_id(temp_wall_id)
+                
                 logger.warning(f"Wall point2 update to ({x2}, {y2}) rejected - would be out of scene bounds")
                 # Показываем предупреждение о выходе за границы сцены
                 QMessageBox.warning(
@@ -957,6 +968,9 @@ class FieldWidget(QGraphicsView):
                 # Обновляем свойства с правильными координатами
                 self.properties_updated.emit(self.selected_item)
                 return False
+            
+            # Очищаем временный ID
+            Wall.cleanup_temp_id(temp_wall_id)
                 
             # Если все проверки пройдены, обновляем стену
             with self.selected_item.updating():

@@ -11,7 +11,7 @@ class Wall(QGraphicsLineItem):
     _next_id = 1  # Счетчик для генерации уникальных ID
     _existing_ids = set()  # Множество для хранения всех существующих ID
 
-    def __init__(self, p1, p2, wall_id=None, width=10, color="#ff0000"):
+    def __init__(self, p1, p2, wall_id=None, width=10, color="#ff0000", is_temp=False):
         """
         Инициализация стены.
         
@@ -21,14 +21,27 @@ class Wall(QGraphicsLineItem):
             wall_id: Идентификатор стены (если None, будет сгенерирован)
             width: Толщина стены (по умолчанию 10)
             color: Цвет стены в HEX-формате
+            is_temp: Флаг, указывающий, является ли стена временной (для проверок)
         """
         super().__init__(p1.x(), p1.y(), p2.x(), p2.y())
+        
+        # Для временных стен не обновляем _existing_ids и не увеличиваем _next_id
+        self.is_temp = is_temp
+        
         if wall_id:
             self.id = wall_id
+            # Добавляем ID в множество только для не временных стен
+            if not is_temp:
+                Wall._existing_ids.add(self.id)
         else:
-            self.id = f"w{Wall._next_id}"
-            Wall._next_id += 1
-        Wall._existing_ids.add(self.id)
+            if is_temp:
+                # Для временных стен генерируем ID, но не добавляем его в _existing_ids
+                self.id = f"temp_w{Wall._next_id}"
+            else:
+                # Для реальных стен генерируем ID и добавляем его в _existing_ids
+                self.id = f"w{Wall._next_id}"
+                Wall._next_id += 1
+                Wall._existing_ids.add(self.id)
 
         self.highlight_rect = None  # Прямоугольник для выделения
         self._updating = False  # Флаг для отслеживания состояния обновления
@@ -243,6 +256,11 @@ class Wall(QGraphicsLineItem):
         """
         logger.debug(f"Attempting to set wall ID from '{self.id}' to '{new_id}'")
         
+        # Для временных стен всегда разрешаем изменение ID
+        if self.is_temp:
+            self.id = new_id
+            return True
+        
         # Сначала проверяем, изменился ли ID
         if new_id == self.id:
             logger.debug(f"New ID is the same as current ID, no change needed")
@@ -262,3 +280,17 @@ class Wall(QGraphicsLineItem):
             self._existing_ids.add(self.id)
             logger.debug(f"Wall ID successfully set to '{new_id}'")
             return True
+
+    @classmethod
+    def cleanup_temp_id(cls, temp_id):
+        """Удаляет временный ID из множества существующих ID.
+        Этот метод должен вызываться явно после использования временной стены.
+        
+        Args:
+            temp_id: Временный ID стены для удаления
+        """
+        if temp_id in cls._existing_ids:
+            logger.debug(f"Удаляем временный ID {temp_id} из Wall._existing_ids")
+            cls._existing_ids.remove(temp_id)
+            return True
+        return False
