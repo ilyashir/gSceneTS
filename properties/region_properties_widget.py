@@ -12,7 +12,7 @@ import logging
 from properties.base_properties_widget import BasePropertiesWidget
 from properties.utils.grid_snap_utils import snap_to_grid, is_snap_enabled
 from utils.signal_utils import SignalBlock
-from custom_widgets import EditableLineEdit, ColorPickerButton
+from custom_widgets import EditableLineEdit, ColorPickerButton, CustomSpinBox
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         
         # X с ползунком
         x_layout = QHBoxLayout()
-        self.x_spinbox = QSpinBox()
+        self.x_spinbox = CustomSpinBox()
         self.x_spinbox.setRange(-10000, 10000)
         self.x_spinbox.setMinimumWidth(70)
         
@@ -77,7 +77,7 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         
         # Y с ползунком
         y_layout = QHBoxLayout()
-        self.y_spinbox = QSpinBox()
+        self.y_spinbox = CustomSpinBox()
         self.y_spinbox.setRange(-10000, 10000)
         self.y_spinbox.setMinimumWidth(70)
         
@@ -94,7 +94,7 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         
         # Ширина с ползунком
         width_layout = QHBoxLayout()
-        self.width_spinbox = QSpinBox()
+        self.width_spinbox = CustomSpinBox()
         self.width_spinbox.setRange(1, 1000)
         self.width_spinbox.setMinimumWidth(70)
         
@@ -108,7 +108,7 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         
         # Высота с ползунком
         height_layout = QHBoxLayout()
-        self.height_spinbox = QSpinBox()
+        self.height_spinbox = CustomSpinBox()
         self.height_spinbox.setRange(1, 1000)
         self.height_spinbox.setMinimumWidth(70)
         
@@ -123,7 +123,7 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         # Цвет
         color_layout = QHBoxLayout()
         color_layout.addWidget(QLabel("Цвет:"))
-        self.color_button = ColorPickerButton()
+        self.color_button = ColorPickerButton(is_dark_theme=self.is_dark_theme)
         color_layout.addWidget(self.color_button)
         form_layout.addRow(color_layout)
         
@@ -134,22 +134,34 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         self.reset_button.setCursor(Qt.CursorShape.PointingHandCursor)
         layout.addWidget(self.reset_button, alignment=Qt.AlignmentFlag.AlignRight)
         
+        if self.field_widget:
+            self.update_ranges(
+                int(self.field_widget.scene().sceneRect().left()),
+                int(self.field_widget.scene().sceneRect().right()),
+                int(self.field_widget.scene().sceneRect().top()),
+                int(self.field_widget.scene().sceneRect().bottom())
+            )
+
         self.properties_layout.addLayout(layout)
         
     def _connect_signals(self):
         """Подключение сигналов и слотов."""
         # Связываем слайдеры и спинбоксы для позиции
-        self.x_spinbox.valueChanged.connect(self.x_slider.setValue)
+        self.x_spinbox.buttonValueChanged.connect(self.x_slider.setValue)
+        self.x_spinbox.buttonValueChanged.connect(self.on_x_spinbox_value_changed)
         self.x_slider.valueChanged.connect(self.on_x_slider_changed)
         
-        self.y_spinbox.valueChanged.connect(self.y_slider.setValue)
+        self.y_spinbox.buttonValueChanged.connect(self.y_slider.setValue)
+        self.y_spinbox.buttonValueChanged.connect(self.on_y_spinbox_value_changed)
         self.y_slider.valueChanged.connect(self.on_y_slider_changed)
         
         # Связываем слайдеры и спинбоксы для размера
-        self.width_spinbox.valueChanged.connect(self.width_slider.setValue)
+        self.width_spinbox.buttonValueChanged.connect(self.width_slider.setValue)
+        self.width_spinbox.buttonValueChanged.connect(self.on_width_spinbox_value_changed)
         self.width_slider.valueChanged.connect(self.on_width_slider_changed)
         
-        self.height_spinbox.valueChanged.connect(self.height_slider.setValue)
+        self.height_spinbox.buttonValueChanged.connect(self.height_slider.setValue)
+        self.height_spinbox.buttonValueChanged.connect(self.on_height_spinbox_value_changed)
         self.height_slider.valueChanged.connect(self.on_height_slider_changed)
         
         # Подключаем сигналы редактирования
@@ -232,15 +244,23 @@ class RegionPropertiesWidget(BasePropertiesWidget):
             max_y: Максимальное значение Y
         """
         try:
+            logger.debug(f"Обновление диапазонов: min_x={min_x}, max_x={max_x}, min_y={min_y}, max_y={max_y}")
+            # Получаем текущие размеры региона
+            current_width = self.width_spinbox.value()
+            current_height = self.height_spinbox.value()
+            logger.debug(f"Текущие размеры региона: current_width={current_width}, current_height={current_height}")
             # Обновляем диапазоны для позиции
-            self.x_spinbox.setRange(min_x, max_x)
-            self.x_slider.setRange(min_x, max_x)
-            self.y_spinbox.setRange(min_y, max_y)
-            self.y_slider.setRange(min_y, max_y)
+            self.x_spinbox.setRange(min_x, max_x-current_width)
+            self.x_slider.setRange(min_x, max_x-current_width)
+            self.y_spinbox.setRange(min_y, max_y-current_height)
+            self.y_slider.setRange(min_y, max_y-current_height)
             
             # Обновляем диапазоны для размера
-            max_width = max(max_x - min_x, 1000)
-            max_height = max(max_y - min_y, 1000)
+            # Максимальная ширина/высота зависит от текущей позиции
+            current_x = self.x_spinbox.value()
+            current_y = self.y_spinbox.value()
+            max_width = max_x - current_x
+            max_height = max_y - current_y
             self.width_spinbox.setRange(1, max_width)
             self.width_slider.setRange(1, max_width)
             self.height_spinbox.setRange(1, max_height)
@@ -383,102 +403,74 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         except Exception as e:
             logger.error(f"Ошибка при изменении высоты: {e}")
             
-    # Обработчики завершения редактирования
-    def on_x_editing_finished(self):
-        """Обработчик завершения редактирования X-координаты."""
+    # Новые обработчики для спинбоксов
+    def on_x_spinbox_value_changed(self, value):
+        """Обработчик изменения значения X в спинбоксе (кнопками)."""
         try:
-            value = self.x_spinbox.value()
-            
             # Привязка к сетке если необходимо
             if is_snap_enabled(self.field_widget):
                 grid_size = getattr(self.field_widget, 'grid_size', 10)
                 value = snap_to_grid(value, grid_size)
                 
-                # Обновляем значение в спинбоксе если оно изменилось
-                if value != self.x_spinbox.value():
-                    with SignalBlock(self.x_spinbox):
-                        self.x_spinbox.setValue(value)
-                
-            # Обновляем слайдер
-            with SignalBlock(self.x_slider):
-                self.x_slider.setValue(value)
+                # Блокируем сигналы при обновлении значения
+                with SignalBlock(self.x_spinbox):
+                    self.x_spinbox.setValue(value)
                 
             # Оповещаем об изменении позиции
             self.position_changed.emit(value, self.y_spinbox.value())
         except Exception as e:
-            logger.error(f"Ошибка при завершении редактирования X: {e}")
-            
-    def on_y_editing_finished(self):
-        """Обработчик завершения редактирования Y-координаты."""
+            logger.error(f"Ошибка при изменении X-координаты через спинбокс: {e}")
+
+    def on_y_spinbox_value_changed(self, value):
+        """Обработчик изменения значения Y в спинбоксе (кнопками)."""
         try:
-            value = self.y_spinbox.value()
-            
             # Привязка к сетке если необходимо
             if is_snap_enabled(self.field_widget):
                 grid_size = getattr(self.field_widget, 'grid_size', 10)
                 value = snap_to_grid(value, grid_size)
                 
-                # Обновляем значение в спинбоксе если оно изменилось
-                if value != self.y_spinbox.value():
-                    with SignalBlock(self.y_spinbox):
-                        self.y_spinbox.setValue(value)
-                
-            # Обновляем слайдер
-            with SignalBlock(self.y_slider):
-                self.y_slider.setValue(value)
+                # Блокируем сигналы при обновлении значения
+                with SignalBlock(self.y_spinbox):
+                    self.y_spinbox.setValue(value)
                 
             # Оповещаем об изменении позиции
             self.position_changed.emit(self.x_spinbox.value(), value)
         except Exception as e:
-            logger.error(f"Ошибка при завершении редактирования Y: {e}")
-            
-    def on_width_editing_finished(self):
-        """Обработчик завершения редактирования ширины."""
+            logger.error(f"Ошибка при изменении Y-координаты через спинбокс: {e}")
+
+    def on_width_spinbox_value_changed(self, value):
+        """Обработчик изменения значения ширины в спинбоксе (кнопками)."""
         try:
-            value = self.width_spinbox.value()
-            
             # Привязка к сетке если необходимо
             if is_snap_enabled(self.field_widget):
                 grid_size = getattr(self.field_widget, 'grid_size', 10)
                 value = snap_to_grid(value, grid_size)
                 
-                # Обновляем значение в спинбоксе если оно изменилось
-                if value != self.width_spinbox.value():
-                    with SignalBlock(self.width_spinbox):
-                        self.width_spinbox.setValue(value)
-                
-            # Обновляем слайдер
-            with SignalBlock(self.width_slider):
-                self.width_slider.setValue(value)
+                # Блокируем сигналы при обновлении значения
+                with SignalBlock(self.width_spinbox):
+                    self.width_spinbox.setValue(value)
                 
             # Оповещаем об изменении размера
             self.size_changed.emit(value, self.height_spinbox.value())
         except Exception as e:
-            logger.error(f"Ошибка при завершении редактирования ширины: {e}")
-            
-    def on_height_editing_finished(self):
-        """Обработчик завершения редактирования высоты."""
+            logger.error(f"Ошибка при изменении ширины через спинбокс: {e}")
+
+    def on_height_spinbox_value_changed(self, value):
+        """Обработчик изменения значения высоты в спинбоксе (кнопками)."""
         try:
-            value = self.height_spinbox.value()
-            
             # Привязка к сетке если необходимо
             if is_snap_enabled(self.field_widget):
                 grid_size = getattr(self.field_widget, 'grid_size', 10)
                 value = snap_to_grid(value, grid_size)
                 
-                # Обновляем значение в спинбоксе если оно изменилось
-                if value != self.height_spinbox.value():
-                    with SignalBlock(self.height_spinbox):
-                        self.height_spinbox.setValue(value)
-                
-            # Обновляем слайдер
-            with SignalBlock(self.height_slider):
-                self.height_slider.setValue(value)
+                # Блокируем сигналы при обновлении значения
+                with SignalBlock(self.height_spinbox):
+                    self.height_spinbox.setValue(value)
                 
             # Оповещаем об изменении размера
             self.size_changed.emit(self.width_spinbox.value(), value)
         except Exception as e:
-            logger.error(f"Ошибка при завершении редактирования высоты: {e}")
+            logger.error(f"Ошибка при изменении высоты через спинбокс: {e}")
             
     def on_color_changed(self, color):
         """
@@ -538,6 +530,7 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         Args:
             region: Объект региона
         """
+        logger.debug(f"Обновление свойств региона: {region}")
         if self.field_widget:
             self.update_ranges(
                 int(self.field_widget.scene().sceneRect().left()),
@@ -545,15 +538,17 @@ class RegionPropertiesWidget(BasePropertiesWidget):
                 int(self.field_widget.scene().sceneRect().top()),
                 int(self.field_widget.scene().sceneRect().bottom())
             )
-        
+            logger.debug(f"Обновлены диапазоны: min_x={self.x_spinbox.minimum()}, max_x={self.x_spinbox.maximum()}, min_y={self.y_spinbox.minimum()}, max_y={self.y_spinbox.maximum()}")
+
         self.set_properties(
-            int(region.x()), 
-            int(region.y()),
+            int(region.pos().x()), 
+            int(region.pos().y()),
             int(region.rect().width()), 
             int(region.rect().height()),
             region.brush().color(),
             region.region_id
         )
+        logger.debug(f"Установлены свойства региона: {region.pos().x()}, {region.pos().y()}, {region.rect().width()}, {region.rect().height()}, {region.brush().color()}, {region.region_id}")
     
     def connect_to_field_widget(self, field_widget):
         """
@@ -575,3 +570,133 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         if self.field_widget:
             step_size = self.field_widget.grid_size if enabled else 1
             self.update_step_sizes(step_size) 
+
+    # Обработчики завершения редактирования
+    def on_x_editing_finished(self):
+        """Обработчик завершения редактирования X-координаты."""
+        try:
+            value = self.x_spinbox.value()
+            
+            # Привязка к сетке если необходимо
+            if is_snap_enabled(self.field_widget):
+                grid_size = getattr(self.field_widget, 'grid_size', 10)
+                value = snap_to_grid(value, grid_size)
+                
+                # Обновляем значение в спинбоксе если оно изменилось
+                if value != self.x_spinbox.value():
+                    with SignalBlock(self.x_spinbox):
+                        self.x_spinbox.setValue(value)
+                
+            # Обновляем слайдер
+            with SignalBlock(self.x_slider):
+                self.x_slider.setValue(value)
+        
+            # Пересчитываем доступные диапазоны размеров
+            if self.field_widget:
+                scene_rect = self.field_widget.scene().sceneRect()
+                min_x = int(scene_rect.left())
+                max_x = int(scene_rect.right())
+                min_y = int(scene_rect.top())
+                max_y = int(scene_rect.bottom())
+                self.update_ranges(min_x, max_x, min_y, max_y)
+                
+            # Оповещаем об изменении позиции
+            self.position_changed.emit(value, self.y_spinbox.value())
+        except Exception as e:
+            logger.error(f"Ошибка при завершении редактирования X: {e}")
+
+    def on_y_editing_finished(self):
+        """Обработчик завершения редактирования Y-координаты."""
+        try:
+            value = self.y_spinbox.value()
+            
+            # Привязка к сетке если необходимо
+            if is_snap_enabled(self.field_widget):
+                grid_size = getattr(self.field_widget, 'grid_size', 10)
+                value = snap_to_grid(value, grid_size)
+                
+                # Обновляем значение в спинбоксе если оно изменилось
+                if value != self.y_spinbox.value():
+                    with SignalBlock(self.y_spinbox):
+                        self.y_spinbox.setValue(value)
+                
+            # Обновляем слайдер
+            with SignalBlock(self.y_slider):
+                self.y_slider.setValue(value)
+
+            if self.field_widget:
+                scene_rect = self.field_widget.scene().sceneRect()
+                min_x = int(scene_rect.left())
+                max_x = int(scene_rect.right())
+                min_y = int(scene_rect.top())
+                max_y = int(scene_rect.bottom())
+                self.update_ranges(min_x, max_x, min_y, max_y)
+                
+            # Оповещаем об изменении позиции
+            self.position_changed.emit(self.x_spinbox.value(), value)
+        except Exception as e:
+            logger.error(f"Ошибка при завершении редактирования Y: {e}")
+
+    def on_width_editing_finished(self):
+        """Обработчик завершения редактирования ширины."""
+        try:
+            value = self.width_spinbox.value()
+            
+            # Привязка к сетке если необходимо
+            if is_snap_enabled(self.field_widget):
+                grid_size = getattr(self.field_widget, 'grid_size', 10)
+                value = snap_to_grid(value, grid_size)
+                
+                # Обновляем значение в спинбоксе если оно изменилось
+                if value != self.width_spinbox.value():
+                    with SignalBlock(self.width_spinbox):
+                        self.width_spinbox.setValue(value)
+                
+            # Обновляем слайдер
+            with SignalBlock(self.width_slider):
+                self.width_slider.setValue(value)
+            
+            if self.field_widget:
+                scene_rect = self.field_widget.scene().sceneRect()
+                min_x = int(scene_rect.left())
+                max_x = int(scene_rect.right())
+                min_y = int(scene_rect.top())
+                max_y = int(scene_rect.bottom())
+                self.update_ranges(min_x, max_x, min_y, max_y)
+                
+            # Оповещаем об изменении размера
+            self.size_changed.emit(value, self.height_spinbox.value())
+        except Exception as e:
+            logger.error(f"Ошибка при завершении редактирования ширины: {e}")
+
+    def on_height_editing_finished(self):
+        """Обработчик завершения редактирования высоты."""
+        try:
+            value = self.height_spinbox.value()
+            
+            # Привязка к сетке если необходимо
+            if is_snap_enabled(self.field_widget):
+                grid_size = getattr(self.field_widget, 'grid_size', 10)
+                value = snap_to_grid(value, grid_size)
+                
+                # Обновляем значение в спинбоксе если оно изменилось
+                if value != self.height_spinbox.value():
+                    with SignalBlock(self.height_spinbox):
+                        self.height_spinbox.setValue(value)
+                
+            # Обновляем слайдер
+            with SignalBlock(self.height_slider):
+                self.height_slider.setValue(value)
+
+            if self.field_widget:
+                scene_rect = self.field_widget.scene().sceneRect()
+                min_x = int(scene_rect.left())
+                max_x = int(scene_rect.right())
+                min_y = int(scene_rect.top())
+                max_y = int(scene_rect.bottom())
+                self.update_ranges(min_x, max_x, min_y, max_y)
+                
+            # Оповещаем об изменении размера
+            self.size_changed.emit(self.width_spinbox.value(), value)
+        except Exception as e:
+            logger.error(f"Ошибка при завершении редактирования высоты: {e}") 

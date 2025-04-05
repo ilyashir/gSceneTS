@@ -1,8 +1,18 @@
 from setuptools import setup, find_packages
+import re
+import os
+
+# Динамически получаем версию из __init__.py
+with open(os.path.join(os.path.dirname(__file__), '__init__.py'), 'r') as f:
+    version_match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]", f.read(), re.M)
+    if version_match:
+        version = version_match.group(1)
+    else:
+        raise RuntimeError("Не удалось найти версию")
 
 setup(
     name="gSceneTS",
-    version="0.2.0",
+    version=version,
     packages=find_packages(),
     
     # Зависимости с указанием версий

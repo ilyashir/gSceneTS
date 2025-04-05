@@ -1,8 +1,8 @@
 import sys
 import os
-import pytest
+import unittest
 from PyQt6.QtCore import QPointF, QRectF
-from PyQt6.QtGui import QColor
+from PyQt6.QtGui import QColor, QPainterPath
 
 # Добавляем корневую директорию проекта в sys.path
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
@@ -10,106 +10,135 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 # Импортируем тестируемые модули
 from region import Region
 
-class TestRegion:
+class TestRegion(unittest.TestCase):
     """Тесты для класса Region"""
     
     def test_region_init(self):
         """Тест инициализации региона с правильными параметрами"""
-        # Создаем регион
-        pos = QPointF(100, 150)
-        width = 200
-        height = 300
+        # Создаем регион с помощью списка точек
+        points = [
+            QPointF(100, 150),
+            QPointF(300, 150),
+            QPointF(300, 450),
+            QPointF(100, 450)
+        ]
         color = "#FF0000"
-        region = Region(pos, width, height, color)
+        region = Region(points, color=color)
         
         # Проверяем атрибуты
-        assert region.color == color
-        assert region.rect().width() == width
-        assert region.rect().height() == height
-        
-        # Проверяем, что прямоугольник имеет правильные координаты
-        # В конструкторе QGraphicsRectItem координаты устанавливаются по значениям pos
-        assert region.rect().x() == pos.x()
-        assert region.rect().y() == pos.y()
-        
-        # По умолчанию позиция самого объекта (0,0) до явного вызова setPos
-        assert region.pos().x() == 0
-        assert region.pos().y() == 0
+        self.assertEqual(region.color, color)
+        # Проверяем, что ограничивающий прямоугольник имеет правильные размеры
+        rect = region.boundingRect()
+        self.assertEqual(rect.width(), 200)  # 300 - 100
+        self.assertEqual(rect.height(), 300)  # 450 - 150
         
         # Проверяем, что ID сгенерирован и начинается с "r"
-        assert region.id.startswith("r")
+        self.assertTrue(region.id.startswith("r"))
     
     def test_region_set_id(self):
         """Тест установки ID региона"""
-        # Создаем регион
-        pos = QPointF(0, 0)
-        region = Region(pos, 100, 100)
+        # Создаем регион с помощью списка точек
+        points = [
+            QPointF(0, 0),
+            QPointF(100, 0),
+            QPointF(100, 100),
+            QPointF(0, 100)
+        ]
+        region = Region(points)
         original_id = region.id
         
         # Устанавливаем новый ID
-        new_id = "test_region"
+        new_id = "r99"
         result = region.set_id(new_id)
         
         # Проверяем, что ID изменился
-        assert result is True
-        assert region.id == new_id
-        assert original_id != new_id
+        self.assertTrue(result)
+        self.assertEqual(region.id, new_id)
+        self.assertNotEqual(original_id, new_id)
     
     def test_region_update_size(self):
         """Тест обновления размера региона"""
-        # Создаем регион
-        pos = QPointF(0, 0)
-        width = 100
-        height = 100
-        region = Region(pos, width, height)
+        # Создаем регион с помощью списка точек
+        points = [
+            QPointF(0, 0),
+            QPointF(100, 0),
+            QPointF(100, 100),
+            QPointF(0, 100)
+        ]
+        region = Region(points)
         
-        # Обновляем размер через setRect
-        new_width = 150
-        new_height = 200
-        region.setRect(0, 0, new_width, new_height)
+        # Обновляем размер через создание нового пути
+        new_points = [
+            QPointF(0, 0),
+            QPointF(150, 0),
+            QPointF(150, 200),
+            QPointF(0, 200)
+        ]
+        new_path = QPainterPath()
+        new_path.moveTo(new_points[0])
+        for i in range(1, len(new_points)):
+            new_path.lineTo(new_points[i])
+        new_path.closeSubpath()
+        region.setPath(new_path)
         
         # Проверяем новый размер
-        assert region.rect().width() == new_width
-        assert region.rect().height() == new_height
+        rect = region.boundingRect()
+        self.assertEqual(rect.width(), 150)
+        self.assertEqual(rect.height(), 200)
     
     def test_region_update_color(self):
         """Тест обновления цвета региона"""
-        # Создаем регион
-        pos = QPointF(0, 0)
-        region = Region(pos, 100, 100, "#000000")
+        # Создаем регион с помощью списка точек
+        points = [
+            QPointF(0, 0),
+            QPointF(100, 0),
+            QPointF(100, 100),
+            QPointF(0, 100)
+        ]
+        region = Region(points, color="#000000")
         
         # Обновляем цвет
         new_color = "#FFFFFF"
         region.set_color(new_color)
         
         # Проверяем новый цвет
-        assert region.color == new_color
+        self.assertEqual(region.color, new_color)
     
     def test_region_initialization(self):
         """Тест инициализации региона с позицией и размерами"""
-        # Создаем регион с заданной позицией
-        pos = QPointF(100, 100)
-        width = 200
-        height = 150
-        region = Region(pos, width, height)
+        # Создаем регион с заданными точками
+        points = [
+            QPointF(100, 100),
+            QPointF(300, 100),
+            QPointF(300, 250),
+            QPointF(100, 250)
+        ]
+        region = Region(points)
         
         # Позиционируем регион явно
-        region.setPos(pos)
+        region.setPos(QPointF(100, 100))
         
         # Проверяем, что регион создался с правильными размерами
-        assert region.rect().width() == width
-        assert region.rect().height() == height
+        rect = region.boundingRect()
+        self.assertEqual(rect.width(), 200)
+        self.assertEqual(rect.height(), 150)
         
         # Проверяем, что позиция установлена правильно
-        assert region.pos().x() == pos.x()
-        assert region.pos().y() == pos.y()
+        self.assertEqual(region.pos().x(), 100)
+        self.assertEqual(region.pos().y(), 100)
     
     def test_region_set_color(self):
         """Тест установки цвета региона"""
-        region = Region(QPointF(0, 0), 100, 100)
+        points = [
+            QPointF(0, 0),
+            QPointF(100, 0),
+            QPointF(100, 100),
+            QPointF(0, 100)
+        ]
+        region = Region(points)
         
         # Проверяем, что у региона есть атрибут color
-        assert hasattr(region, 'color')
+        self.assertTrue(hasattr(region, 'color'))
         
         # Сохраняем исходный цвет
         original_color = region.color
@@ -119,15 +148,24 @@ class TestRegion:
         region.set_color(new_color)
         
         # Проверяем, что цвет изменился
-        assert region.color == new_color
-        assert region.color != original_color
+        self.assertEqual(region.color, new_color)
+        self.assertNotEqual(region.color, original_color)
     
     def test_region_highlight(self):
         """Тест выделения региона"""
-        region = Region(QPointF(0, 0), 100, 100)
+        points = [
+            QPointF(0, 0),
+            QPointF(100, 0),
+            QPointF(100, 100),
+            QPointF(0, 100)
+        ]
+        region = Region(points)
         
         # Включаем подсветку
         region.set_highlight(True)
         
         # Отключаем подсветку
-        region.set_highlight(False) 
+        region.set_highlight(False)
+
+if __name__ == '__main__':
+    unittest.main() 

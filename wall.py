@@ -294,3 +294,8 @@ class Wall(QGraphicsLineItem):
             cls._existing_ids.remove(temp_id)
             return True
         return False
+
+    @property
+    def wall_id(self):
+        """Возвращает идентификатор стены (для совместимости с PropertiesWindow)"""
+        return self.id

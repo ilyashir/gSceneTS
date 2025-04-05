@@ -165,28 +165,11 @@ class Region(QGraphicsPathItem):
         """Устанавливает новый ID региона, если он уникален."""
         logger.debug(f"Attempting to set region ID from '{self.id}' to '{new_id}'")
         
-        # Преобразуем ID в строку с префиксом, если необходимо
+        # Преобразуем ID в строку
         if isinstance(new_id, str):
-            if new_id.startswith('r'):
-                try:
-                    num_id = int(new_id[1:])
-                    new_id_str = new_id
-                except ValueError:
-                    logger.warning(f"Invalid region ID format: {new_id}")
-                    return False
-            else:
-                try:
-                    num_id = int(new_id)
-                    new_id_str = f"r{num_id}"
-                except ValueError:
-                    logger.warning(f"Invalid region ID format: {new_id}")
-                    return False
+            new_id_str = new_id
         elif isinstance(new_id, int):
-            if new_id <= 0:
-                logger.warning(f"Region ID must be positive: {new_id}")
-                return False
-            num_id = new_id
-            new_id_str = f"r{new_id}"
+            new_id_str = str(new_id)
         else:
             logger.warning(f"Unsupported ID type: {type(new_id)}")
             return False
@@ -207,9 +190,15 @@ class Region(QGraphicsPathItem):
         self._id = new_id_str
         Region._existing_ids.add(self._id)
         
-        # Обновляем счетчик, если новый ID больше текущего
-        if num_id >= Region._next_id:
-            Region._next_id = num_id + 1
+        # Обновляем счетчик, если ID имеет формат "r<number>" и число больше текущего
+        if new_id_str.startswith('r'):
+            try:
+                num_id = int(new_id_str[1:])
+                if num_id >= Region._next_id:
+                    Region._next_id = num_id + 1
+            except ValueError:
+                # Если ID не имеет формат "r<number>", не обновляем счетчик
+                pass
             
         logger.debug(f"Region ID changed from {old_id} to {self._id}")
         return True
@@ -224,3 +213,20 @@ class Region(QGraphicsPathItem):
         scene = self.scene()
         if scene:
             scene.removeItem(self)
+
+    @property
+    def region_id(self):
+        """Возвращает идентификатор региона (для совместимости с PropertiesWindow)"""
+        return self.id
+        
+    def rect(self):
+        """Возвращает ограничивающий прямоугольник региона (для совместимости с PropertiesWindow)"""
+        return self.boundingRect()
+        
+    def x(self):
+        """Возвращает X-координату региона (для совместимости с PropertiesWindow)"""
+        return self.boundingRect().x()
+        
+    def y(self):
+        """Возвращает Y-координату региона (для совместимости с PropertiesWindow)"""
+        return self.boundingRect().y()

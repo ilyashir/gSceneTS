@@ -196,4 +196,4 @@ class BasePropertiesWidget(QGroupBox):
     def hide(self):
         """Скрывает виджет"""
         super().hide()
-        self.field_widget = None 
+        

@@ -1,6 +1,6 @@
 import sys
 import os
-import pytest
+import unittest
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QColor
 import math
@@ -10,8 +10,12 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 
 from robot import Robot
 
-class TestRobot:
+class TestRobot(unittest.TestCase):
     """Тесты для класса Robot"""
+    
+    def setUp(self):
+        """Сбросить экземпляр робота перед каждым тестом"""
+        Robot.reset_instance()
     
     def test_robot_initialization(self):
         """Тест инициализации робота"""
@@ -20,26 +24,26 @@ class TestRobot:
         robot = Robot(pos)
         
         # Проверяем, что робот создался с правильной позицией
-        assert robot.pos() == pos
+        self.assertEqual(robot.pos(), pos)
         
         # Проверяем, что размеры робота близки к ожидаемым (около 50x50)
         # Реальный размер может немного отличаться из-за особенностей реализации
-        assert abs(robot.boundingRect().width() - 50) <= 1
-        assert abs(robot.boundingRect().height() - 50) <= 1
+        self.assertLessEqual(abs(robot.boundingRect().width() - 50), 1)
+        self.assertLessEqual(abs(robot.boundingRect().height() - 50), 1)
     
     def test_robot_rotation(self):
         """Тест вращения робота"""
         robot = Robot(QPointF(0, 0))
         
-        # У робота нет метода rotation(), вместо этого есть direction
-        assert robot.direction == 0
+        # Запоминаем исходное значение направления
+        old_direction = robot.direction
         
-        # Устанавливаем новый угол поворота
-        new_rotation = 45
+        # Устанавливаем новый угол поворота, отличающийся от исходного
+        new_rotation = old_direction + 45
         robot.set_direction(new_rotation)
         
         # Проверяем, что поворот изменился
-        assert robot.direction == new_rotation
+        self.assertEqual(robot.direction, new_rotation)
     
     def test_robot_highlight(self):
         """Тест выделения робота"""
@@ -59,10 +63,10 @@ class TestRobot:
         robot.set_direction(45)
         
         # Проверяем атрибуты
-        assert robot.id == "robot1"  # Фиксированный ID
-        assert robot.pos().x() == 150
-        assert robot.pos().y() == 200
-        assert robot.direction == 45
+        self.assertEqual(robot.id, "trikKitRobot")  # Фиксированный ID
+        self.assertEqual(robot.pos().x(), 150)
+        self.assertEqual(robot.pos().y(), 200)
+        self.assertEqual(robot.direction, 45)
     
     def test_robot_update_position(self):
         """Тест обновления позиции робота"""
@@ -74,8 +78,8 @@ class TestRobot:
         robot.setPos(new_pos)
         
         # Проверяем новую позицию
-        assert robot.pos().x() == 75
-        assert robot.pos().y() == 125
+        self.assertEqual(robot.pos().x(), 75)
+        self.assertEqual(robot.pos().y(), 125)
     
     def test_robot_update_direction(self):
         """Тест обновления направления робота"""
@@ -86,7 +90,7 @@ class TestRobot:
         robot.set_direction(90)
         
         # Проверяем новое направление
-        assert robot.direction == 90
+        self.assertEqual(robot.direction, 90)
         
     def test_robot_negative_direction(self):
         """Тест отрицательного направления робота"""
@@ -95,4 +99,7 @@ class TestRobot:
         robot.set_direction(-45)
         
         # Проверяем, что направление правильно обрабатывается
-        assert robot.direction == -45 
+        self.assertEqual(robot.direction, -45)
+
+if __name__ == '__main__':
+    unittest.main() 

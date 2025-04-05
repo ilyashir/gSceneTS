@@ -136,7 +136,13 @@ class PropertiesManager(QWidget):
         """
         # Скрываем все виджеты свойств
         self.hide_all_widgets()
-        
+
+        # Восстанавливаем field_widget в виджетах
+        if self.field_widget:
+            self.robot_widget.field_widget = self.field_widget
+            self.wall_widget.field_widget = self.field_widget
+            self.region_widget.field_widget = self.field_widget
+
         # Определяем тип элемента и показываем соответствующий виджет
         if isinstance(item, Robot):
             self.robot_widget.update_properties(item)

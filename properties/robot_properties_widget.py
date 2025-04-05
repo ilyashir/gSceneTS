@@ -11,6 +11,7 @@ import logging
 from properties.base_properties_widget import BasePropertiesWidget
 from properties.utils.grid_snap_utils import snap_to_grid, snap_rotation_to_grid, is_snap_enabled
 from utils.signal_utils import SignalBlock
+from custom_widgets import CustomSpinBox
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         
         # Координата X с ползунком
         x_layout = QHBoxLayout()
-        self.x_spinbox = QSpinBox()
+        self.x_spinbox = CustomSpinBox()
         self.x_spinbox.setRange(-10000, 10000)
         self.x_spinbox.setMinimumWidth(70)
         
@@ -68,7 +69,7 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         
         # Координата Y с ползунком
         y_layout = QHBoxLayout()
-        self.y_spinbox = QSpinBox()
+        self.y_spinbox = CustomSpinBox()
         self.y_spinbox.setRange(-10000, 10000)
         self.y_spinbox.setMinimumWidth(70)
         
@@ -82,7 +83,7 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         
         # Поворот с ползунком
         rotation_layout = QHBoxLayout()
-        self.rotation_spinbox = QSpinBox()
+        self.rotation_spinbox = CustomSpinBox()
         self.rotation_spinbox.setRange(-180, 180)
         self.rotation_spinbox.setMinimumWidth(70)
         
@@ -106,13 +107,16 @@ class RobotPropertiesWidget(BasePropertiesWidget):
     def _connect_signals(self):
         """Подключение сигналов и слотов."""
         # Связываем слайдеры и спинбоксы
-        self.x_spinbox.valueChanged.connect(self.x_slider.setValue)
+        self.x_spinbox.buttonValueChanged.connect(self.x_slider.setValue)
+        self.x_spinbox.buttonValueChanged.connect(self.on_x_spinbox_value_changed)
         self.x_slider.valueChanged.connect(self.on_x_slider_changed)
         
-        self.y_spinbox.valueChanged.connect(self.y_slider.setValue)
+        self.y_spinbox.buttonValueChanged.connect(self.y_slider.setValue)
+        self.y_spinbox.buttonValueChanged.connect(self.on_y_spinbox_value_changed)
         self.y_slider.valueChanged.connect(self.on_y_slider_changed)
         
-        self.rotation_spinbox.valueChanged.connect(self.rotation_slider.setValue)
+        self.rotation_spinbox.buttonValueChanged.connect(self.rotation_slider.setValue)
+        self.rotation_spinbox.buttonValueChanged.connect(self.on_rotation_spinbox_value_changed)
         self.rotation_slider.valueChanged.connect(self.on_rotation_slider_changed)
         
         # Подключаем сигналы редактирования
@@ -172,13 +176,13 @@ class RobotPropertiesWidget(BasePropertiesWidget):
             max_y: Максимальное значение Y
         """
         try:
-            # Обновляем диапазоны для X
-            self.x_spinbox.setRange(min_x, max_x)
-            self.x_slider.setRange(min_x, max_x)
+            # Обновляем диапазоны для X c учетом размера робота
+            self.x_spinbox.setRange(min_x, max_x - 50)
+            self.x_slider.setRange(min_x, max_x - 50)
             
             # Обновляем диапазоны для Y
-            self.y_spinbox.setRange(min_y, max_y)
-            self.y_slider.setRange(min_y, max_y)
+            self.y_spinbox.setRange(min_y, max_y - 50)
+            self.y_slider.setRange(min_y, max_y - 50)
         except Exception as e:
             logger.error(f"Ошибка при обновлении диапазонов: {e}")
             
@@ -224,6 +228,56 @@ class RobotPropertiesWidget(BasePropertiesWidget):
             logger.error(f"Ошибка при обновлении шага спинбоксов: {e}")
     
     # Обработчики событий
+    def on_x_spinbox_value_changed(self, value):
+        """Обработчик изменения значения X в спинбоксе (кнопками)."""
+        try:
+            # Привязка к сетке если необходимо
+            if is_snap_enabled(self.field_widget):
+                grid_size = getattr(self.field_widget, 'grid_size', 10)
+                value = snap_to_grid(value, grid_size)
+                
+                # Блокируем сигналы при обновлении значения
+                with SignalBlock(self.x_spinbox):
+                    self.x_spinbox.setValue(value)
+                
+            # Оповещаем об изменении позиции
+            self.position_changed.emit(value, self.y_spinbox.value())
+        except Exception as e:
+            logger.error(f"Ошибка при изменении X-координаты через спинбокс: {e}")
+
+    def on_y_spinbox_value_changed(self, value):
+        """Обработчик изменения значения Y в спинбоксе (кнопками)."""
+        try:
+            # Привязка к сетке если необходимо
+            if is_snap_enabled(self.field_widget):
+                grid_size = getattr(self.field_widget, 'grid_size', 10)
+                value = snap_to_grid(value, grid_size)
+                
+                # Блокируем сигналы при обновлении значения
+                with SignalBlock(self.y_spinbox):
+                    self.y_spinbox.setValue(value)
+                
+            # Оповещаем об изменении позиции
+            self.position_changed.emit(self.x_spinbox.value(), value)
+        except Exception as e:
+            logger.error(f"Ошибка при изменении Y-координаты через спинбокс: {e}")
+
+    def on_rotation_spinbox_value_changed(self, value):
+        """Обработчик изменения значения поворота в спинбоксе (кнопками)."""
+        try:
+            # Привязка к сетке если необходимо
+            if is_snap_enabled(self.field_widget):
+                value = snap_rotation_to_grid(value, 45)
+                
+                # Блокируем сигналы при обновлении значения
+                with SignalBlock(self.rotation_spinbox):
+                    self.rotation_spinbox.setValue(value)
+                
+            # Оповещаем об изменении поворота
+            self.rotation_changed.emit(value)
+        except Exception as e:
+            logger.error(f"Ошибка при изменении поворота через спинбокс: {e}")
+
     def on_x_slider_changed(self, value):
         """
         Обработчик изменения слайдера X.
@@ -235,8 +289,10 @@ class RobotPropertiesWidget(BasePropertiesWidget):
             # Привязка к сетке если необходимо
             if is_snap_enabled(self.field_widget):
                 grid_size = getattr(self.field_widget, 'grid_size', 10)
-                value = snap_to_grid(value, grid_size)
-                
+                value = snap_to_grid(value, grid_size)  
+                logger.info(f"Привязка к сетке: {value}")
+
+            logger.info(f"Изменение X: {value}")
             # Устанавливаем значение в спинбокс без эмиссии сигнала
             with SignalBlock(self.x_spinbox):
                 self.x_spinbox.setValue(value)

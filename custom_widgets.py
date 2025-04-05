@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QLineEdit, QPushButton,
-    QGraphicsOpacityEffect, QLabel, QColorDialog
+    QGraphicsOpacityEffect, QLabel, QColorDialog, QSpinBox
 )
 from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve, pyqtSignal, pyqtProperty, QSize
 from PyQt6.QtGui import QColor, QPainter, QPainterPath, QIcon
@@ -201,6 +201,25 @@ class EditableLineEdit(QWidget):
         self.text_field.setStyleSheet(stylesheet)
         super().setStyleSheet(stylesheet)
         
+    def setValue(self, value):
+        """
+        Устанавливает значение в поле редактирования.
+        Метод для совместимости с другими компонентами UI.
+        
+        Args:
+            value: Новое значение
+        """
+        self.setText(str(value))
+        
+    def getText(self):
+        """
+        Возвращает текущий текст из поля редактирования.
+        
+        Returns:
+            str: Текущий текст
+        """
+        return self.text_field.text()
+    
     def setLinkedObject(self, obj):
         """Устанавливает связанный объект для текстового поля."""
         self._linked_object = obj
@@ -348,7 +367,7 @@ class ColorPickerButton(QPushButton):
     
     colorChanged = pyqtSignal(str)  # Сигнал при изменении цвета (строка с цветом)
     
-    def __init__(self, color="#800000ff", parent=None, is_dark_theme=True):
+    def __init__(self, color="#800000ff", parent=None, is_dark_theme=False):
         super().__init__(parent)
         self._color = color
         self._is_dark_theme = is_dark_theme
@@ -424,7 +443,7 @@ class ColorPickerButton(QPushButton):
             }}
             QPushButton:hover {{
                 background-color: {AppStyles.PRIMARY_COLOR if self._is_dark_theme else AppStyles.LIGHT_PRIMARY_COLOR};
-                color: white;
+                color: {'white' if self._is_dark_theme else AppStyles.LIGHT_TEXT_COLOR};
             }}
         """)
         
@@ -450,4 +469,69 @@ class ColorPickerButton(QPushButton):
         """Устанавливает тему для виджета"""
         if self._is_dark_theme != is_dark_theme:
             self._is_dark_theme = is_dark_theme
-            self.update_style() 
+            self.update_style()
+
+
+class CustomSpinBox(QSpinBox):
+    """
+    Спинбокс с разделением обработки событий кнопок и ручного ввода.
+    
+    Стандартный QSpinBox отправляет сигнал valueChanged при каждом изменении,
+    что неудобно при ручном вводе текста (прерывает ввод).
+    
+    Этот класс отличает изменения, вызванные кнопками от изменений, вызванных
+    редактированием, и генерирует соответствующие сигналы.
+    """
+    # Обычный сигнал отправляется только при изменении с помощью кнопок спинбокса
+    buttonValueChanged = pyqtSignal(int)
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._is_editing = False
+        self._value_before_edit = 0
+        self._is_button_change = False
+        
+        # Перенаправляем сигналы
+        super().valueChanged.connect(self._on_value_changed)
+        
+    def _on_value_changed(self, value):
+        """
+        Обработчик изменения значения, определяет источник изменения.
+        
+        Если изменение происходит от кнопки, вызывает buttonValueChanged.
+        Если от ручного ввода, сигнал не вызывается, а ждет завершения редактирования.
+        """
+        # Если изменение было вызвано кнопкой, эмитируем сигнал
+        if self._is_button_change:
+            self._is_button_change = False
+            self.buttonValueChanged.emit(value)
+        # Программное изменение значения (не от ручного ввода и не от кнопок)
+        elif not self.hasFocus():
+            self.buttonValueChanged.emit(value)
+    
+    def stepBy(self, steps):
+        """
+        Переопределение метода шага, вызываемого при нажатии кнопок спинбокса.
+        """
+        self._is_button_change = True
+        super().stepBy(steps)
+    
+    def focusInEvent(self, event):
+        """
+        Обработчик события получения фокуса.
+        Запоминает текущее значение для отслеживания изменений.
+        """
+        self._is_editing = True
+        self._value_before_edit = self.value()
+        super().focusInEvent(event)
+        
+    def focusOutEvent(self, event):
+        """
+        Обработчик события потери фокуса.
+        Сигнализирует о завершении редактирования.
+        """
+        if self._is_editing and self.value() != self._value_before_edit:
+            # При потере фокуса, если значение изменилось, отправляем сигнал
+            self.buttonValueChanged.emit(self.value())
+        self._is_editing = False
+        super().focusOutEvent(event) 

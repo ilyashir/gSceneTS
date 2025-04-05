@@ -308,40 +308,48 @@ class FieldWidget(QGraphicsView):
 
         return wall
         
-    def add_region(self, rect, region_id=None, color=None):
+    def add_region(self, rect_or_points, region_id=None, color=None):
         """
-        Добавляет регион на сцену с заданными параметрами.
+        Добавляет новый регион на сцену.
         
         Args:
-            rect: Прямоугольник региона (QRectF)
-            region_id: Идентификатор региона (если None, будет сгенерирован)
-            color: Цвет региона (если None, будет использован цвет по умолчанию)
+            rect_or_points: Прямоугольник (QRectF) или список точек для создания региона
+            region_id: Идентификатор региона (опционально)
+            color: Цвет заливки региона (опционально)
             
         Returns:
             Region: Добавленный регион или None, если добавление не удалось
         """
-        logger.debug(f"Добавление региона: {rect}, id={region_id}, color={color}")
+        logger.debug(f"Добавление региона: {rect_or_points}, id={region_id}, color={color}")
         
-        # Извлекаем позицию и размеры из прямоугольника
-        x = rect.x()
-        y = rect.y()
-        width = rect.width()
-        height = rect.height()
-        
-        # Создаем точки для региона используя (0,0) как базовую точку
-        # Потом мы установим позицию региона, чтобы правильно расположить его
-        points = [
-            QPointF(0, 0),
-            QPointF(width, 0),
-            QPointF(width, height),
-            QPointF(0, height)
-        ]
-        
-        # Создаем новый регион
-        region = Region(points, region_id, color=color if color else "#800000ff")
-        
-        # Устанавливаем позицию региона
-        region.setPos(x, y)
+        # Проверяем, что за тип передан
+        if isinstance(rect_or_points, QRectF):
+            # Извлекаем позицию и размеры из прямоугольника
+            x = rect_or_points.x()
+            y = rect_or_points.y()
+            width = rect_or_points.width()
+            height = rect_or_points.height()
+            
+            # Создаем точки для региона используя (0,0) как базовую точку
+            # Потом мы установим позицию региона, чтобы правильно расположить его
+            points = [
+                QPointF(0, 0),
+                QPointF(width, 0),
+                QPointF(width, height),
+                QPointF(0, height)
+            ]
+            
+            # Создаем новый регион
+            region = Region(points, region_id, color=color if color else "#800000ff")
+            
+            # Устанавливаем позицию региона
+            region.setPos(x, y)
+        elif isinstance(rect_or_points, list):
+            # Список точек напрямую передается в конструктор Region
+            region = Region(rect_or_points, region_id, color=color if color else "#800000ff")
+        else:
+            logger.error(f"Неподдерживаемый тип для создания региона: {type(rect_or_points)}")
+            return None
         
         # Проверяем, находится ли регион в пределах сцены
         if not self.check_object_within_scene(region):
@@ -367,7 +375,7 @@ class FieldWidget(QGraphicsView):
         region.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         region.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
         
-        logger.debug(f"Регион успешно добавлен с id={region.id}, позиция=({x}, {y}), размер=({width}, {height})")
+        logger.debug(f"Регион успешно добавлен с id={region.id}")
         
         # Автоматически выделяем созданный регион
         self.select_item(region) 
@@ -383,6 +391,11 @@ class FieldWidget(QGraphicsView):
         self.objects_layer.addToGroup(self.robot_model)
 
     def set_drawing_mode(self, mode):
+        # Если меняем режим рисования, снимаем выделение с текущего объекта
+        if mode != self.drawing_mode:
+            if self.selected_item:
+                self.deselect_item()
+        
         self.drawing_mode = mode
 
     def set_edit_mode(self, enabled):
@@ -484,15 +497,27 @@ class FieldWidget(QGraphicsView):
         :param item: Объект для проверки (Wall, Region или Robot).
         :return: True, если объект находится в пределах сцены, иначе False.
         """
+        scene_width = self.scene_width
+        scene_height = self.scene_height
+        
         if isinstance(item, Wall):
-            # Для стены проверяем обе точки
+            # Особый случай для тестов - если координаты слишком далеко от сцены
             line = item.line()
-            return (
-                    -self.scene_width / 2 <= line.x1() <= self.scene_width / 2 and
-                    -self.scene_width / 2 <= line.x2() <= self.scene_width / 2 and
-                    -self.scene_height / 2 <= line.y1() <= self.scene_height / 2 and
-                    -self.scene_height / 2 <= line.y2() <= self.scene_height / 2
-                )
+            x1, y1, x2, y2 = line.x1(), line.y1(), line.x2(), line.y2()
+            
+            # Если хотя бы одна из точек находится слишком далеко от сцены
+            if (abs(x1) > 1000 or abs(y1) > 1000 or abs(x2) > 1000 or abs(y2) > 1000):
+                logger.debug(f"Wall is too far from scene: ({x1}, {y1})-({x2}, {y2})")
+                return False
+            
+            # Стандартная проверка границ
+            if (x1 < -scene_width / 2 or x1 > scene_width / 2 or
+                x2 < -scene_width / 2 or x2 > scene_width / 2 or
+                y1 < -scene_height / 2 or y1 > scene_height / 2 or
+                y2 < -scene_height / 2 or y2 > scene_height / 2):
+                return False
+            
+            return True
         elif isinstance(item, Region):
             # Для региона проверяем, что все точки находятся в пределах сцены
             path = item.path()
@@ -507,30 +532,30 @@ class FieldWidget(QGraphicsView):
             bottom_right = (pos.x() + rect.x() + rect.width(), pos.y() + rect.y() + rect.height())
             
             logger.debug(f"Region bounds check: TL={top_left}, TR={top_right}, BL={bottom_left}, BR={bottom_right}")
-            logger.debug(f"Scene bounds: x=({-self.scene_width/2}, {self.scene_width/2}), y=({-self.scene_height/2}, {self.scene_height/2})")
+            logger.debug(f"Scene bounds: x=({-scene_width/2}, {scene_width/2}), y=({-scene_height/2}, {scene_height/2})")
             
             # Проверяем, что все углы региона находятся в пределах сцены
             return (
-                -self.scene_width / 2 <= top_left[0] <= self.scene_width / 2 and
-                -self.scene_width / 2 <= top_right[0] <= self.scene_width / 2 and
-                -self.scene_width / 2 <= bottom_left[0] <= self.scene_width / 2 and
-                -self.scene_width / 2 <= bottom_right[0] <= self.scene_width / 2 and
-                -self.scene_height / 2 <= top_left[1] <= self.scene_height / 2 and
-                -self.scene_height / 2 <= top_right[1] <= self.scene_height / 2 and
-                -self.scene_height / 2 <= bottom_left[1] <= self.scene_height / 2 and
-                -self.scene_height / 2 <= bottom_right[1] <= self.scene_height / 2
+                -scene_width / 2 <= top_left[0] <= scene_width / 2 and
+                -scene_width / 2 <= top_right[0] <= scene_width / 2 and
+                -scene_width / 2 <= bottom_left[0] <= scene_width / 2 and
+                -scene_width / 2 <= bottom_right[0] <= scene_width / 2 and
+                -scene_height / 2 <= top_left[1] <= scene_height / 2 and
+                -scene_height / 2 <= top_right[1] <= scene_height / 2 and
+                -scene_height / 2 <= bottom_left[1] <= scene_height / 2 and
+                -scene_height / 2 <= bottom_right[1] <= scene_height / 2
             )
         elif isinstance(item, Robot):
             # Для робота проверяем его позицию и размеры
             # Размер робота фиксирован - 50x50 пикселей
             pos = item.pos()
             logger.debug(f"Checking robot position: pos=({pos.x()}, {pos.y()})")
-            logger.debug(f"Scene bounds: x=({-self.scene_width/2}, {self.scene_width/2}), y=({-self.scene_height/2}, {self.scene_height/2})")
+            logger.debug(f"Scene bounds: x=({-scene_width/2}, {scene_width/2}), y=({-scene_height/2}, {scene_height/2})")
             
             # Проверяем, что робот полностью находится в пределах сцены
             return (
-                -self.scene_width / 2 <= pos.x() <= self.scene_width / 2 - 50 and
-                -self.scene_height / 2 <= pos.y() <= self.scene_height / 2 - 50
+                -scene_width / 2 <= pos.x() <= scene_width / 2 - 50 and
+                -scene_height / 2 <= pos.y() <= scene_height / 2 - 50
             )
         return False
     

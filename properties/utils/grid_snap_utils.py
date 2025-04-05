@@ -28,7 +28,7 @@ def snap_rotation_to_grid(rotation, grid_size=45):
     """
     return round(rotation / grid_size) * grid_size
 
-def is_snap_enabled(scene):
+def is_snap_enabled(obj):
     """
     Проверяет, включена ли привязка к сетке.
     
@@ -38,12 +38,18 @@ def is_snap_enabled(scene):
     Returns:
         bool: True если привязка включена, False в противном случае
     """
-    if not scene:
+    if not obj:
         return False
-        
-    field_widget = scene.parent()
-    return (hasattr(field_widget, 'snap_to_grid_enabled') and 
-            field_widget.snap_to_grid_enabled)
+    
+    # Если передан сам FieldWidget
+    if hasattr(obj, 'snap_to_grid_enabled'):
+        return obj.snap_to_grid_enabled
+    
+    # Если передана сцена, получаем родительский FieldWidget
+    if hasattr(obj, 'parent'):
+        field_widget = obj.parent()
+        if hasattr(field_widget, 'snap_to_grid_enabled'):
+            return field_widget.snap_to_grid_enabled
 
 def get_grid_size(scene):
     """

@@ -1,8 +1,16 @@
 # Changelog / История изменений
 
-All notable changes to this project will be documented in this file.
+Все заметные изменения в этом проекте будут документироваться в этом файле.
 
-Все значимые изменения в проекте будут документироваться в этом файле.
+Формат основан на [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+## [0.2.9] - 2025-04-05
+
+### Changed / Изменено
+- Improved properties window with more intuitive controls / Улучшено окно свойств с более интуитивными элементами управления
+- Refactored properties window UI widgets into separate module for better maintainability / Выделены UI виджеты окна свойств в отдельный модуль для улучшения поддерживаемости
+- Migrated tests from pytest to unittest for better integration / Переведены тесты с pytest на unittest для лучшей интеграции
+- Fixed Region.set_id method to accept any unique string ID / Исправлен метод Region.set_id для принятия любого уникального строкового ID
 
 ## [0.2.5] - 2025-04-02
 

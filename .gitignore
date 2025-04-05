@@ -61,4 +61,13 @@ Thumbs.db
 desktop.ini
 
 # JSON files
-*.json 
+*.json
+
+#файлы временные
+*.tmp
+*.tmp.*
+*.bak
+*.bak.*
+
+#private files
+privat/

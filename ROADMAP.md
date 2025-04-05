@@ -14,14 +14,14 @@ This document outlines the planned development path for the project, including u
 - [x] Add application menu with access to all functions / Добавить меню приложения с доступом ко всем функциям
 
 ### Improvements / Улучшения
-- [ ] Enhance the properties window with more intuitive controls / Улучшить окно свойств, сделав элементы управления более интуитивными
-- [ ] Optimize performance for large scenes / Оптимизировать производительность для больших сцен
-- [ ] Implement undo/redo functionality / Реализовать функциональность отмены/повтора действий
+- [x] Enhance the properties window with more intuitive controls / Улучшить окно свойств, сделав элементы управления более интуитивными
+- [x] Refactor properties window UI widgets into separate module for better maintainability / Выделить UI виджеты окна свойств в отдельный модуль для улучшения поддерживаемости
 - [x] Change robot rotation to rotate around its center / Изменить поворот робота: должен вращаться вокруг своего центра
 - [x] Style scrollbars with semi-transparent appearance and auto-hide functionality / Стилизовать полосы прокрутки с полупрозрачным видом и функцией автоскрытия
 
 ### Testing / Тестирование
 - [x] Add more UI interaction tests / Добавить больше тестов взаимодействия с интерфейсом
+- [x] Migrate tests from pytest to unittest for better integration / Перевести тесты с pytest на unittest для лучшей интеграции
 - [ ] Implement performance benchmarks / Внедрить тесты производительности
 - [ ] Improve test coverage / Улучшить покрытие кода тестами
 
@@ -40,6 +40,8 @@ This document outlines the planned development path for the project, including u
 - [ ] Optimize memory usage / Оптимизировать использование памяти
 - [ ] Improve the scene rendering system / Улучшить систему рендеринга сцены
 - [ ] Align object properties with current TRIK Studio scene tag attributes format / Привести свойства объектов к текущему формату атрибутов тегов сцен TRIK Studio
+- [ ] Optimize performance for large scenes / Оптимизировать производительность для больших сцен
+- [ ] Implement undo/redo functionality / Реализовать функциональность отмены/повтора действий
 
 ### Documentation / Документация
 - [ ] Create comprehensive user manual / Создать подробное руководство пользователя

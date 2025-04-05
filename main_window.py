@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QIcon, QAction
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QPointF
 from field_widget import FieldWidget
-from properties_window import PropertiesWindow
+from properties.properties_window_adapter import PropertiesWindow
 import xml.etree.ElementTree as ET
 from xml.dom import minidom 
 import logging
@@ -14,6 +14,9 @@ from config import config
 from utils.transparent_scrollbar import apply_scrollbars_to_graphics_view
 from utils.keyboard_shortcuts import AppShortcutsManager
 from utils.xml_handler import XMLHandler, XMLValidationError  # Импортируем новый обработчик XML
+import os
+import sys
+from __init__ import __version__  # Импортируем версию из корневого модуля
 
 # Настройка логгера
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -66,11 +69,15 @@ class MainWindow(QMainWindow):
         self.coords_panel.setLayout(coords_layout)
 
         # Создаем окно свойств
-        self.properties_window = PropertiesWindow()
+        logger.debug(f"Создаем окно свойств, is_dark_theme: {self.is_dark_theme}")
+        self.properties_window = PropertiesWindow(self, is_dark_theme=self.is_dark_theme)
+        
         # Устанавливаем тему для окна свойств
         if hasattr(self.properties_window, 'set_theme'):
+            logger.debug("Вызываем set_theme для окна свойств")
             self.properties_window.set_theme(self.is_dark_theme)
         else:
+            logger.debug("Метод set_theme не найден, применяем стиль напрямую")
             self.properties_window.setStyleSheet(
                 AppStyles.DARK_PROPERTIES_WINDOW if self.is_dark_theme else AppStyles.LIGHT_PROPERTIES_WINDOW
             )
@@ -80,6 +87,8 @@ class MainWindow(QMainWindow):
             AppStyles.DARK_PROPERTIES_WINDOW if self.is_dark_theme else AppStyles.LIGHT_PROPERTIES_WINDOW
         )
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.properties_dock)
+        self.properties_dock.show()  # Явно показываем dock-виджет
+        logger.debug(f"Dock-виджет свойств создан, видимость: {self.properties_dock.isVisible()}")
 
         # Создаем контейнер для координат и FieldWidget
         container = QWidget()
@@ -91,6 +100,11 @@ class MainWindow(QMainWindow):
                                         scene_width=self.scene_width, 
                                         scene_height=self.scene_height,
                                         grid_size=self.grid_size)
+
+        # Явно подключаем field_widget к properties_window
+        if hasattr(self.properties_window, 'connect_to_field_widget'):
+            logger.debug("Явно подключаем field_widget к properties_window")
+            self.properties_window.connect_to_field_widget(self.field_widget)
 
         vsb, hsb = apply_scrollbars_to_graphics_view(
             self.field_widget,
@@ -247,10 +261,16 @@ class MainWindow(QMainWindow):
     
     def toggle_properties_panel(self):
         """Скрывает или показывает окно свойств."""
+        logger.debug(f"Вызван toggle_properties_panel, текущая видимость: {self.properties_dock.isVisible()}")
         if self.properties_dock.isVisible():
+            logger.debug("Скрываем панель свойств")
             self.properties_dock.hide()
         else:
+            logger.debug("Показываем панель свойств")
             self.properties_dock.show()
+            
+        # Проверяем, что панель была действительно переключена
+        logger.debug(f"Новая видимость панели свойств: {self.properties_dock.isVisible()}")
     
     def create_scene_size_widget(self):
         size_widget = QWidget()
@@ -816,7 +836,7 @@ class MainWindow(QMainWindow):
             self,
             "О программе",
             "<h3>gScene — Графический редактор сцены TRIK</h3>"
-            "<p>Версия 0.2.5</p>"
+            f"<p>Версия {__version__}</p>"
             "<p>Редактор сцены для создания виртуальных сцен для TRIK Studio.</p>"
             "<p>&copy; 2025</p>"
         )

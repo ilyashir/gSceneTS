@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gSceneTS"
-version = "0.2.0"
+version = "0.2.9"
 description = "Графический редактор сцены для TRIK Studio"
 authors = [
     {name = "ilyashir", email = "ilya.shirokolobov@gmail.com"}
