@@ -15,6 +15,8 @@ class AppStyles:
     SUCCESS_COLOR = "#6A9955"  # Зеленый для подтверждения
     ERROR_COLOR = "#F14C4C"  # Красный для ошибок
     WARNING_COLOR = "#CCA700"  # Желтый для предупреждений
+    FLOAT_BUTTON_COLOR = "#E6E6E6" # Синий для плавающих кнопок
+    CLOSE_BUTTON_COLOR = "#E6E6E6" # Красный для кнопки закрыть
     
     # Светлая цветовая схема 
     LIGHT_PRIMARY_COLOR = "#0078D7"  # Синий для светлой темы
@@ -28,6 +30,8 @@ class AppStyles:
     LIGHT_SUCCESS_COLOR = "#107C10"  # Зеленый для подтверждения
     LIGHT_ERROR_COLOR = "#E81123"  # Красный для ошибок
     LIGHT_WARNING_COLOR = "#FF8C00"  # Оранжевый для предупреждений
+    FLOAT_BUTTON_COLOR = "#252526" # Синий для плавающих кнопок
+    CLOSE_BUTTON_COLOR = "#252526" # Красный для кнопки закрыть
     
     #===============================
     # ФУНКЦИИ ДЛЯ ПОЛУЧЕНИЯ ЦВЕТОВ
@@ -96,7 +100,9 @@ class AppStyles:
                 'text_highlight': cls.TEXT_HIGHLIGHT,
                 'success': cls.SUCCESS_COLOR,
                 'error': cls.ERROR_COLOR,
-                'warning': cls.WARNING_COLOR
+                'warning': cls.WARNING_COLOR,
+                'float_button': cls.FLOAT_BUTTON_COLOR,
+                'close_button': cls.CLOSE_BUTTON_COLOR
             }
         else:
             return {
@@ -110,13 +116,34 @@ class AppStyles:
                 'text_highlight': cls.LIGHT_TEXT_HIGHLIGHT,
                 'success': cls.LIGHT_SUCCESS_COLOR,
                 'error': cls.LIGHT_ERROR_COLOR,
-                'warning': cls.LIGHT_WARNING_COLOR
+                'warning': cls.LIGHT_WARNING_COLOR,
+                'float_button': cls.FLOAT_BUTTON_COLOR,
+                'close_button': cls.CLOSE_BUTTON_COLOR
             }
     
     @classmethod
     def get_window_style(cls, is_dark_theme=True):
         """Генерирует стиль для основного окна приложения"""
         colors = cls._get_theme_colors(is_dark_theme)
+
+        # Вычисляем цвета для эффектов
+        hover_bg = f"rgba({int(colors['primary'][1:3], 16)}, {int(colors['primary'][3:5], 16)}, {int(colors['primary'][5:7], 16)}, 0.1)"
+        focus_bg = f"rgba({int(colors['primary'][1:3], 16)}, {int(colors['primary'][3:5], 16)}, {int(colors['primary'][5:7], 16)}, 0.2)"
+
+        # Определяем фон/цвет для кнопок док-виджета
+        if is_dark_theme:
+            # Темная тема: фон кнопок светлый, рамка темная
+            dock_button_bg = "#7A7A7A" # Светло-серый фон (#E6E6E6)
+            dock_button_border = cls.SECONDARY_DARK    # Очень темная рамка (#252526)
+            dock_button_hover_bg = cls.LIGHT_BORDER_COLOR # Еще светлее при наведении (#CCCCCC)
+            dock_button_pressed_bg = cls.LIGHT_PANEL_COLOR # Почти белый при нажатии (#F9F9F9)
+        else:
+            # Светлая тема: фон кнопок темный, рамка светлая
+            dock_button_bg = cls.LIGHT_SECONDARY_DARK        # Темно-серый фон (#555555)
+            dock_button_border = cls.LIGHT_BORDER_COLOR # Светлая рамка (#CCCCCC)
+            dock_button_hover_bg = cls.LIGHT_BORDER_COLOR # Еще темнее при наведении (#333333)
+            dock_button_pressed_bg = cls.SECONDARY_DARK  # Почти черный при нажатии (#252526)
+
         return f"""
             QMainWindow {{
                 background-color: {colors['background']};
@@ -149,18 +176,35 @@ class AppStyles:
                 color: {colors['text']};
                 border: 1px solid {colors['border']};
                 border-radius: 3px;
-                padding: 5px;
+                padding: 4px 8px;
+                min-height: 24px;
+            }}
+            QLineEdit:hover, QTextEdit:hover {{
+                background-color: {hover_bg};
+                border: 1px solid {colors['primary']};
+            }}
+            QLineEdit:focus, QTextEdit:focus {{
+                background-color: {focus_bg};
+                border: 2px solid {colors['primary']};
             }}
             QSpinBox, QDoubleSpinBox {{
                 background-color: {colors['secondary_dark']};
                 color: {colors['text']};
                 border: 1px solid {colors['border']};
                 border-radius: 3px;
-                padding: 2px 5px;
+                padding: 4px 8px;
                 padding-right: 20px;
-                min-height: 22px;
-                min-width: 65px;
-                selection-background-color: {colors['primary']}; 
+                min-height: 24px;
+                min-width: 80px;
+                selection-background-color: {colors['primary']};
+            }}
+            QSpinBox:hover, QDoubleSpinBox:hover {{
+                background-color: {hover_bg};
+                border: 1px solid {colors['primary']};
+            }}
+            QSpinBox:focus, QDoubleSpinBox:focus {{
+                background-color: {focus_bg};
+                border: 2px solid {colors['primary']};
             }}
             QToolBar {{
                 background-color: {colors['panel']};
@@ -174,7 +218,44 @@ class AppStyles:
             QDockWidget::title {{
                 background-color: {colors['panel']};
                 color: {colors['text']};
-                padding: 5px;
+                padding: 3px; 
+                padding-right: 50px; 
+                text-align: left;
+                spacing: 4px;
+            }}
+            /* Стили для кнопок БЕЗ кастомных иконок */
+            QDockWidget::close-button, QDockWidget::float-button {{
+                background-color: {dock_button_bg}; /* Контрастный фон */
+                border: 1px solid {dock_button_border}; /* Контрастная рамка */
+                border-radius: 2px;
+                width: 16px; 
+                height: 16px;
+            }}
+            /* Позиционирование оставляем */
+            QDockWidget::close-button {{
+                subcontrol-position: top right;
+                subcontrol-origin: margin;
+                position: absolute; 
+                top: 2px; 
+                right: 5px; 
+                bottom: 2px;
+            }}
+            QDockWidget::float-button {{
+                subcontrol-position: top right;
+                subcontrol-origin: margin;
+                position: absolute; 
+                top: 2px; 
+                right: 25px;
+                bottom: 2px;
+            }}
+
+            /* Общие стили hover/pressed */
+            QDockWidget::close-button:hover, QDockWidget::float-button:hover {{
+                background-color: {dock_button_hover_bg}; 
+            }}
+            QDockWidget::close-button:pressed, QDockWidget::float-button:pressed {{
+                background-color: {dock_button_pressed_bg};
+                border-color: {dock_button_border}; /* Оставляем ту же рамку при нажатии */
             }}
             QCheckBox {{
                 color: {colors['text']};
