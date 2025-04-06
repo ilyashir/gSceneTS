@@ -71,3 +71,6 @@ desktop.ini
 
 #private files
 privat/
+
+# Временные файлы
+temp/
