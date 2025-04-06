@@ -5,17 +5,19 @@
 различных объектов (робот, стена, регион).
 """
 
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QLayout
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QLayout, QStackedWidget
+from PyQt6.QtCore import Qt, pyqtSignal, QObject
 import logging
 
 from robot import Robot
 from wall import Wall
 from region import Region
+from start_position import StartPosition
 
 from properties.robot_properties_widget import RobotPropertiesWidget
 from properties.wall_properties_widget import WallPropertiesWidget
 from properties.region_properties_widget import RegionPropertiesWidget
+from properties.start_position_properties_widget import StartPositionPropertiesWidget
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +43,9 @@ class PropertiesManager(QWidget):
     region_size_changed = pyqtSignal(int, int)  # width, height
     region_color_changed = pyqtSignal(str)  # color
     region_id_changed = pyqtSignal(str)  # id
+    
+    # Сигнал для оповещения об изменении свойств стартовой позиции
+    start_position_properties_changed = pyqtSignal(object)
     
     def __init__(self, parent=None, is_dark_theme=True):
         """
@@ -71,11 +76,13 @@ class PropertiesManager(QWidget):
         self.robot_widget = RobotPropertiesWidget(self, self.is_dark_theme)
         self.wall_widget = WallPropertiesWidget(self, self.is_dark_theme)
         self.region_widget = RegionPropertiesWidget(self, self.is_dark_theme)
+        self.start_position_widget = StartPositionPropertiesWidget(self, self.is_dark_theme)
         
         # Скрываем все виджеты по умолчанию
         self.robot_widget.hide()
         self.wall_widget.hide()
         self.region_widget.hide()
+        self.start_position_widget.hide()
         
         # Подключаем сигналы от виджетов свойств
         self._connect_signals()
@@ -97,6 +104,7 @@ class PropertiesManager(QWidget):
         layout.addWidget(self.robot_widget)
         layout.addWidget(self.wall_widget)
         layout.addWidget(self.region_widget)
+        layout.addWidget(self.start_position_widget)
         
         # Добавляем растягивающийся элемент в конец
         layout.addStretch()
@@ -110,7 +118,11 @@ class PropertiesManager(QWidget):
         main_layout.addWidget(scroll_area)
         
     def _connect_signals(self):
-        """Подключение сигналов от виджетов свойств."""
+        """Подключает сигналы виджетов свойств к слотам."""
+        # Стартовая позиция
+        self.start_position_widget.position_changed.connect(self._on_start_position_position_changed)
+        self.start_position_widget.direction_changed.connect(self._on_start_position_direction_changed)
+        
         # Робот
         self.robot_widget.position_changed.connect(self.robot_position_changed)
         self.robot_widget.rotation_changed.connect(self.robot_rotation_changed)
@@ -142,6 +154,7 @@ class PropertiesManager(QWidget):
             self.robot_widget.field_widget = self.field_widget
             self.wall_widget.field_widget = self.field_widget
             self.region_widget.field_widget = self.field_widget
+            self.start_position_widget.field_widget = self.field_widget
 
         # Определяем тип элемента и показываем соответствующий виджет
         if isinstance(item, Robot):
@@ -156,6 +169,10 @@ class PropertiesManager(QWidget):
             self.region_widget.update_properties(item)
             self.region_widget.show()
             self.current_widget = self.region_widget
+        elif isinstance(item, StartPosition):
+            self.start_position_widget.update_properties(item)
+            self.start_position_widget.show()
+            self.current_widget = self.start_position_widget
         else:
             logger.warning(f"Неизвестный тип элемента: {type(item)}")
             self.current_widget = None
@@ -171,6 +188,7 @@ class PropertiesManager(QWidget):
         self.robot_widget.hide()
         self.wall_widget.hide()
         self.region_widget.hide()
+        self.start_position_widget.hide()
         
     def set_theme(self, is_dark_theme):
         """
@@ -185,6 +203,7 @@ class PropertiesManager(QWidget):
         self.robot_widget.set_theme(is_dark_theme)
         self.wall_widget.set_theme(is_dark_theme)
         self.region_widget.set_theme(is_dark_theme)
+        self.start_position_widget.set_theme(is_dark_theme)
         
     def on_grid_snap_changed(self, enabled):
         """
@@ -197,6 +216,7 @@ class PropertiesManager(QWidget):
         self.robot_widget.on_grid_snap_changed(enabled)
         self.wall_widget.on_grid_snap_changed(enabled)
         self.region_widget.on_grid_snap_changed(enabled)
+        self.start_position_widget.on_grid_snap_changed(enabled)
         
     def connect_to_field_widget(self, field_widget):
         """
@@ -210,4 +230,18 @@ class PropertiesManager(QWidget):
         # Передаем виджет поля всем виджетам свойств
         self.robot_widget.connect_to_field_widget(field_widget)
         self.wall_widget.connect_to_field_widget(field_widget)
-        self.region_widget.connect_to_field_widget(field_widget) 
+        self.region_widget.connect_to_field_widget(field_widget)
+        self.start_position_widget.connect_to_field_widget(field_widget) 
+
+    # Слоты для стартовой позиции
+    def _on_start_position_position_changed(self, x, y):
+        """Обработчик изменения позиции стартовой позиции."""
+        if isinstance(self.current_widget, StartPosition):
+            # Эмитируем сигнал для оповещения о изменении свойства
+            self.start_position_properties_changed.emit(self.current_widget)
+    
+    def _on_start_position_direction_changed(self, direction):
+        """Обработчик изменения направления стартовой позиции."""
+        if isinstance(self.current_widget, StartPosition):
+            # Эмитируем сигнал для оповещения о изменении свойства
+            self.start_position_properties_changed.emit(self.current_widget) 

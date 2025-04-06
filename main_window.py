@@ -610,7 +610,8 @@ class MainWindow(QMainWindow):
             formatted_xml = xml_handler.generate_xml(
                 walls=self.field_widget.walls,
                 regions=self.field_widget.regions,
-                robot_model=self.field_widget.robot_model
+                robot_model=self.field_widget.robot_model,
+                start_position=self.field_widget.start_position_model
             )
 
             # Записываем форматированный XML в файл
@@ -1056,6 +1057,15 @@ class MainWindow(QMainWindow):
                 )
                 if not robot:
                     logger.warning(f"Не удалось добавить робота: {scene_data['robot']}")
+                    
+                # Добавляем стартовую позицию из XML, если она есть
+                if "start_position" in scene_data:
+                    start_position = self.field_widget.place_start_position(
+                        position=QPointF(scene_data["start_position"]["x"], scene_data["start_position"]["y"]),
+                        direction=scene_data["start_position"].get("direction", 0)
+                    )
+                    if not start_position:
+                        logger.warning(f"Не удалось добавить стартовую позицию: {scene_data['start_position']}")
                     
             # Обновляем сцену
             self.field_widget.update()

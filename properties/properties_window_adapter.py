@@ -5,8 +5,8 @@
 Делегирует всю работу со свойствами новому PropertiesManager.
 """
 
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QSizePolicy
+from PyQt6.QtCore import pyqtSignal, Qt
 from PyQt6.QtGui import QFont
 import logging
 
@@ -14,6 +14,7 @@ from properties.properties_manager import PropertiesManager
 from robot import Robot
 from wall import Wall
 from region import Region
+from start_position import StartPosition
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,10 @@ class PropertiesWindow(QWidget):
     region_color_changed = pyqtSignal(str)  # color
     wall_id_changed = pyqtSignal(str)  # id for walls
     region_id_changed = pyqtSignal(str)  # id for regions
+    
+    # Сигналы для оповещения об изменении свойств стартовой позиции
+    start_position_position_changed = pyqtSignal(float, float)  # x, y
+    start_position_direction_changed = pyqtSignal(float)  # direction
     
     def __init__(self, parent=None, is_dark_theme=False):
         """
@@ -127,6 +132,9 @@ class PropertiesWindow(QWidget):
         self.properties_manager.region_size_changed.connect(self.region_size_changed)
         self.properties_manager.region_color_changed.connect(self.region_color_changed)
         self.properties_manager.region_id_changed.connect(self.region_id_changed)
+        
+        # Сигналы стартовой позиции
+        self.properties_manager.start_position_properties_changed.connect(self._on_start_position_properties_changed)
         
     def set_theme(self, is_dark_theme):
         """
@@ -257,3 +265,74 @@ class PropertiesWindow(QWidget):
         """Показывает свойства региона."""
         self.properties_manager.region_widget.set_properties(x, y, width, height, color, region_id)
         self.properties_manager.region_widget.show()
+    
+    # ==== Слоты для обработки сигналов ====
+    
+    def _on_wall_properties_changed(self, wall):
+        """
+        Обработчик изменения свойств стены.
+        
+        Args:
+            wall: Объект стены
+        """
+        if wall and isinstance(wall, Wall):
+            # Получаем актуальные свойства стены
+            line = wall.line()
+            width = wall.pen().width()
+            
+            # Эмитируем сигналы для оповещения о изменении свойств
+            self.wall_begin_changed.emit(line.x1(), line.y1())
+            self.wall_end_changed.emit(line.x2(), line.y2())
+            self.wall_thickness_changed.emit(width)
+    
+    def _on_region_properties_changed(self, region):
+        """
+        Обработчик изменения свойств региона.
+        
+        Args:
+            region: Объект региона
+        """
+        if region and isinstance(region, Region):
+            # Получаем актуальные свойства региона
+            rect = region.boundingRect()
+            pos = region.pos()
+            color = region.color().name()
+            
+            # Эмитируем сигналы для оповещения о изменении свойств
+            self.region_position_changed.emit(pos.x(), pos.y())
+            self.region_size_changed.emit(rect.width(), rect.height())
+            self.region_color_changed.emit(color)
+    
+    def _on_robot_properties_changed(self, robot):
+        """
+        Обработчик изменения свойств робота.
+        
+        Args:
+            robot: Объект робота
+        """
+        if robot and isinstance(robot, Robot):
+            # Получаем актуальные свойства робота
+            pos = robot.pos()
+            name = robot.name
+            direction = robot.direction
+            
+            # Эмитируем сигналы для оповещения о изменении свойств
+            self.robot_position_changed.emit(pos.x(), pos.y())
+            self.robot_name_changed.emit(name)
+            self.robot_direction_changed.emit(direction)
+    
+    def _on_start_position_properties_changed(self, start_position):
+        """
+        Обработчик изменения свойств стартовой позиции.
+        
+        Args:
+            start_position: Объект стартовой позиции
+        """
+        if start_position and isinstance(start_position, StartPosition):
+            # Получаем актуальные свойства стартовой позиции
+            pos = start_position.pos()
+            direction = start_position.direction()
+            
+            # Эмитируем сигналы для оповещения о изменении свойств
+            self.start_position_position_changed.emit(pos.x(), pos.y())
+            self.start_position_direction_changed.emit(direction)

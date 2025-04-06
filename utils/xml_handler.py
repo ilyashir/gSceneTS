@@ -313,7 +313,7 @@ class XMLHandler:
             
         return root
     
-    def generate_xml(self, walls, regions, robot_model=None):
+    def generate_xml(self, walls, regions, robot_model=None, start_position=None):
         """
         Генерирует XML на основе объектов сцены.
         
@@ -321,6 +321,7 @@ class XMLHandler:
             walls: Список стен
             regions: Список регионов
             robot_model: Объект робота
+            start_position: Объект стартовой позиции
             
         Returns:
             str: Форматированный XML
@@ -431,6 +432,14 @@ class XMLHandler:
                 # Добавляем имя робота, если оно задано
                 if hasattr(robot_model, 'name') and robot_model.name:
                     robot_element.set("name", robot_model.name)
+                
+                # Добавляем стартовую позицию, если она есть
+                if start_position:
+                    start_pos_element = ET.SubElement(robot_element, "startPosition")
+                    start_pos_element.set("id", start_position.id)
+                    start_pos_element.set("x", str(int(start_position.pos().x())))
+                    start_pos_element.set("y", str(int(start_position.pos().y())))
+                    start_pos_element.set("direction", str(int(start_position.direction())))
         
         # Преобразуем XML в строку с отступами
         xml_str = ET.tostring(root, encoding='utf-8')
@@ -520,6 +529,7 @@ class XMLHandler:
             
             # Извлекаем данные о роботах
             robot_data = None
+            start_position_data = None
             robots_element = root.find("robots")
             if robots_element is not None:
                 robot = robots_element.find("robot")
@@ -539,6 +549,27 @@ class XMLHandler:
                             "direction": direction,
                             "name": name
                         }
+                        
+                        # Парсим стартовую позицию, если она есть
+                        start_position = robot.find("startPosition")
+                        if start_position is not None:
+                            start_id = start_position.get("id", "startPosition")
+                            start_x = int(start_position.get("x", 25))
+                            start_y = int(start_position.get("y", 25))
+                            start_direction = float(start_position.get("direction", 0))
+                            
+                            # Проверяем координаты стартовой позиции
+                            try:
+                                self.validate_coordinates(start_x, start_y)
+                                start_position_data = {
+                                    "id": start_id,
+                                    "x": start_x,
+                                    "y": start_y,
+                                    "direction": start_direction
+                                }
+                            except XMLValidationError as e:
+                                logger.warning(f"Стартовая позиция не прошла валидацию: {e}")
+                        
                     except XMLValidationError as e:
                         logger.warning(f"Робот с ID {id_str} не прошел валидацию: {e}")
                     except (ValueError, TypeError) as e:
@@ -549,7 +580,8 @@ class XMLHandler:
                 "scene_height": scene_height,
                 "walls": walls_data,
                 "regions": regions_data,
-                "robot": robot_data
+                "robot": robot_data,
+                "start_position": start_position_data
             }
             
         except ET.ParseError as e:

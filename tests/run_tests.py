@@ -89,6 +89,7 @@ def add_timeout_to_test_classes():
     from test_ui_interactions import TestUIInteractions
     from test_theme_switching import TestThemeSwitching
     from test_performance import TestPerformance
+    from test_xml_start_position import TestXMLStartPosition
     
     # Список тестовых классов для модификации
     test_classes = [
@@ -100,7 +101,8 @@ def add_timeout_to_test_classes():
         TestMouseEvents,
         TestUIInteractions,
         TestThemeSwitching,
-        TestPerformance
+        TestPerformance,
+        TestXMLStartPosition
     ]
     
     # Для каждого класса добавляем миксин TestMethodTimeout
@@ -240,6 +242,7 @@ def run_specific_tests(test_names):
         'ui': TestUIInteractions,
         'theme': TestThemeSwitching,
         'performance': TestPerformance,
+        'xml_start_position': TestXMLStartPosition,
     }
     
     # Создаем загрузчик тестов
@@ -311,6 +314,7 @@ def run_all_tests():
     test_suite.addTests(loader.loadTestsFromTestCase(TestUIInteractions))
     test_suite.addTests(loader.loadTestsFromTestCase(TestThemeSwitching))
     test_suite.addTests(loader.loadTestsFromTestCase(TestPerformance))  # Добавляем тесты производительности
+    test_suite.addTests(loader.loadTestsFromTestCase(TestXMLStartPosition))  # Добавляем тесты XML стартовой позиции
     
     # Запускаем тесты
     runner = ColoredTextTestRunner() if has_colors else unittest.TextTestRunner()
@@ -331,6 +335,7 @@ def _print_help():
     logger.info("  ui - тесты взаимодействия с пользовательским интерфейсом")
     logger.info("  theme - тесты переключения темы")
     logger.info("  performance - тесты производительности")
+    logger.info("  xml_start_position - тесты XML для стартовой позиции")
     logger.info("  all - запустить все тесты")
 
 if __name__ == '__main__':

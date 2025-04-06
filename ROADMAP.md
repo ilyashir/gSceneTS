@@ -4,28 +4,7 @@ This document outlines the planned development path for the project, including u
 
 Этот документ описывает планируемый путь развития проекта, включая предстоящие функции, улучшения и исправления.
 
-## Short-term goals (v0.3.0) / Краткосрочные цели
-
-### Features / Функции
-- [x] Implement scene scaling with mouse wheel / Реализовать масштабирование сцены колесиком мыши
-- [x] Improve XML import/export with additional validation / Улучшить импорт/экспорт XML с дополнительной валидацией
-- [x] Add keyboard shortcuts for common actions / Добавить горячие клавиши для типовых действий
-- [x] Add scene constraints validation when changing object parameters in the properties window / Добавить проверку ограничений сцены при изменении параметров объекта в окне свойств
-- [x] Add application menu with access to all functions / Добавить меню приложения с доступом ко всем функциям
-
-### Improvements / Улучшения
-- [x] Enhance the properties window with more intuitive controls / Улучшить окно свойств, сделав элементы управления более интуитивными
-- [x] Refactor properties window UI widgets into separate module for better maintainability / Выделить UI виджеты окна свойств в отдельный модуль для улучшения поддерживаемости
-- [x] Change robot rotation to rotate around its center / Изменить поворот робота: должен вращаться вокруг своего центра
-- [x] Style scrollbars with semi-transparent appearance and auto-hide functionality / Стилизовать полосы прокрутки с полупрозрачным видом и функцией автоскрытия
-
-### Testing / Тестирование
-- [x] Add more UI interaction tests / Добавить больше тестов взаимодействия с интерфейсом
-- [x] Migrate tests from pytest to unittest for better integration / Перевести тесты с pytest на unittest для лучшей интеграции
-- [x] Implement performance benchmarks / Внедрить тесты производительности
-- [x] Improve test coverage / Улучшить покрытие кода тестами
-
-## Medium-term goals (v0.4.0) / Среднесрочные цели
+## Current Release (v0.4.0) / Текущий релиз
 
 ### Features / Функции
 - [ ] Add robot start position marker as a red cross / Добавить метку старта робота в виде красного крестика
@@ -58,6 +37,29 @@ This document outlines the planned development path for the project, including u
 
 ### Platform / Платформа
 
+## Released Versions / Выпущенные версии
+
+### v0.3.0 (Released) / (Выпущена)
+
+#### Features / Функции
+- [x] Implement scene scaling with mouse wheel / Реализовать масштабирование сцены колесиком мыши
+- [x] Improve XML import/export with additional validation / Улучшить импорт/экспорт XML с дополнительной валидацией
+- [x] Add keyboard shortcuts for common actions / Добавить горячие клавиши для типовых действий
+- [x] Add scene constraints validation when changing object parameters in the properties window / Добавить проверку ограничений сцены при изменении параметров объекта в окне свойств
+- [x] Add application menu with access to all functions / Добавить меню приложения с доступом ко всем функциям
+
+#### Improvements / Улучшения
+- [x] Enhance the properties window with more intuitive controls / Улучшить окно свойств, сделав элементы управления более интуитивными
+- [x] Refactor properties window UI widgets into separate module for better maintainability / Выделить UI виджеты окна свойств в отдельный модуль для улучшения поддерживаемости
+- [x] Change robot rotation to rotate around its center / Изменить поворот робота: должен вращаться вокруг своего центра
+- [x] Style scrollbars with semi-transparent appearance and auto-hide functionality / Стилизовать полосы прокрутки с полупрозрачным видом и функцией автоскрытия
+
+#### Testing / Тестирование
+- [x] Add more UI interaction tests / Добавить больше тестов взаимодействия с интерфейсом
+- [x] Migrate tests from pytest to unittest for better integration / Перевести тесты с pytest на unittest для лучшей интеграции
+- [x] Implement performance benchmarks / Внедрить тесты производительности
+- [x] Improve test coverage / Улучшить покрытие кода тестами
+
 ## Prioritization and Progress Tracking / Отслеживание приоритетов и прогресса
 
 Progress on these goals will be tracked through GitHub issues and project boards. Items will be prioritized based on:
@@ -73,4 +75,6 @@ Progress on these goals will be tracked through GitHub issues and project boards
 
 This roadmap is a living document and will be updated as the project evolves and priorities change. Team members and contributors are encouraged to suggest updates and additions to this roadmap.
 
-Эта дорожная карта является живым документом и будет обновляться по мере развития проекта и изменения приоритетов. Членам команды и контрибьюторам рекомендуется предлагать обновления и дополнения к этой дорожной карте. 
+Эта дорожная карта является живым документом и будет обновляться по мере развития проекта и изменения приоритетов. Членам команды и контрибьюторам рекомендуется предлагать обновления и дополнения к этой дорожной карте.
+
+Last updated: April 2025 / Последнее обновление: Апрель 2025 

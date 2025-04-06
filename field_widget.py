@@ -1,13 +1,14 @@
 from PyQt6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QGraphicsLineItem, QGraphicsRectItem,
-    QGraphicsTextItem, QGraphicsItemGroup, QGraphicsItem, QMessageBox
+    QGraphicsTextItem, QGraphicsItemGroup, QGraphicsItem, QMessageBox, QInputDialog
 )
-from PyQt6.QtGui import QPainter, QPixmap, QPen, QBrush, QColor, QImage, QTransform, QPainterPath
-from PyQt6.QtCore import Qt, QPointF, QRectF, QLineF, pyqtSignal
+from PyQt6.QtGui import QPainter, QPixmap, QPen, QBrush, QColor, QImage, QTransform, QPainterPath, QPolygonF
+from PyQt6.QtCore import Qt, QPointF, QRectF, QLineF, pyqtSignal, pyqtSlot, QThread, QTimer
 from PyQt6.QtSvg import QSvgRenderer
 from robot import Robot
 from wall import Wall
 from region import Region
+from start_position import StartPosition
 from styles import AppStyles
 
 import logging
@@ -73,7 +74,7 @@ class FieldWidget(QGraphicsView):
         self.selected_marker = None
         
         self.temp_wall = None
-        self.wall_start = None  # Добавляем инициализацию wall_start
+        self.wall_start = None  # Начальная точка стены
 
         self.region_start = None  # Начальная точка региона
         self.temp_region = None  # Временный прямоугольник для отрисовки региона
@@ -81,7 +82,8 @@ class FieldWidget(QGraphicsView):
         # Состояния объектов
         self.walls = []
         self.regions = []
-        self.robot_model = None  
+        self.robot_model = None
+        self.start_position_model = None  
         self.dragging_robot = False
         self.robot_offset = QPointF()
         self.scene_width = scene_width  # размеры сцены из конфигурации
@@ -99,6 +101,7 @@ class FieldWidget(QGraphicsView):
         self.draw_grid()
         self.draw_axes()
         self.init_robot(QPointF(0, 0))  # Робот по умолчанию в (0, 0)
+        self.init_start_position(QPointF(25, 25))  # Стартовая позиция по умолчанию
         
         # Устанавливаем размер сцены
         self.scene().setSceneRect(-self.scene_width/2, -self.scene_height/2, self.scene_width, self.scene_height)
@@ -389,6 +392,21 @@ class FieldWidget(QGraphicsView):
             self.scene().removeItem(self.robot_model)
         self.robot_model = Robot(pos)
         self.objects_layer.addToGroup(self.robot_model)
+    
+    def init_start_position(self, pos, direction=0):
+        """
+        Инициализирует стартовую позицию робота на сцене.
+        
+        Args:
+            pos: Позиция стартовой позиции (QPointF)
+            direction: Начальное направление стартовой позиции
+        """
+        logger.debug(f"Setting start position to {pos}, direction: {direction}")
+        if self.start_position_model is not None:
+            logger.debug("Removing existing start position from scene")
+            self.scene().removeItem(self.start_position_model)
+        self.start_position_model = StartPosition(pos, direction)
+        self.objects_layer.addToGroup(self.start_position_model)
 
     def set_drawing_mode(self, mode):
         # Если меняем режим рисования, снимаем выделение с текущего объекта
@@ -494,57 +512,45 @@ class FieldWidget(QGraphicsView):
     def check_object_within_scene(self, item):
         """
         Проверяет, находится ли объект в пределах сцены.
-        :param item: Объект для проверки (Wall, Region или Robot).
-        :return: True, если объект находится в пределах сцены, иначе False.
+        
+        Args:
+            item: Объект для проверки
+            
+        Returns:
+            bool: True, если объект находится в пределах сцены, False в противном случае
         """
         scene_width = self.scene_width
         scene_height = self.scene_height
         
+        # Проверяем, является ли элемент стеной
         if isinstance(item, Wall):
-            # Особый случай для тестов - если координаты слишком далеко от сцены
+            # Для стены проверяем обе точки
             line = item.line()
-            x1, y1, x2, y2 = line.x1(), line.y1(), line.x2(), line.y2()
+            x1, y1 = line.x1(), line.y1()
+            x2, y2 = line.x2(), line.y2()
             
-            # Если хотя бы одна из точек находится слишком далеко от сцены
-            if (abs(x1) > 1000 or abs(y1) > 1000 or abs(x2) > 1000 or abs(y2) > 1000):
-                logger.debug(f"Wall is too far from scene: ({x1}, {y1})-({x2}, {y2})")
-                return False
-            
-            # Стандартная проверка границ
-            if (x1 < -scene_width / 2 or x1 > scene_width / 2 or
-                x2 < -scene_width / 2 or x2 > scene_width / 2 or
-                y1 < -scene_height / 2 or y1 > scene_height / 2 or
-                y2 < -scene_height / 2 or y2 > scene_height / 2):
-                return False
-            
-            return True
-        elif isinstance(item, Region):
-            # Для региона проверяем, что все точки находятся в пределах сцены
-            path = item.path()
-            # Получаем ограничивающий прямоугольник
-            rect = path.boundingRect()
-            pos = item.pos()
-            
-            # Вычисляем координаты углов региона
-            top_left = (pos.x() + rect.x(), pos.y() + rect.y())
-            top_right = (pos.x() + rect.x() + rect.width(), pos.y() + rect.y())
-            bottom_left = (pos.x() + rect.x(), pos.y() + rect.y() + rect.height())
-            bottom_right = (pos.x() + rect.x() + rect.width(), pos.y() + rect.y() + rect.height())
-            
-            logger.debug(f"Region bounds check: TL={top_left}, TR={top_right}, BL={bottom_left}, BR={bottom_right}")
-            logger.debug(f"Scene bounds: x=({-scene_width/2}, {scene_width/2}), y=({-scene_height/2}, {scene_height/2})")
-            
-            # Проверяем, что все углы региона находятся в пределах сцены
+            # Проверяем, что обе точки находятся в пределах сцены
             return (
-                -scene_width / 2 <= top_left[0] <= scene_width / 2 and
-                -scene_width / 2 <= top_right[0] <= scene_width / 2 and
-                -scene_width / 2 <= bottom_left[0] <= scene_width / 2 and
-                -scene_width / 2 <= bottom_right[0] <= scene_width / 2 and
-                -scene_height / 2 <= top_left[1] <= scene_height / 2 and
-                -scene_height / 2 <= top_right[1] <= scene_height / 2 and
-                -scene_height / 2 <= bottom_left[1] <= scene_height / 2 and
-                -scene_height / 2 <= bottom_right[1] <= scene_height / 2
+                -scene_width / 2 <= x1 <= scene_width / 2 and
+                -scene_height / 2 <= y1 <= scene_height / 2 and
+                -scene_width / 2 <= x2 <= scene_width / 2 and
+                -scene_height / 2 <= y2 <= scene_height / 2
             )
+        
+        # Проверяем, является ли элемент регионом
+        elif isinstance(item, Region):
+            # Для региона проверяем все его точки
+            points = item.points()
+            for point in points:
+                if (
+                    point.x() < -scene_width / 2 or
+                    point.x() > scene_width / 2 or
+                    point.y() < -scene_height / 2 or
+                    point.y() > scene_height / 2
+                ):
+                    return False
+            return True
+        
         elif isinstance(item, Robot):
             # Для робота проверяем его позицию и размеры
             # Размер робота фиксирован - 50x50 пикселей
@@ -557,6 +563,18 @@ class FieldWidget(QGraphicsView):
                 -scene_width / 2 <= pos.x() <= scene_width / 2 - 50 and
                 -scene_height / 2 <= pos.y() <= scene_height / 2 - 50
             )
+            
+        elif isinstance(item, StartPosition):
+            # Для стартовой позиции проверяем центр, т.к. крест довольно компактный
+            pos = item.pos()
+            logger.debug(f"Checking start position: pos=({pos.x()}, {pos.y()})")
+            
+            # Проверяем, что стартовая позиция находится в пределах сцены
+            return (
+                -scene_width / 2 <= pos.x() <= scene_width / 2 and
+                -scene_height / 2 <= pos.y() <= scene_height / 2
+            )
+        
         return False
     
     def mousePressEvent(self, event):
@@ -1363,37 +1381,60 @@ class FieldWidget(QGraphicsView):
 
     def clear_scene(self):
         """
-        Очищает сцену от всех объектов: стен, регионов и робота.
+        Полностью очищает сцену от всех объектов, кроме сетки и осей.
         """
-        logger.debug("Очистка сцены...")
+        logger.debug("Clearing scene...")
         
         # Удаляем все стены
         for wall in self.walls[:]:
-            wall.remove_from_scene()
+            logger.debug(f"Removing wall {wall}")
+            self.scene().removeItem(wall)
             self.walls.remove(wall)
-            
+        
         # Удаляем все регионы
         for region in self.regions[:]:
+            logger.debug(f"Removing region {region}")
             region.remove_from_scene()
             self.regions.remove(region)
-            
+        
         # Удаляем робота
         if self.robot_model:
+            logger.debug("Removing robot")
             self.scene().removeItem(self.robot_model)
-            # Сбрасываем экземпляр робота
-            Robot.reset_instance()
             self.robot_model = None
+            # Освобождаем экземпляр робота
+            Robot.reset_instance()
             
-        # Сбрасываем выделение
+        # Удаляем стартовую позицию
+        if self.start_position_model:
+            logger.debug("Removing start position")
+            self.scene().removeItem(self.start_position_model)
+            self.start_position_model = None
+            # Освобождаем экземпляр стартовой позиции
+            StartPosition.reset_instance()
+        
+        # Сбрасываем режим рисования
+        self.drawing_mode = None
         self.selected_item = None
-        self.selected_marker = None
         
-        # Обновляем view
-        self.scene().update()
-        logger.debug("Сцена очищена")
+        # Очищаем другие выделенные элементы
+        if self.selected_marker:
+            self.scene().removeItem(self.selected_marker)
+            self.selected_marker = None
         
-        # Сигнализируем о снятии выделения
+        # Отправляем сигнал о том, что не выделено ни одного элемента
         self.item_deselected.emit()
+        
+        # Сбрасываем временные переменные
+        self.wall_start = None
+        self.region_start = None
+        self.temp_wall = None
+        self.temp_region = None
+        
+        # Обновляем сцену
+        self.update()
+        
+        logger.debug("Scene cleared successfully")
 
     def place_robot(self, position, robot_id=None, name="", direction=0):
         """
@@ -1504,3 +1545,81 @@ class FieldWidget(QGraphicsView):
         
         logger.debug(f"Region placed successfully with id={region.id}")
         return region
+
+    def update_start_position(self, x, y, direction=None):
+        """
+        Обновляет позицию и направление стартовой позиции.
+        
+        Args:
+            x: Новая координата X
+            y: Новая координата Y
+            direction: Новое направление (в градусах)
+            
+        Returns:
+            bool: True, если обновление прошло успешно, False в противном случае
+        """
+        if self.start_position_model:
+            # Создаем временный объект для проверки границ сцены
+            temp_start = StartPosition(QPointF(x, y))
+            if not self.check_object_within_scene(temp_start):
+                logger.warning(f"Start position update to ({x}, {y}) rejected - would be out of scene bounds")
+                # Показываем предупреждение о выходе за границы сцены
+                QMessageBox.warning(
+                    None,
+                    "Ошибка",
+                    f"Стартовая позиция выйдет за границы сцены. Пожалуйста, укажите другие координаты.",
+                    QMessageBox.StandardButton.Ok
+                )
+                # Обновляем свойства с правильной позицией
+                self.properties_updated.emit(self.start_position_model)
+                return False
+            
+            # Если проверка пройдена, обновляем позицию
+            self.start_position_model.setPos(x, y)
+            
+            # Обновляем направление, если оно указано
+            if direction is not None:
+                self.start_position_model.set_direction(direction)
+                
+            return True
+            
+        return False
+
+    def place_start_position(self, position, direction=0):
+        """
+        Размещает стартовую позицию на сцене.
+        
+        Args:
+            position: Позиция стартовой позиции (QPointF)
+            direction: Направление стартовой позиции (в градусах)
+            
+        Returns:
+            StartPosition: Объект стартовой позиции, если размещение успешно, None в противном случае
+        """
+        # Создаем временный объект для проверки границ сцены
+        temp_start = StartPosition(position, direction)
+        
+        if not self.check_object_within_scene(temp_start):
+            logger.warning("Стартовая позиция выходит за границы сцены - отмена размещения")
+            # Сбрасываем экземпляр, т.к. его не удалось разместить
+            StartPosition.reset_instance()
+            self.start_position_model = None
+            return None
+            
+        # Если у нас уже есть стартовая позиция на сцене, удаляем ее
+        if self.start_position_model:
+            self.scene().removeItem(self.start_position_model)
+            
+        # Создаем новую стартовую позицию (или получаем существующий экземпляр)
+        self.start_position_model = StartPosition(position, direction)
+            
+        # Добавляем стартовую позицию на сцену
+        self.scene().addItem(self.start_position_model)
+        
+        # Настраиваем обработку событий для стартовой позиции
+        self.start_position_model.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+        self.start_position_model.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
+        
+        logger.debug(f"Стартовая позиция успешно размещена в позиции {position}, direction={direction}")
+        
+        return self.start_position_model

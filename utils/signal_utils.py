@@ -12,20 +12,41 @@ class SignalBlock:
     Контекстный менеджер для блокировки сигналов.
     
     Использование:
-    with SignalBlock(widget):
+    with SignalBlock(widget1, widget2, ...):
         # Код, выполняемый при заблокированных сигналах
-        widget.setValue(100)
+        widget1.setValue(100)
+        widget2.setValue(200)
     """
     
-    def __init__(self, widget):
-        self.widget = widget
+    def __init__(self, *widgets):
+        """
+        Инициализация с одним или несколькими виджетами.
+        
+        Args:
+            *widgets: Один или несколько виджетов, сигналы которых нужно блокировать
+        """
+        self.widgets = widgets
+        self.blocked_states = []
         
     def __enter__(self):
-        self.widget.blockSignals(True)
-        return self.widget
+        """
+        Блокирует сигналы от всех виджетов.
+        """
+        self.blocked_states = []
+        for widget in self.widgets:
+            if isinstance(widget, QObject):
+                self.blocked_states.append(widget.blockSignals(True))
+            else:
+                self.blocked_states.append(False)
+        return self
         
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.widget.blockSignals(False)
+        """
+        Восстанавливает исходное состояние сигналов для всех виджетов.
+        """
+        for i, widget in enumerate(self.widgets):
+            if isinstance(widget, QObject):
+                widget.blockSignals(self.blocked_states[i])
 
 def safe_emit(signal, *args, **kwargs):
     """
