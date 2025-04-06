@@ -3,6 +3,7 @@
 Содержит общие методы и функциональность для работы со свойствами элементов.
 """
 
+from abc import abstractmethod
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, QSlider, QGroupBox
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QCursor
@@ -38,6 +39,26 @@ class BasePropertiesWidget(QGroupBox):
         # Применяем базовый стиль
         self.apply_theme()
         
+        # Инициализируем интерфейс
+        self.create_widgets()
+        self.create_layouts()
+        self.setup_connections()
+        
+    @abstractmethod
+    def create_widgets(self):
+        """Создает все виджеты. Должен быть реализован в дочерних классах."""
+        pass
+        
+    @abstractmethod
+    def create_layouts(self):
+        """Создает и настраивает компоновку. Должен быть реализован в дочерних классах."""
+        pass
+        
+    @abstractmethod
+    def setup_connections(self):
+        """Подключает сигналы и слоты. Должен быть реализован в дочерних классах."""
+        pass
+
     def apply_theme(self, is_dark_theme=True):
         """
         Применение темы оформления к виджету.

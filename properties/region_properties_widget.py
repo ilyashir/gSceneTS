@@ -38,21 +38,76 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         self.apply_theme(is_dark_theme)
         self.field_widget = None
         self.initial_values = {}
-        self._initialize_ui()
-        self._connect_signals()
         self.setup_cursors()
         
-    def _initialize_ui(self):
-        """Инициализация интерфейса виджета."""
-        layout = QVBoxLayout()
-        
-        # ID региона (редактируемый)
-        id_layout = QHBoxLayout()
-        id_label = QLabel("ID:")
-        self.apply_field_style(id_label)
-        id_layout.addWidget(id_label)
+    def create_widgets(self):
+        """Создание всех виджетов."""
+        # ID региона
+        self.id_label = QLabel("ID:")
+        self.apply_field_style(self.id_label)
         self.id_edit = EditableLineEdit()
         self.apply_field_style(self.id_edit)
+        
+        # Позиция
+        self.position_label = QLabel("<b>Позиция</b>")
+        self.apply_field_style(self.position_label)
+        
+        # X с ползунком
+        self.x_label = QLabel("X:")
+        self.apply_field_style(self.x_label)
+        self.x_spinbox = CustomSpinBox()
+        self.x_spinbox.setRange(-10000, 10000)
+        self.x_spinbox.setMinimumWidth(70)
+        self.x_slider = QSlider(Qt.Orientation.Horizontal)
+        self.x_slider.setRange(-10000, 10000)
+        
+        # Y с ползунком
+        self.y_label = QLabel("Y:")
+        self.apply_field_style(self.y_label)
+        self.y_spinbox = CustomSpinBox()
+        self.y_spinbox.setRange(-10000, 10000)
+        self.y_spinbox.setMinimumWidth(70)
+        self.y_slider = QSlider(Qt.Orientation.Horizontal)
+        self.y_slider.setRange(-10000, 10000)
+        
+        # Размер
+        self.size_label = QLabel("<b>Размер</b>")
+        self.apply_field_style(self.size_label)
+        
+        # Ширина с ползунком
+        self.width_label = QLabel("Ширина:")
+        self.apply_field_style(self.width_label)
+        self.width_spinbox = CustomSpinBox()
+        self.width_spinbox.setRange(1, 1000)
+        self.width_spinbox.setMinimumWidth(70)
+        self.width_slider = QSlider(Qt.Orientation.Horizontal)
+        self.width_slider.setRange(1, 1000)
+        
+        # Высота с ползунком
+        self.height_label = QLabel("Высота:")
+        self.apply_field_style(self.height_label)
+        self.height_spinbox = CustomSpinBox()
+        self.height_spinbox.setRange(1, 1000)
+        self.height_spinbox.setMinimumWidth(70)
+        self.height_slider = QSlider(Qt.Orientation.Horizontal)
+        self.height_slider.setRange(1, 1000)
+        
+        # Цвет
+        self.color_label = QLabel("Цвет:")
+        self.apply_field_style(self.color_label)
+        self.color_button = ColorPickerButton(is_dark_theme=self.is_dark_theme)
+        
+        # Кнопка сброса параметров
+        self.reset_button = QPushButton("Сбросить")
+        self.reset_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+    def create_layouts(self):
+        """Создание и настройка компоновки."""
+        layout = QVBoxLayout()
+        
+        # ID региона
+        id_layout = QHBoxLayout()
+        id_layout.addWidget(self.id_label)
         id_layout.addWidget(self.id_edit)
         layout.addLayout(id_layout)
         
@@ -61,120 +116,55 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         form_layout.setSpacing(10)
         
         # Позиция
-        position_label = QLabel("<b>Позиция</b>")
-        self.apply_field_style(position_label)
-        form_layout.addRow(position_label)
+        form_layout.addRow(self.position_label)
         
         # X с ползунком
         x_layout = QHBoxLayout()
-        self.x_spinbox = CustomSpinBox()
-        self.x_spinbox.setRange(-10000, 10000)
-        self.x_spinbox.setMinimumWidth(70)
-        
-        # Ползунок X
-        self.x_slider = QSlider(Qt.Orientation.Horizontal)
-        self.x_slider.setRange(-10000, 10000)
-        
         x_layout.addWidget(self.x_spinbox)
         x_layout.addWidget(self.x_slider)
-        
-        x_label = QLabel("X:")
-        self.apply_field_style(x_label)
-        form_layout.addRow(x_label, x_layout)
+        form_layout.addRow(self.x_label, x_layout)
         
         # Y с ползунком
         y_layout = QHBoxLayout()
-        self.y_spinbox = CustomSpinBox()
-        self.y_spinbox.setRange(-10000, 10000)
-        self.y_spinbox.setMinimumWidth(70)
-        
-        # Ползунок Y
-        self.y_slider = QSlider(Qt.Orientation.Horizontal)
-        self.y_slider.setRange(-10000, 10000)
-        
         y_layout.addWidget(self.y_spinbox)
         y_layout.addWidget(self.y_slider)
-        
-        y_label = QLabel("Y:")
-        self.apply_field_style(y_label)
-        form_layout.addRow(y_label, y_layout)
+        form_layout.addRow(self.y_label, y_layout)
         
         # Размер
-        size_label = QLabel("<b>Размер</b>")
-        self.apply_field_style(size_label)
-        form_layout.addRow(size_label)
+        form_layout.addRow(self.size_label)
         
         # Ширина с ползунком
         width_layout = QHBoxLayout()
-        self.width_spinbox = CustomSpinBox()
-        self.width_spinbox.setRange(1, 1000)
-        self.width_spinbox.setMinimumWidth(70)
-        
-        # Ползунок ширины
-        self.width_slider = QSlider(Qt.Orientation.Horizontal)
-        self.width_slider.setRange(1, 1000)
-        
         width_layout.addWidget(self.width_spinbox)
         width_layout.addWidget(self.width_slider)
-        
-        width_label = QLabel("Ширина:")
-        self.apply_field_style(width_label)
-        form_layout.addRow(width_label, width_layout)
+        form_layout.addRow(self.width_label, width_layout)
         
         # Высота с ползунком
         height_layout = QHBoxLayout()
-        self.height_spinbox = CustomSpinBox()
-        self.height_spinbox.setRange(1, 1000)
-        self.height_spinbox.setMinimumWidth(70)
-        
-        # Ползунок высоты
-        self.height_slider = QSlider(Qt.Orientation.Horizontal)
-        self.height_slider.setRange(1, 1000)
-        
         height_layout.addWidget(self.height_spinbox)
         height_layout.addWidget(self.height_slider)
-        
-        height_label = QLabel("Высота:")
-        self.apply_field_style(height_label)
-        form_layout.addRow(height_label, height_layout)
+        form_layout.addRow(self.height_label, height_layout)
         
         # Цвет
         color_layout = QHBoxLayout()
-        color_label = QLabel("Цвет:")
-        self.apply_field_style(color_label)
-        color_layout.addWidget(color_label)
-        self.color_button = ColorPickerButton(is_dark_theme=self.is_dark_theme)
+        color_layout.addWidget(self.color_label)
         color_layout.addWidget(self.color_button)
         form_layout.addRow(color_layout)
         
         layout.addLayout(form_layout)
         
         # Кнопка сброса параметров
-        self.reset_button = QPushButton("Сбросить")
-        self.reset_button.setCursor(Qt.CursorShape.PointingHandCursor)
         layout.addWidget(self.reset_button, alignment=Qt.AlignmentFlag.AlignRight)
         
-        if self.field_widget:
-            self.update_ranges(
-                int(self.field_widget.scene().sceneRect().left()),
-                int(self.field_widget.scene().sceneRect().right()),
-                int(self.field_widget.scene().sceneRect().top()),
-                int(self.field_widget.scene().sceneRect().bottom())
-            )
-
+        # Очищаем текущий лейаут и добавляем новый
+        while self.properties_layout.count():
+            item = self.properties_layout.takeAt(0)
+            if item.widget():
+                item.widget().setParent(None)
+                
         self.properties_layout.addLayout(layout)
         
-        # Сохраняем ссылки на метки для дальнейшего обновления тем
-        self.id_label = id_label
-        self.position_label = position_label
-        self.x_label = x_label
-        self.y_label = y_label
-        self.size_label = size_label
-        self.width_label = width_label
-        self.height_label = height_label
-        self.color_label = color_label
-        
-    def _connect_signals(self):
+    def setup_connections(self):
         """Подключение сигналов и слотов."""
         # Связываем слайдеры и спинбоксы для позиции
         self.x_spinbox.buttonValueChanged.connect(self.x_slider.setValue)

@@ -39,21 +39,76 @@ class WallPropertiesWidget(BasePropertiesWidget):
         self.apply_theme(is_dark_theme)
         self.field_widget = None
         self.initial_values = {}
-        self._initialize_ui()
-        self._connect_signals()
         self.setup_cursors()
         
-    def _initialize_ui(self):
-        """Инициализация интерфейса виджета."""
-        layout = QVBoxLayout()
-        
-        # ID стены (редактируемый)
-        id_layout = QHBoxLayout()
-        id_label = QLabel("ID:")
-        self.apply_field_style(id_label)
-        id_layout.addWidget(id_label)
+    def create_widgets(self):
+        """Создание всех виджетов."""
+        # ID стены
+        self.id_label = QLabel("ID:")
+        self.apply_field_style(self.id_label)
         self.id_edit = EditableLineEdit()
         self.apply_field_style(self.id_edit)
+        
+        # Метки
+        self.coords_label = QLabel("<b>Координаты</b>")
+        self.apply_field_style(self.coords_label)
+        
+        # X1 с ползунком
+        self.x1_label = QLabel("X1:")
+        self.apply_field_style(self.x1_label)
+        self.x1_spinbox = CustomSpinBox()
+        self.x1_spinbox.setRange(-10000, 10000)
+        self.x1_spinbox.setMinimumWidth(70)
+        self.x1_slider = QSlider(Qt.Orientation.Horizontal)
+        self.x1_slider.setRange(-10000, 10000)
+        
+        # Y1 с ползунком
+        self.y1_label = QLabel("Y1:")
+        self.apply_field_style(self.y1_label)
+        self.y1_spinbox = CustomSpinBox()
+        self.y1_spinbox.setRange(-10000, 10000)
+        self.y1_spinbox.setMinimumWidth(70)
+        self.y1_slider = QSlider(Qt.Orientation.Horizontal)
+        self.y1_slider.setRange(-10000, 10000)
+        
+        # X2 с ползунком
+        self.x2_label = QLabel("X2:")
+        self.apply_field_style(self.x2_label)
+        self.x2_spinbox = CustomSpinBox()
+        self.x2_spinbox.setRange(-10000, 10000)
+        self.x2_spinbox.setMinimumWidth(70)
+        self.x2_slider = QSlider(Qt.Orientation.Horizontal)
+        self.x2_slider.setRange(-10000, 10000)
+        
+        # Y2 с ползунком
+        self.y2_label = QLabel("Y2:")
+        self.apply_field_style(self.y2_label)
+        self.y2_spinbox = CustomSpinBox()
+        self.y2_spinbox.setRange(-10000, 10000)
+        self.y2_spinbox.setMinimumWidth(70)
+        self.y2_slider = QSlider(Qt.Orientation.Horizontal)
+        self.y2_slider.setRange(-10000, 10000)
+        
+        # Ширина стены
+        self.width_label = QLabel("Ширина:")
+        self.apply_field_style(self.width_label)
+        self.wall_width_spinbox = CustomSpinBox()
+        self.wall_width_spinbox.setRange(1, 50)
+        self.wall_width_spinbox.setMinimumWidth(70)
+        self.wall_width_slider = QSlider(Qt.Orientation.Horizontal)
+        self.wall_width_slider.setRange(1, 50)
+        
+        # Кнопка сброса параметров
+        self.reset_button = QPushButton("Сбросить")
+        self.reset_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+    def create_layouts(self):
+        """Создание и настройка компоновки."""
+        layout = QVBoxLayout()
+        
+        # ID стены
+        id_layout = QHBoxLayout()
+        id_layout.addWidget(self.id_label)
         id_layout.addWidget(self.id_edit)
         layout.addLayout(id_layout)
         
@@ -61,115 +116,53 @@ class WallPropertiesWidget(BasePropertiesWidget):
         form_layout = QFormLayout()
         form_layout.setSpacing(10)
         
-        # Координаты
-        coords_label = QLabel("<b>Координаты</b>")
-        self.apply_field_style(coords_label)
-        form_layout.addRow(coords_label)
+        # Заголовок координат
+        form_layout.addRow(self.coords_label)
         
         # X1 с ползунком
         x1_layout = QHBoxLayout()
-        self.x1_spinbox = CustomSpinBox()
-        self.x1_spinbox.setRange(-10000, 10000)
-        self.x1_spinbox.setMinimumWidth(70)
-        
-        # Ползунок X1
-        self.x1_slider = QSlider(Qt.Orientation.Horizontal)
-        self.x1_slider.setRange(-10000, 10000)
-        
         x1_layout.addWidget(self.x1_spinbox)
         x1_layout.addWidget(self.x1_slider)
-        
-        x1_label = QLabel("X1:")
-        self.apply_field_style(x1_label)
-        form_layout.addRow(x1_label, x1_layout)
+        form_layout.addRow(self.x1_label, x1_layout)
         
         # Y1 с ползунком
         y1_layout = QHBoxLayout()
-        self.y1_spinbox = CustomSpinBox()
-        self.y1_spinbox.setRange(-10000, 10000)
-        self.y1_spinbox.setMinimumWidth(70)
-        
-        # Ползунок Y1
-        self.y1_slider = QSlider(Qt.Orientation.Horizontal)
-        self.y1_slider.setRange(-10000, 10000)
-        
         y1_layout.addWidget(self.y1_spinbox)
         y1_layout.addWidget(self.y1_slider)
-        
-        y1_label = QLabel("Y1:")
-        self.apply_field_style(y1_label)
-        form_layout.addRow(y1_label, y1_layout)
+        form_layout.addRow(self.y1_label, y1_layout)
         
         # X2 с ползунком
         x2_layout = QHBoxLayout()
-        self.x2_spinbox = CustomSpinBox()
-        self.x2_spinbox.setRange(-10000, 10000)
-        self.x2_spinbox.setMinimumWidth(70)
-        
-        # Ползунок X2
-        self.x2_slider = QSlider(Qt.Orientation.Horizontal)
-        self.x2_slider.setRange(-10000, 10000)
-        
         x2_layout.addWidget(self.x2_spinbox)
         x2_layout.addWidget(self.x2_slider)
-        
-        x2_label = QLabel("X2:")
-        self.apply_field_style(x2_label)
-        form_layout.addRow(x2_label, x2_layout)
+        form_layout.addRow(self.x2_label, x2_layout)
         
         # Y2 с ползунком
         y2_layout = QHBoxLayout()
-        self.y2_spinbox = CustomSpinBox()
-        self.y2_spinbox.setRange(-10000, 10000)
-        self.y2_spinbox.setMinimumWidth(70)
-        
-        # Ползунок Y2
-        self.y2_slider = QSlider(Qt.Orientation.Horizontal)
-        self.y2_slider.setRange(-10000, 10000)
-        
         y2_layout.addWidget(self.y2_spinbox)
         y2_layout.addWidget(self.y2_slider)
-        
-        y2_label = QLabel("Y2:")
-        self.apply_field_style(y2_label)
-        form_layout.addRow(y2_label, y2_layout)
+        form_layout.addRow(self.y2_label, y2_layout)
         
         # Ширина стены
         width_layout = QHBoxLayout()
-        self.wall_width_spinbox = CustomSpinBox()
-        self.wall_width_spinbox.setRange(1, 50)
-        self.wall_width_spinbox.setMinimumWidth(70)
-        
-        # Ползунок ширины
-        self.wall_width_slider = QSlider(Qt.Orientation.Horizontal)
-        self.wall_width_slider.setRange(1, 50)
-        
         width_layout.addWidget(self.wall_width_spinbox)
         width_layout.addWidget(self.wall_width_slider)
-        
-        width_label = QLabel("Ширина:")
-        self.apply_field_style(width_label)
-        form_layout.addRow(width_label, width_layout)
+        form_layout.addRow(self.width_label, width_layout)
         
         layout.addLayout(form_layout)
         
         # Кнопка сброса параметров
-        self.reset_button = QPushButton("Сбросить")
-        self.reset_button.setCursor(Qt.CursorShape.PointingHandCursor)
         layout.addWidget(self.reset_button, alignment=Qt.AlignmentFlag.AlignRight)
         
+        # Очищаем текущий лейаут и добавляем новый
+        while self.properties_layout.count():
+            item = self.properties_layout.takeAt(0)
+            if item.widget():
+                item.widget().setParent(None)
+                
         self.properties_layout.addLayout(layout)
         
-        # Сохраняем ссылки на метки для дальнейшего обновления тем
-        self.id_label = id_label
-        self.coords_label = coords_label
-        self.x1_label = x1_label
-        self.y1_label = y1_label
-        self.x2_label = x2_label
-        self.y2_label = y2_label
-        self.width_label = width_label
-        
-    def _connect_signals(self):
+    def setup_connections(self):
         """Подключение сигналов и слотов."""
         # Связываем слайдеры и спинбоксы для координат
         self.x1_spinbox.buttonValueChanged.connect(self.x1_slider.setValue)
@@ -205,7 +198,7 @@ class WallPropertiesWidget(BasePropertiesWidget):
         
         # Кнопка сброса
         self.reset_button.clicked.connect(self.reset_properties)
-        
+
     def set_properties(self, x1, y1, x2, y2, width, wall_id=None):
         """
         Установка свойств стены.

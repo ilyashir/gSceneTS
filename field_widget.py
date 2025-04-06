@@ -517,24 +517,20 @@ class FieldWidget(QGraphicsView):
             item: Объект для проверки
             
         Returns:
-            bool: True, если объект находится в пределах сцены, False в противном случае
+            bool: True, если объект в пределах сцены, False в противном случае
         """
         scene_width = self.scene_width
         scene_height = self.scene_height
         
         # Проверяем, является ли элемент стеной
         if isinstance(item, Wall):
-            # Для стены проверяем обе точки
+            # Для стены проверяем обе точки линии
             line = item.line()
-            x1, y1 = line.x1(), line.y1()
-            x2, y2 = line.x2(), line.y2()
-            
-            # Проверяем, что обе точки находятся в пределах сцены
             return (
-                -scene_width / 2 <= x1 <= scene_width / 2 and
-                -scene_height / 2 <= y1 <= scene_height / 2 and
-                -scene_width / 2 <= x2 <= scene_width / 2 and
-                -scene_height / 2 <= y2 <= scene_height / 2
+                -scene_width / 2 + 25 <= line.x1() <= scene_width / 2 - 25 and
+                -scene_height / 2 + 25 <= line.y1() <= scene_height / 2 - 25 and
+                -scene_width / 2 + 25 <= line.x2() <= scene_width / 2 - 25 and
+                -scene_height / 2 + 25 <= line.y2() <= scene_height / 2 - 25
             )
         
         # Проверяем, является ли элемент регионом
@@ -580,9 +576,10 @@ class FieldWidget(QGraphicsView):
             logger.debug(f"Checking start position: pos=({pos.x()}, {pos.y()})")
             
             # Проверяем, что стартовая позиция находится в пределах сцены
+            # Добавляем отступ 25 пикселей 
             return (
-                -scene_width / 2 <= pos.x() <= scene_width / 2 and
-                -scene_height / 2 <= pos.y() <= scene_height / 2
+                -scene_width / 2 + 25 <= pos.x() <= scene_width / 2 - 25 and
+                -scene_height / 2 + 25 <= pos.y() <= scene_height / 2 - 25
             )
         
         return False
@@ -770,8 +767,14 @@ class FieldWidget(QGraphicsView):
                 temp_start = StartPosition(new_pos)
                 if not self.check_object_within_scene(temp_start):
                     logger.debug(f"ERR start position would be out of bounds")
-                    return
+                    # Ограничиваем позицию в пределах сцены
+                    x = max(min(new_pos.x(), self.scene_width/2 - 25), -self.scene_width/2 + 25)
+                    y = max(min(new_pos.y(), self.scene_height/2 - 25), -self.scene_height/2 + 25)
+                    new_pos = QPointF(x, y)
                 
+                # Обновляем позицию и свойства
+                self.dragging_item.setPos(new_pos)
+                self.properties_window.update_properties(self.dragging_item)
             elif isinstance(self.dragging_item, Wall):
                 # Вычисляем смещение относительно точки захвата
                 dx = pos.x() - self.grab_point.x()
@@ -1583,6 +1586,11 @@ class FieldWidget(QGraphicsView):
             bool: True, если обновление прошло успешно, False в противном случае
         """
         if self.start_position_model:
+            # Применяем привязку к сетке, если она включена
+            if self.snap_to_grid_enabled:
+                pos = self.snap_to_half_grid(QPointF(x, y))
+                x, y = pos.x(), pos.y()
+            
             # Создаем временный объект для проверки границ сцены
             temp_start = StartPosition(QPointF(x, y))
             if not self.check_object_within_scene(temp_start):

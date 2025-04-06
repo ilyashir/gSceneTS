@@ -33,21 +33,50 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         """
         super().__init__("Свойства робота", parent)
         self.apply_theme(is_dark_theme)
-        self._initialize_ui()
-        self._connect_signals()
         self.setup_cursors()
         
-    def _initialize_ui(self):
-        """Инициализация интерфейса виджета."""
-        layout = QVBoxLayout()
-        
+    def create_widgets(self):
+        """Создание всех виджетов."""
         # ID робота (неизменяемый)
-        id_layout = QHBoxLayout()
-        id_label = QLabel("ID:")
-        self.apply_field_style(id_label)
-        id_layout.addWidget(id_label)
+        self.id_label = QLabel("ID:")
         self.robot_id_label = QLabel("trikKitRobot")
         self.apply_field_style(self.robot_id_label)
+        
+        # Координата X с ползунком
+        self.x_label = QLabel("X:")
+        self.x_spinbox = CustomSpinBox()
+        self.x_spinbox.setRange(-10000, 10000)
+        self.x_spinbox.setMinimumWidth(70)
+        self.x_slider = QSlider(Qt.Orientation.Horizontal)
+        self.x_slider.setRange(-10000, 10000)
+        
+        # Координата Y с ползунком
+        self.y_label = QLabel("Y:")
+        self.y_spinbox = CustomSpinBox()
+        self.y_spinbox.setRange(-10000, 10000)
+        self.y_spinbox.setMinimumWidth(70)
+        self.y_slider = QSlider(Qt.Orientation.Horizontal)
+        self.y_slider.setRange(-10000, 10000)
+        
+        # Поворот с ползунком
+        self.rotation_label = QLabel("Поворот:")
+        self.rotation_spinbox = CustomSpinBox()
+        self.rotation_spinbox.setRange(-180, 180)
+        self.rotation_spinbox.setMinimumWidth(70)
+        self.rotation_slider = QSlider(Qt.Orientation.Horizontal)
+        self.rotation_slider.setRange(-180, 180)
+        
+        # Кнопка сброса параметров
+        self.reset_button = QPushButton("Сбросить")
+        self.reset_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+    def create_layouts(self):
+        """Создание и настройка компоновки."""
+        layout = QVBoxLayout()
+        
+        # ID робота
+        id_layout = QHBoxLayout()
+        id_layout.addWidget(self.id_label)
         id_layout.addWidget(self.robot_id_label)
         layout.addLayout(id_layout)
         
@@ -55,76 +84,38 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         form_layout = QFormLayout()
         form_layout.setSpacing(10)
         
-        # Координата X с ползунком
+        # X с ползунком
         x_layout = QHBoxLayout()
-        self.x_spinbox = CustomSpinBox()
-        self.x_spinbox.setRange(-10000, 10000)
-        self.x_spinbox.setMinimumWidth(70)
-        
-        # Ползунок X
-        self.x_slider = QSlider(Qt.Orientation.Horizontal)
-        self.x_slider.setRange(-10000, 10000)
-        
         x_layout.addWidget(self.x_spinbox)
         x_layout.addWidget(self.x_slider)
+        form_layout.addRow(self.x_label, x_layout)
         
-        # Метка для оси X
-        x_label = QLabel("X:")
-        self.apply_field_style(x_label)
-        form_layout.addRow(x_label, x_layout)
-        
-        # Координата Y с ползунком
+        # Y с ползунком
         y_layout = QHBoxLayout()
-        self.y_spinbox = CustomSpinBox()
-        self.y_spinbox.setRange(-10000, 10000)
-        self.y_spinbox.setMinimumWidth(70)
-        
-        # Ползунок Y
-        self.y_slider = QSlider(Qt.Orientation.Horizontal)
-        self.y_slider.setRange(-10000, 10000)
-        
         y_layout.addWidget(self.y_spinbox)
         y_layout.addWidget(self.y_slider)
-        
-        # Метка для оси Y
-        y_label = QLabel("Y:")
-        self.apply_field_style(y_label)
-        form_layout.addRow(y_label, y_layout)
+        form_layout.addRow(self.y_label, y_layout)
         
         # Поворот с ползунком
         rotation_layout = QHBoxLayout()
-        self.rotation_spinbox = CustomSpinBox()
-        self.rotation_spinbox.setRange(-180, 180)
-        self.rotation_spinbox.setMinimumWidth(70)
-        
-        # Ползунок для поворота
-        self.rotation_slider = QSlider(Qt.Orientation.Horizontal)
-        self.rotation_slider.setRange(-180, 180)
-        
         rotation_layout.addWidget(self.rotation_spinbox)
         rotation_layout.addWidget(self.rotation_slider)
-        
-        # Метка для поворота
-        rotation_label = QLabel("Поворот:")
-        self.apply_field_style(rotation_label)
-        form_layout.addRow(rotation_label, rotation_layout)
+        form_layout.addRow(self.rotation_label, rotation_layout)
         
         layout.addLayout(form_layout)
         
         # Кнопка сброса параметров
-        self.reset_button = QPushButton("Сбросить")
-        self.reset_button.setCursor(Qt.CursorShape.PointingHandCursor)
         layout.addWidget(self.reset_button, alignment=Qt.AlignmentFlag.AlignRight)
         
+        # Очищаем текущий лейаут и добавляем новый
+        while self.properties_layout.count():
+            item = self.properties_layout.takeAt(0)
+            if item.widget():
+                item.widget().setParent(None)
+                
         self.properties_layout.addLayout(layout)
         
-        # Сохраняем ссылки на метки для дальнейшего обновления тем
-        self.id_label = id_label
-        self.x_label = x_label
-        self.y_label = y_label
-        self.rotation_label = rotation_label
-        
-    def _connect_signals(self):
+    def setup_connections(self):
         """Подключение сигналов и слотов."""
         # Связываем слайдеры и спинбоксы
         self.x_spinbox.buttonValueChanged.connect(self.x_slider.setValue)
@@ -146,7 +137,7 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         
         # Подключаем кнопку сброса
         self.reset_button.clicked.connect(self.reset_properties)
-        
+
     def set_properties(self, x, y, rotation, robot_id=None):
         """
         Установка свойств робота.
