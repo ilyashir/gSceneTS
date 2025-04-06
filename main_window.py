@@ -753,31 +753,36 @@ class MainWindow(QMainWindow):
         config.set("appearance", "dark_theme", str(self.is_dark_theme))
         
     def _apply_theme_recursively(self, widget, is_dark_theme):
-        """Рекурсивно применяет тему ко всем дочерним виджетам с методом set_theme
+        """
+        Рекурсивно применяет тему ко всем дочерним виджетам с поддержкой метода set_theme.
         
         Args:
-            widget: Виджет, с которого начинается поиск
+            widget: Виджет, к которому и его дочерним элементам нужно применить тему
             is_dark_theme: True для темной темы, False для светлой
         """
-        # Проверяем текущий виджет
-        if hasattr(widget, 'set_theme') and callable(getattr(widget, 'set_theme')):
-            try:
+        # Список типов виджетов, которые не нужно обрабатывать для оптимизации
+        ignored_widget_types = ["QComboBox", "QSpinBox", "QProgressBar", "QScrollBar", 
+                               "QSlider", "QToolBar", "QTabBar", "QStatusBar", "QMenu"]
+        
+        # Проверяем тип виджета
+        widget_type = widget.metaObject().className()
+        if widget_type in ignored_widget_types:
+            return
+            
+        try:
+            # Если виджет имеет метод set_theme, вызываем его
+            if hasattr(widget, 'set_theme') and callable(widget.set_theme):
                 widget.set_theme(is_dark_theme)
-                logger.debug(f"Тема применена к виджету {widget.__class__.__name__}")
-            except Exception as e:
-                logger.error(f"Ошибка при применении темы к {widget.__class__.__name__}: {e}")
+                return  # Нет необходимости обрабатывать дочерние элементы, так как виджет сам должен это сделать
+        except Exception as e:
+            # В случае ошибки логируем ее, но продолжаем обработку
+            logger.error(f"Ошибка при установке темы для виджета {widget}: {e}")
         
-        # Обработка специальных случаев для диалогов
-        if hasattr(widget, 'update_style') and callable(getattr(widget, 'update_style')):
-            try:
-                widget.update_style(is_dark_theme)
-                logger.debug(f"Стиль обновлен для виджета {widget.__class__.__name__}")
-            except Exception as e:
-                logger.error(f"Ошибка при обновлении стиля {widget.__class__.__name__}: {e}")
-        
-        # Рекурсивно обрабатываем дочерние виджеты
-        for child in widget.findChildren(QWidget):
-            self._apply_theme_recursively(child, is_dark_theme)
+        # Рекурсивно применяем тему ко всем дочерним виджетам, но только непосредственным потомкам
+        # Получаем все непосредственные дочерние виджеты
+        for child in widget.children():
+            if isinstance(child, QWidget):
+                self._apply_theme_recursively(child, is_dark_theme)
 
     def toggle_theme(self):
         """Переключает тему между светлой и темной"""

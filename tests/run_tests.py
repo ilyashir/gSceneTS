@@ -88,6 +88,7 @@ def add_timeout_to_test_classes():
     from test_mouse_events import TestMouseEvents
     from test_ui_interactions import TestUIInteractions
     from test_theme_switching import TestThemeSwitching
+    from test_performance import TestPerformance
     
     # Список тестовых классов для модификации
     test_classes = [
@@ -98,7 +99,8 @@ def add_timeout_to_test_classes():
         TestRegion,
         TestMouseEvents,
         TestUIInteractions,
-        TestThemeSwitching
+        TestThemeSwitching,
+        TestPerformance
     ]
     
     # Для каждого класса добавляем миксин TestMethodTimeout
@@ -236,7 +238,8 @@ def run_specific_tests(test_names):
         'region': TestRegion,
         'mouse': TestMouseEvents,
         'ui': TestUIInteractions,
-        'theme': TestThemeSwitching
+        'theme': TestThemeSwitching,
+        'performance': TestPerformance,
     }
     
     # Создаем загрузчик тестов
@@ -310,6 +313,21 @@ def run_all_tests():
     result = runner.run(suite)
     
     return result.wasSuccessful()
+
+def _print_help():
+    """Выводит справку по использованию скрипта."""
+    logger.info("Использование: python run_tests.py [test(s)]")
+    logger.info("где [test(s)] может быть одним из следующих имен тестов или их комбинацией:")
+    logger.info("  shortcuts - тесты горячих клавиш")
+    logger.info("  field - тесты виджета поля")
+    logger.info("  wall - тесты стены")
+    logger.info("  robot - тесты робота")
+    logger.info("  region - тесты региона")
+    logger.info("  mouse - тесты событий мыши")
+    logger.info("  ui - тесты взаимодействия с пользовательским интерфейсом")
+    logger.info("  theme - тесты переключения темы")
+    logger.info("  performance - тесты производительности")
+    logger.info("  all - запустить все тесты")
 
 if __name__ == '__main__':
     # Настраиваем парсер аргументов командной строки
