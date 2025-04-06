@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QGraphicsItem
+from PyQt6.QtWidgets import QGraphicsItem, QGraphicsRectItem
 from PyQt6.QtGui import QPainter, QPen, QBrush, QPainterPath
 from PyQt6.QtCore import QRectF, Qt, QPointF
 import logging
@@ -45,7 +45,9 @@ class StartPosition(QGraphicsItem):
             
             # Настройка отображения
             self.setZValue(500)  # Стартовая позиция отображается под роботом, но над другими объектами
-            self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+            
+            # Настройка выделения
+            self.highlight_rect = None
             
             # Помечаем, что экземпляр уже инициализирован
             self._is_initialized = True
@@ -54,6 +56,14 @@ class StartPosition(QGraphicsItem):
         
         # Обновляем позицию при каждом вызове
         self.setPos(pos)
+        
+        # Включаем обработку событий мыши
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
+        
+        # Обновляем направление, если оно задано
+        if direction != 0:
+            self._direction = direction
     
     def boundingRect(self):
         """
@@ -88,6 +98,26 @@ class StartPosition(QGraphicsItem):
         path.addRect(-half_size, -half_size, 2 * half_size, 2 * half_size)
         
         return path
+    
+    def set_highlight(self, enabled):
+        """
+        Включает или выключает подсветку стартовой позиции.
+        :param enabled: Если True, стартовая позиция выделяется прямоугольником.
+        """
+        if enabled:
+            # Создаем прямоугольник для выделения
+            if not self.highlight_rect:
+                size = 24  # Удвоенный half_size
+                self.highlight_rect = QGraphicsRectItem(-12, -12, size, size, self)
+                self.highlight_rect.setPen(QPen(Qt.GlobalColor.blue, 2))
+                self.highlight_rect.setBrush(QBrush(Qt.GlobalColor.transparent))
+                
+            # Показываем выделение
+            self.highlight_rect.show()
+            
+        elif hasattr(self, 'highlight_rect') and self.highlight_rect:
+            # Скрываем прямоугольник выделения
+            self.highlight_rect.hide()
     
     @property
     def id(self):

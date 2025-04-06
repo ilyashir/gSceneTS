@@ -128,20 +128,9 @@ class MainWindow(QMainWindow):
         
         # Подключаем сигналы от главного окна
         self.scene_size_changed.connect(self.field_widget.set_scene_size)
-        # Подключаем сигналы от окна свойств
-        self.properties_window.robot_position_changed.connect(self.field_widget.update_robot_position)
-        self.properties_window.robot_rotation_changed.connect(self.field_widget.update_robot_rotation)
-        self.properties_window.wall_position_point1_changed.connect(self.field_widget.update_wall_point1)
-        self.properties_window.wall_position_point2_changed.connect(self.field_widget.update_wall_point2)
-        self.properties_window.wall_size_changed.connect(self.field_widget.update_wall_size)
-        self.properties_window.region_position_changed.connect(self.field_widget.update_region_position)
-        self.properties_window.region_size_changed.connect(self.field_widget.update_region_size)
-        self.properties_window.region_color_changed.connect(self.field_widget.update_region_color)
-        # Подключаем сигналы изменения ID от окна свойств
-        self.properties_window.wall_id_changed.connect(self.field_widget.update_wall_id)
-        self.properties_window.region_id_changed.connect(self.field_widget.update_region_id)
-        # Подключаем сигналы изменения координат мыши
-        self.field_widget.mouse_coords_updated.connect(self.update_coords_label)
+        
+        # Подключаем все сигналы
+        self._connect_signals()
 
         # Создаем кнопку для скрытия/открытия окна свойств
         self.toggle_properties_button = QToolButton(self)
@@ -1080,3 +1069,26 @@ class MainWindow(QMainWindow):
             logger.error(f"Ошибка загрузки XML: {e}", exc_info=True)
             QMessageBox.critical(self, "Ошибка", f"Произошла ошибка при загрузке XML: {e}")
             return False
+
+    def _connect_signals(self):
+        """Подключение сигналов."""
+        # Подключаем сигналы от окна свойств
+        self.properties_window.robot_position_changed.connect(self.field_widget.update_robot_position)
+        self.properties_window.robot_rotation_changed.connect(self.field_widget.update_robot_rotation)
+        self.properties_window.wall_position_point1_changed.connect(self.field_widget.update_wall_point1)
+        self.properties_window.wall_position_point2_changed.connect(self.field_widget.update_wall_point2)
+        self.properties_window.wall_size_changed.connect(self.field_widget.update_wall_size)
+        self.properties_window.region_position_changed.connect(self.field_widget.update_region_position)
+        self.properties_window.region_size_changed.connect(self.field_widget.update_region_size)
+        self.properties_window.region_color_changed.connect(self.field_widget.update_region_color)
+        
+        # Подключаем сигналы изменения ID от окна свойств
+        self.properties_window.wall_id_changed.connect(self.field_widget.update_wall_id)
+        self.properties_window.region_id_changed.connect(self.field_widget.update_region_id)
+        
+        # Подключаем сигналы для стартовой позиции
+        self.properties_window.start_position_position_changed.connect(self.field_widget.update_start_position)
+        self.properties_window.start_position_direction_changed.connect(self.field_widget.update_start_position_direction)
+        
+        # Подключаем сигналы изменения координат мыши
+        self.field_widget.mouse_coords_updated.connect(self.update_coords_label)

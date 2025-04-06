@@ -44,8 +44,9 @@ class PropertiesManager(QWidget):
     region_color_changed = pyqtSignal(str)  # color
     region_id_changed = pyqtSignal(str)  # id
     
-    # Сигнал для оповещения об изменении свойств стартовой позиции
-    start_position_properties_changed = pyqtSignal(object)
+    # Сигналы для изменения свойств стартовой позиции
+    start_position_position_changed = pyqtSignal(float, float)  # x, y
+    start_position_direction_changed = pyqtSignal(float)  # direction
     
     def __init__(self, parent=None, is_dark_theme=True):
         """
@@ -120,8 +121,8 @@ class PropertiesManager(QWidget):
     def _connect_signals(self):
         """Подключает сигналы виджетов свойств к слотам."""
         # Стартовая позиция
-        self.start_position_widget.position_changed.connect(self._on_start_position_position_changed)
-        self.start_position_widget.direction_changed.connect(self._on_start_position_direction_changed)
+        self.start_position_widget.position_changed.connect(self.start_position_position_changed)
+        self.start_position_widget.direction_changed.connect(self.start_position_direction_changed)
         
         # Робот
         self.robot_widget.position_changed.connect(self.robot_position_changed)
@@ -236,12 +237,10 @@ class PropertiesManager(QWidget):
     # Слоты для стартовой позиции
     def _on_start_position_position_changed(self, x, y):
         """Обработчик изменения позиции стартовой позиции."""
-        if isinstance(self.current_widget, StartPosition):
-            # Эмитируем сигнал для оповещения о изменении свойства
-            self.start_position_properties_changed.emit(self.current_widget)
-    
+        logger.debug(f"Позиция стартовой позиции изменена на: ({x}, {y})")
+        self.start_position_position_changed.emit(x, y)
+        
     def _on_start_position_direction_changed(self, direction):
         """Обработчик изменения направления стартовой позиции."""
-        if isinstance(self.current_widget, StartPosition):
-            # Эмитируем сигнал для оповещения о изменении свойства
-            self.start_position_properties_changed.emit(self.current_widget) 
+        logger.debug(f"Направление стартовой позиции изменено на: {direction}")
+        self.start_position_direction_changed.emit(direction) 

@@ -134,7 +134,8 @@ class PropertiesWindow(QWidget):
         self.properties_manager.region_id_changed.connect(self.region_id_changed)
         
         # Сигналы стартовой позиции
-        self.properties_manager.start_position_properties_changed.connect(self._on_start_position_properties_changed)
+        self.properties_manager.start_position_position_changed.connect(self.start_position_position_changed)
+        self.properties_manager.start_position_direction_changed.connect(self.start_position_direction_changed)
         
     def set_theme(self, is_dark_theme):
         """

@@ -212,7 +212,7 @@ class FieldWidget(QGraphicsView):
         if self.selected_item:
             self.deselect_item()
 
-        if isinstance(item, (Wall, Robot, Region)):
+        if isinstance(item, (Wall, Robot, Region, StartPosition)):
             logger.debug(f"Selecting item: {item}")
             self.selected_item = item
             self.selected_item.set_highlight(True)
@@ -222,7 +222,7 @@ class FieldWidget(QGraphicsView):
         """Снимает выделение с объекта."""
         if self.selected_item:
             logger.debug(f"Deselecting item: {self.selected_item}")
-            if isinstance(self.selected_item, (Wall, Robot, Region)):
+            if isinstance(self.selected_item, (Wall, Robot, Region, StartPosition)):
                 self.selected_item.set_highlight(False)
             self.selected_item = None
             self.item_deselected.emit()
@@ -539,17 +539,27 @@ class FieldWidget(QGraphicsView):
         
         # Проверяем, является ли элемент регионом
         elif isinstance(item, Region):
-            # Для региона проверяем все его точки
-            points = item.points()
-            for point in points:
-                if (
-                    point.x() < -scene_width / 2 or
-                    point.x() > scene_width / 2 or
-                    point.y() < -scene_height / 2 or
-                    point.y() > scene_height / 2
-                ):
-                    return False
-            return True
+            # Для региона проверяем его ограничивающий прямоугольник
+            rect = item.boundingRect()
+            pos = item.pos()
+            
+            # Проверяем, что все углы прямоугольника находятся в пределах сцены
+            top_left = QPointF(pos.x() + rect.x(), pos.y() + rect.y())
+            top_right = QPointF(pos.x() + rect.x() + rect.width(), pos.y() + rect.y())
+            bottom_left = QPointF(pos.x() + rect.x(), pos.y() + rect.y() + rect.height())
+            bottom_right = QPointF(pos.x() + rect.x() + rect.width(), pos.y() + rect.y() + rect.height())
+            
+            # Проверяем, что все углы прямоугольника находятся в пределах сцены
+            return (
+                -scene_width / 2 <= top_left.x() <= scene_width / 2 and
+                -scene_height / 2 <= top_left.y() <= scene_height / 2 and
+                -scene_width / 2 <= top_right.x() <= scene_width / 2 and
+                -scene_height / 2 <= top_right.y() <= scene_height / 2 and
+                -scene_width / 2 <= bottom_left.x() <= scene_width / 2 and
+                -scene_height / 2 <= bottom_left.y() <= scene_height / 2 and
+                -scene_width / 2 <= bottom_right.x() <= scene_width / 2 and
+                -scene_height / 2 <= bottom_right.y() <= scene_height / 2
+            )
         
         elif isinstance(item, Robot):
             # Для робота проверяем его позицию и размеры
@@ -586,9 +596,9 @@ class FieldWidget(QGraphicsView):
         if event.button() == Qt.MouseButton.LeftButton:
             
             # Если в режиме редактирования и нажали на объект, меняем курсор на "кулачок"
-            if self.edit_mode and item and (isinstance(item, (Robot, Region)) or 
+            if self.edit_mode and item and (isinstance(item, (Robot, Region, StartPosition, Wall)) or 
                       (hasattr(item, 'data') and (item.data(0) == "its_wall" or item.data(0) == "wall_marker")) or 
-                      (item.parentItem() and isinstance(item.parentItem(), (Robot, Region)))):
+                      (item.parentItem() and isinstance(item.parentItem(), (Robot, Region, StartPosition, Wall)))):
                 self.setCursor(Qt.CursorShape.ClosedHandCursor)
             
             # Проверка клика по выделяемому объекту или его дочернему элементу
@@ -599,9 +609,9 @@ class FieldWidget(QGraphicsView):
                     # Если кликнули на дочерний элемент выделенного объекта (например, рамку выделения)
                     target_item = parent_item
                 # Иначе проверяем тип объекта
-                elif isinstance(item, (Robot, Region)) or (hasattr(item, 'data') and item.data(0) in ["its_wall", "wall_marker"]):
+                elif isinstance(item, (Robot, Region, StartPosition)) or (hasattr(item, 'data') and item.data(0) in ["its_wall", "wall_marker"]):
                     # Выделяем объект или его родительский элемент
-                    if isinstance(item, (Robot, Region)):
+                    if isinstance(item, (Robot, Region, StartPosition)):
                         target_item = item
                     else:
                         target_item = item.parentItem()
@@ -630,10 +640,10 @@ class FieldWidget(QGraphicsView):
                     line = self.dragging_item.line()
                     self.initial_line = QLineF(line.x1(), line.y1(), line.x2(), line.y2())
                     return
-                elif item and (isinstance(item, (Robot, Region)) or 
-                              (parent_item and isinstance(parent_item, (Robot, Region)))):
+                elif item and (isinstance(item, (Robot, Region, StartPosition)) or 
+                              (parent_item and isinstance(parent_item, (Robot, Region, StartPosition)))):
                     # Если кликнули на робота/регион или на его дочерний элемент
-                    drag_item = item if isinstance(item, (Robot, Region)) else parent_item
+                    drag_item = item if isinstance(item, (Robot, Region, StartPosition)) else parent_item
                     self.dragging_item = drag_item
                     self.drag_offset = pos - self.dragging_item.pos()
                     return
@@ -674,9 +684,9 @@ class FieldWidget(QGraphicsView):
         
         # Меняем курсор при наведении на объекты (редактируемые)
         if self.edit_mode:
-            if item and (isinstance(item, (Robot, Region)) or 
+            if item and (isinstance(item, (Robot, Region, StartPosition)) or 
                         (hasattr(item, 'data') and (item.data(0) == "its_wall" or item.data(0) == "wall_marker")) or 
-                        (item.parentItem() and isinstance(item.parentItem(), (Robot, Region)))):
+                        (item.parentItem() and isinstance(item.parentItem(), (Robot, Region, StartPosition)))):
                 # Если перетаскиваем - устанавливаем курсор "кулачок"
                 if hasattr(self, 'dragging_item') and self.dragging_item:
                     self.setCursor(Qt.CursorShape.ClosedHandCursor)
@@ -688,9 +698,9 @@ class FieldWidget(QGraphicsView):
                 self.setCursor(Qt.CursorShape.ArrowCursor)
         # В режиме наблюдателя устанавливаем указательный палец при наведении на объекты
         elif not self.drawing_mode:  # Режим наблюдателя
-            if item and (isinstance(item, (Robot, Region)) or 
+            if item and (isinstance(item, (Robot, Region, StartPosition)) or 
                        (hasattr(item, 'data') and (item.data(0) == "its_wall" or item.data(0) == "wall_marker")) or 
-                       (item.parentItem() and isinstance(item.parentItem(), (Robot, Region)))):
+                       (item.parentItem() and isinstance(item.parentItem(), (Robot, Region, StartPosition)))):
                 # Устанавливаем курсор "указательный палец"
                 self.setCursor(Qt.CursorShape.PointingHandCursor)
             else:
@@ -747,6 +757,21 @@ class FieldWidget(QGraphicsView):
                 self.dragging_item.setPos(new_pos)
                 # Обновляем свойства в окне свойств в режиме реального времени
                 self.properties_window.update_properties(self.dragging_item)
+            elif isinstance(self.dragging_item, StartPosition):
+                # Для стартовой позиции используем половинный шаг сетки
+                if self.snap_to_grid_enabled:
+                    # Вычисляем позицию с половинным шагом сетки
+                    half_grid_pos = self.snap_to_half_grid(posOriginal - self.drag_offset)
+                    new_pos = half_grid_pos
+                else:
+                    new_pos = posOriginal - self.drag_offset
+                
+                # Создаем временную стартовую позицию для проверки
+                temp_start = StartPosition(new_pos)
+                if not self.check_object_within_scene(temp_start):
+                    logger.debug(f"ERR start position would be out of bounds")
+                    return
+                
             elif isinstance(self.dragging_item, Wall):
                 # Вычисляем смещение относительно точки захвата
                 dx = pos.x() - self.grab_point.x()
@@ -1546,14 +1571,13 @@ class FieldWidget(QGraphicsView):
         logger.debug(f"Region placed successfully with id={region.id}")
         return region
 
-    def update_start_position(self, x, y, direction=None):
+    def update_start_position(self, x, y):
         """
-        Обновляет позицию и направление стартовой позиции.
+        Обновляет позицию стартовой позиции.
         
         Args:
             x: Новая координата X
             y: Новая координата Y
-            direction: Новое направление (в градусах)
             
         Returns:
             bool: True, если обновление прошло успешно, False в противном случае
@@ -1576,13 +1600,23 @@ class FieldWidget(QGraphicsView):
             
             # Если проверка пройдена, обновляем позицию
             self.start_position_model.setPos(x, y)
-            
-            # Обновляем направление, если оно указано
-            if direction is not None:
-                self.start_position_model.set_direction(direction)
-                
             return True
             
+        return False
+
+    def update_start_position_direction(self, direction):
+        """
+        Обновляет направление стартовой позиции.
+        
+        Args:
+            direction: Новое направление (в градусах)
+            
+        Returns:
+            bool: True, если обновление прошло успешно, False в противном случае
+        """
+        if self.start_position_model:
+            self.start_position_model.set_direction(direction)
+            return True
         return False
 
     def place_start_position(self, position, direction=0):
@@ -1618,8 +1652,31 @@ class FieldWidget(QGraphicsView):
         
         # Настраиваем обработку событий для стартовой позиции
         self.start_position_model.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
-        self.start_position_model.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
+        self.start_position_model.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
         
         logger.debug(f"Стартовая позиция успешно размещена в позиции {position}, direction={direction}")
         
         return self.start_position_model
+
+    def snap_to_half_grid(self, pos):
+        """
+        Привязывает координаты к половинному шагу сетки.
+        Для использования при перетаскивании стартовой позиции.
+        
+        Args:
+            pos: Позиция (QPointF)
+            
+        Returns:
+            QPointF: Координаты, привязанные к половинному шагу сетки
+        """
+        if not self.snap_to_grid_enabled:
+            return pos
+        
+        # Берем половину шага сетки
+        half_grid_size = self.grid_size / 2
+        
+        # Округляем координаты до половины шага сетки
+        x = round(pos.x() / half_grid_size) * half_grid_size
+        y = round(pos.y() / half_grid_size) * half_grid_size
+        
+        return QPointF(x, y)
