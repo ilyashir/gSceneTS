@@ -87,6 +87,7 @@ def add_timeout_to_test_classes():
     from test_region import TestRegion
     from test_mouse_events import TestMouseEvents
     from test_ui_interactions import TestUIInteractions
+    from test_theme_switching import TestThemeSwitching
     
     # Список тестовых классов для модификации
     test_classes = [
@@ -96,7 +97,8 @@ def add_timeout_to_test_classes():
         TestRobot,
         TestRegion,
         TestMouseEvents,
-        TestUIInteractions
+        TestUIInteractions,
+        TestThemeSwitching
     ]
     
     # Для каждого класса добавляем миксин TestMethodTimeout
@@ -233,7 +235,8 @@ def run_specific_tests(test_names):
         'robot': TestRobot,
         'region': TestRegion,
         'mouse': TestMouseEvents,
-        'ui': TestUIInteractions
+        'ui': TestUIInteractions,
+        'theme': TestThemeSwitching
     }
     
     # Создаем загрузчик тестов
@@ -311,7 +314,7 @@ def run_all_tests():
 if __name__ == '__main__':
     # Настраиваем парсер аргументов командной строки
     parser = argparse.ArgumentParser(description='Запуск тестов для приложения gSceneTS')
-    parser.add_argument('tests', nargs='*', help='Список тестов для запуска (shortcuts, field, wall, robot, region, mouse, ui)')
+    parser.add_argument('tests', nargs='*', help='Список тестов для запуска (shortcuts, field, wall, robot, region, mouse, ui, theme)')
     parser.add_argument('--all', action='store_true', help='Запустить все тесты')
     parser.add_argument('--no-color', action='store_true', help='Отключить цветной вывод')
     parser.add_argument('--no-skip', action='store_true', help='Не пропускать проблемные тесты')

@@ -43,7 +43,9 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         
         # ID робота (неизменяемый)
         id_layout = QHBoxLayout()
-        id_layout.addWidget(QLabel("ID:"))
+        id_label = QLabel("ID:")
+        self.apply_field_style(id_label)
+        id_layout.addWidget(id_label)
         self.robot_id_label = QLabel("trikKitRobot")
         self.apply_field_style(self.robot_id_label)
         id_layout.addWidget(self.robot_id_label)
@@ -65,7 +67,11 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         
         x_layout.addWidget(self.x_spinbox)
         x_layout.addWidget(self.x_slider)
-        form_layout.addRow("X:", x_layout)
+        
+        # Метка для оси X
+        x_label = QLabel("X:")
+        self.apply_field_style(x_label)
+        form_layout.addRow(x_label, x_layout)
         
         # Координата Y с ползунком
         y_layout = QHBoxLayout()
@@ -79,7 +85,11 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         
         y_layout.addWidget(self.y_spinbox)
         y_layout.addWidget(self.y_slider)
-        form_layout.addRow("Y:", y_layout)
+        
+        # Метка для оси Y
+        y_label = QLabel("Y:")
+        self.apply_field_style(y_label)
+        form_layout.addRow(y_label, y_layout)
         
         # Поворот с ползунком
         rotation_layout = QHBoxLayout()
@@ -93,7 +103,11 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         
         rotation_layout.addWidget(self.rotation_spinbox)
         rotation_layout.addWidget(self.rotation_slider)
-        form_layout.addRow("Поворот:", rotation_layout)
+        
+        # Метка для поворота
+        rotation_label = QLabel("Поворот:")
+        self.apply_field_style(rotation_label)
+        form_layout.addRow(rotation_label, rotation_layout)
         
         layout.addLayout(form_layout)
         
@@ -103,6 +117,12 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         layout.addWidget(self.reset_button, alignment=Qt.AlignmentFlag.AlignRight)
         
         self.properties_layout.addLayout(layout)
+        
+        # Сохраняем ссылки на метки для дальнейшего обновления тем
+        self.id_label = id_label
+        self.x_label = x_label
+        self.y_label = y_label
+        self.rotation_label = rotation_label
         
     def _connect_signals(self):
         """Подключение сигналов и слотов."""
@@ -434,6 +454,13 @@ class RobotPropertiesWidget(BasePropertiesWidget):
             is_dark_theme: True для темной темы, False для светлой
         """
         self.apply_theme(is_dark_theme)
+        
+        # Обновляем стиль для всех статических QLabel
+        self.apply_field_style(self.id_label)
+        self.apply_field_style(self.x_label)
+        self.apply_field_style(self.y_label)
+        self.apply_field_style(self.rotation_label)
+        self.apply_field_style(self.robot_id_label)
     
     def update_properties(self, robot):
         """

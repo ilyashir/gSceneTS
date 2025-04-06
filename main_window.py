@@ -686,6 +686,9 @@ class MainWindow(QMainWindow):
             for btn in self.findChildren(QPushButton):
                 if btn.text() == "Горячие клавиши":
                     btn.setStyleSheet(AppStyles.get_accent_button_style(True))
+                    
+            # Рекурсивно применяем тему ко всем виджетам с методом set_theme
+            self._apply_theme_recursively(self, True)
         else:
             # Светлая тема
             self.setStyleSheet(AppStyles.LIGHT_MAIN_WINDOW)
@@ -742,9 +745,39 @@ class MainWindow(QMainWindow):
             for btn in self.findChildren(QPushButton):
                 if btn.text() == "Горячие клавиши":
                     btn.setStyleSheet(AppStyles.get_accent_button_style(False))
+                    
+            # Рекурсивно применяем тему ко всем виджетам с методом set_theme
+            self._apply_theme_recursively(self, False)
             
         # Сохраняем состояние темы в конфиг
         config.set("appearance", "dark_theme", str(self.is_dark_theme))
+        
+    def _apply_theme_recursively(self, widget, is_dark_theme):
+        """Рекурсивно применяет тему ко всем дочерним виджетам с методом set_theme
+        
+        Args:
+            widget: Виджет, с которого начинается поиск
+            is_dark_theme: True для темной темы, False для светлой
+        """
+        # Проверяем текущий виджет
+        if hasattr(widget, 'set_theme') and callable(getattr(widget, 'set_theme')):
+            try:
+                widget.set_theme(is_dark_theme)
+                logger.debug(f"Тема применена к виджету {widget.__class__.__name__}")
+            except Exception as e:
+                logger.error(f"Ошибка при применении темы к {widget.__class__.__name__}: {e}")
+        
+        # Обработка специальных случаев для диалогов
+        if hasattr(widget, 'update_style') and callable(getattr(widget, 'update_style')):
+            try:
+                widget.update_style(is_dark_theme)
+                logger.debug(f"Стиль обновлен для виджета {widget.__class__.__name__}")
+            except Exception as e:
+                logger.error(f"Ошибка при обновлении стиля {widget.__class__.__name__}: {e}")
+        
+        # Рекурсивно обрабатываем дочерние виджеты
+        for child in widget.findChildren(QWidget):
+            self._apply_theme_recursively(child, is_dark_theme)
 
     def toggle_theme(self):
         """Переключает тему между светлой и темной"""

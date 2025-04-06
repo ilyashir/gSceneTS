@@ -260,16 +260,74 @@ class FlatRoundButton(QPushButton):
 class RussianColorDialog(QColorDialog):
     """Локализованный на русский язык диалог выбора цвета"""
     
-    def __init__(self, initial_color=None, parent=None):
+    def __init__(self, initial_color=None, parent=None, is_dark_theme=False):
         super().__init__(initial_color, parent)
+        self._is_dark_theme = is_dark_theme
         self.setWindowTitle("Выберите цвет")
         self.setOption(QColorDialog.ColorDialogOption.ShowAlphaChannel, True)
         logger.debug("Создан локализованный диалог выбора цвета RussianColorDialog")
+        
+    def set_theme(self, is_dark_theme):
+        """
+        Устанавливает тему оформления для диалога.
+        
+        Args:
+            is_dark_theme: True для темной темы, False для светлой
+        """
+        if self._is_dark_theme != is_dark_theme:
+            self._is_dark_theme = is_dark_theme
+            self.update_style()
+        
+    def update_style(self):
+        """Обновляет стиль диалога в соответствии с текущей темой"""
+        # Получаем цветовую тему для стилизации диалога
+        bg_color = AppStyles.SECONDARY_COLOR if self._is_dark_theme else AppStyles.LIGHT_SECONDARY_COLOR
+        text_color = AppStyles.TEXT_COLOR if self._is_dark_theme else AppStyles.LIGHT_TEXT_COLOR
+        input_bg = AppStyles.SECONDARY_DARK if self._is_dark_theme else AppStyles.LIGHT_SECONDARY_DARK
+        border_color = AppStyles.BORDER_COLOR if self._is_dark_theme else AppStyles.LIGHT_BORDER_COLOR
+        
+        self.setStyleSheet(f"""
+            QColorDialog {{
+                background-color: {bg_color};
+                color: {text_color};
+            }}
+            QLabel {{
+                color: {text_color};
+            }}
+            QLineEdit {{
+                background-color: {input_bg};
+                color: {text_color};
+                border: 1px solid {border_color};
+                border-radius: 3px;
+                padding: 3px;
+            }}
+            QSpinBox, QDoubleSpinBox {{
+                background-color: {input_bg};
+                color: {text_color};
+                border: 1px solid {border_color};
+                border-radius: 3px;
+                padding: 2px;
+            }}
+            QPushButton {{
+                background-color: {input_bg};
+                color: {text_color};
+                border: 1px solid {border_color};
+                border-radius: 3px;
+                padding: 5px 10px;
+            }}
+            QPushButton:hover {{
+                background-color: {AppStyles.PRIMARY_COLOR if self._is_dark_theme else AppStyles.LIGHT_PRIMARY_COLOR};
+                color: {'white' if self._is_dark_theme else AppStyles.LIGHT_TEXT_COLOR};
+            }}
+        """)
         
     def showEvent(self, event):
         """Переопределяем метод показа окна, чтобы локализовать элементы интерфейса"""
         super().showEvent(event)
         logger.debug("Вызван метод showEvent для RussianColorDialog")
+        
+        # Обновляем стиль перед показом
+        self.update_style()
         
         # Переводим кнопки
         buttons = self.findChildren(QPushButton)
@@ -402,50 +460,8 @@ class ColorPickerButton(QPushButton):
         # Создаем объект QColor из текущего значения цвета с альфа-каналом
         current_color = QColor(self._color)
         
-        # Получаем цветовую тему для стилизации диалога
-        bg_color = AppStyles.SECONDARY_COLOR if self._is_dark_theme else AppStyles.LIGHT_SECONDARY_COLOR
-        text_color = AppStyles.TEXT_COLOR if self._is_dark_theme else AppStyles.LIGHT_TEXT_COLOR
-        input_bg = AppStyles.SECONDARY_DARK if self._is_dark_theme else AppStyles.LIGHT_SECONDARY_DARK
-        border_color = AppStyles.BORDER_COLOR if self._is_dark_theme else AppStyles.LIGHT_BORDER_COLOR
-        
         # Используем локализованный диалог
-        dialog = RussianColorDialog(current_color, self)
-        
-        # Устанавливаем стиль
-        dialog.setStyleSheet(f"""
-            QColorDialog {{
-                background-color: {bg_color};
-                color: {text_color};
-            }}
-            QLabel {{
-                color: {text_color};
-            }}
-            QLineEdit {{
-                background-color: {input_bg};
-                color: {text_color};
-                border: 1px solid {border_color};
-                border-radius: 3px;
-                padding: 3px;
-            }}
-            QSpinBox, QDoubleSpinBox {{
-                background-color: {input_bg};
-                color: {text_color};
-                border: 1px solid {border_color};
-                border-radius: 3px;
-                padding: 2px;
-            }}
-            QPushButton {{
-                background-color: {input_bg};
-                color: {text_color};
-                border: 1px solid {border_color};
-                border-radius: 3px;
-                padding: 5px 10px;
-            }}
-            QPushButton:hover {{
-                background-color: {AppStyles.PRIMARY_COLOR if self._is_dark_theme else AppStyles.LIGHT_PRIMARY_COLOR};
-                color: {'white' if self._is_dark_theme else AppStyles.LIGHT_TEXT_COLOR};
-            }}
-        """)
+        dialog = RussianColorDialog(current_color, self, self._is_dark_theme)
         
         # Отображаем диалог и обрабатываем результат
         if dialog.exec() == QColorDialog.DialogCode.Accepted:

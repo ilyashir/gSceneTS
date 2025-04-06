@@ -48,7 +48,9 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         
         # ID региона (редактируемый)
         id_layout = QHBoxLayout()
-        id_layout.addWidget(QLabel("ID:"))
+        id_label = QLabel("ID:")
+        self.apply_field_style(id_label)
+        id_layout.addWidget(id_label)
         self.id_edit = EditableLineEdit()
         self.apply_field_style(self.id_edit)
         id_layout.addWidget(self.id_edit)
@@ -59,7 +61,9 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         form_layout.setSpacing(10)
         
         # Позиция
-        form_layout.addRow(QLabel("<b>Позиция</b>"))
+        position_label = QLabel("<b>Позиция</b>")
+        self.apply_field_style(position_label)
+        form_layout.addRow(position_label)
         
         # X с ползунком
         x_layout = QHBoxLayout()
@@ -73,7 +77,10 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         
         x_layout.addWidget(self.x_spinbox)
         x_layout.addWidget(self.x_slider)
-        form_layout.addRow("X:", x_layout)
+        
+        x_label = QLabel("X:")
+        self.apply_field_style(x_label)
+        form_layout.addRow(x_label, x_layout)
         
         # Y с ползунком
         y_layout = QHBoxLayout()
@@ -87,10 +94,15 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         
         y_layout.addWidget(self.y_spinbox)
         y_layout.addWidget(self.y_slider)
-        form_layout.addRow("Y:", y_layout)
+        
+        y_label = QLabel("Y:")
+        self.apply_field_style(y_label)
+        form_layout.addRow(y_label, y_layout)
         
         # Размер
-        form_layout.addRow(QLabel("<b>Размер</b>"))
+        size_label = QLabel("<b>Размер</b>")
+        self.apply_field_style(size_label)
+        form_layout.addRow(size_label)
         
         # Ширина с ползунком
         width_layout = QHBoxLayout()
@@ -104,7 +116,10 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         
         width_layout.addWidget(self.width_spinbox)
         width_layout.addWidget(self.width_slider)
-        form_layout.addRow("Ширина:", width_layout)
+        
+        width_label = QLabel("Ширина:")
+        self.apply_field_style(width_label)
+        form_layout.addRow(width_label, width_layout)
         
         # Высота с ползунком
         height_layout = QHBoxLayout()
@@ -118,11 +133,16 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         
         height_layout.addWidget(self.height_spinbox)
         height_layout.addWidget(self.height_slider)
-        form_layout.addRow("Высота:", height_layout)
+        
+        height_label = QLabel("Высота:")
+        self.apply_field_style(height_label)
+        form_layout.addRow(height_label, height_layout)
         
         # Цвет
         color_layout = QHBoxLayout()
-        color_layout.addWidget(QLabel("Цвет:"))
+        color_label = QLabel("Цвет:")
+        self.apply_field_style(color_label)
+        color_layout.addWidget(color_label)
         self.color_button = ColorPickerButton(is_dark_theme=self.is_dark_theme)
         color_layout.addWidget(self.color_button)
         form_layout.addRow(color_layout)
@@ -143,6 +163,16 @@ class RegionPropertiesWidget(BasePropertiesWidget):
             )
 
         self.properties_layout.addLayout(layout)
+        
+        # Сохраняем ссылки на метки для дальнейшего обновления тем
+        self.id_label = id_label
+        self.position_label = position_label
+        self.x_label = x_label
+        self.y_label = y_label
+        self.size_label = size_label
+        self.width_label = width_label
+        self.height_label = height_label
+        self.color_label = color_label
         
     def _connect_signals(self):
         """Подключение сигналов и слотов."""
@@ -522,6 +552,22 @@ class RegionPropertiesWidget(BasePropertiesWidget):
             is_dark_theme: True для темной темы, False для светлой
         """
         self.apply_theme(is_dark_theme)
+        
+        # Обновляем стиль для EditableLineEdit с ID региона
+        self.apply_field_style(self.id_edit)
+        
+        # Обновляем тему для кнопки выбора цвета
+        self.color_button.set_theme(is_dark_theme)
+        
+        # Обновляем тему для всех статических QLabel
+        self.apply_field_style(self.id_label)
+        self.apply_field_style(self.position_label)
+        self.apply_field_style(self.x_label)
+        self.apply_field_style(self.y_label)
+        self.apply_field_style(self.size_label)
+        self.apply_field_style(self.width_label)
+        self.apply_field_style(self.height_label)
+        self.apply_field_style(self.color_label)
     
     def update_properties(self, region):
         """

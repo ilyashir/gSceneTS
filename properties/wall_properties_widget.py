@@ -49,7 +49,9 @@ class WallPropertiesWidget(BasePropertiesWidget):
         
         # ID стены (редактируемый)
         id_layout = QHBoxLayout()
-        id_layout.addWidget(QLabel("ID:"))
+        id_label = QLabel("ID:")
+        self.apply_field_style(id_label)
+        id_layout.addWidget(id_label)
         self.id_edit = EditableLineEdit()
         self.apply_field_style(self.id_edit)
         id_layout.addWidget(self.id_edit)
@@ -60,7 +62,9 @@ class WallPropertiesWidget(BasePropertiesWidget):
         form_layout.setSpacing(10)
         
         # Координаты
-        form_layout.addRow(QLabel("<b>Координаты</b>"))
+        coords_label = QLabel("<b>Координаты</b>")
+        self.apply_field_style(coords_label)
+        form_layout.addRow(coords_label)
         
         # X1 с ползунком
         x1_layout = QHBoxLayout()
@@ -74,7 +78,10 @@ class WallPropertiesWidget(BasePropertiesWidget):
         
         x1_layout.addWidget(self.x1_spinbox)
         x1_layout.addWidget(self.x1_slider)
-        form_layout.addRow("X1:", x1_layout)
+        
+        x1_label = QLabel("X1:")
+        self.apply_field_style(x1_label)
+        form_layout.addRow(x1_label, x1_layout)
         
         # Y1 с ползунком
         y1_layout = QHBoxLayout()
@@ -88,7 +95,10 @@ class WallPropertiesWidget(BasePropertiesWidget):
         
         y1_layout.addWidget(self.y1_spinbox)
         y1_layout.addWidget(self.y1_slider)
-        form_layout.addRow("Y1:", y1_layout)
+        
+        y1_label = QLabel("Y1:")
+        self.apply_field_style(y1_label)
+        form_layout.addRow(y1_label, y1_layout)
         
         # X2 с ползунком
         x2_layout = QHBoxLayout()
@@ -102,7 +112,10 @@ class WallPropertiesWidget(BasePropertiesWidget):
         
         x2_layout.addWidget(self.x2_spinbox)
         x2_layout.addWidget(self.x2_slider)
-        form_layout.addRow("X2:", x2_layout)
+        
+        x2_label = QLabel("X2:")
+        self.apply_field_style(x2_label)
+        form_layout.addRow(x2_label, x2_layout)
         
         # Y2 с ползунком
         y2_layout = QHBoxLayout()
@@ -116,7 +129,10 @@ class WallPropertiesWidget(BasePropertiesWidget):
         
         y2_layout.addWidget(self.y2_spinbox)
         y2_layout.addWidget(self.y2_slider)
-        form_layout.addRow("Y2:", y2_layout)
+        
+        y2_label = QLabel("Y2:")
+        self.apply_field_style(y2_label)
+        form_layout.addRow(y2_label, y2_layout)
         
         # Ширина стены
         width_layout = QHBoxLayout()
@@ -130,7 +146,10 @@ class WallPropertiesWidget(BasePropertiesWidget):
         
         width_layout.addWidget(self.wall_width_spinbox)
         width_layout.addWidget(self.wall_width_slider)
-        form_layout.addRow("Ширина:", width_layout)
+        
+        width_label = QLabel("Ширина:")
+        self.apply_field_style(width_label)
+        form_layout.addRow(width_label, width_layout)
         
         layout.addLayout(form_layout)
         
@@ -140,6 +159,15 @@ class WallPropertiesWidget(BasePropertiesWidget):
         layout.addWidget(self.reset_button, alignment=Qt.AlignmentFlag.AlignRight)
         
         self.properties_layout.addLayout(layout)
+        
+        # Сохраняем ссылки на метки для дальнейшего обновления тем
+        self.id_label = id_label
+        self.coords_label = coords_label
+        self.x1_label = x1_label
+        self.y1_label = y1_label
+        self.x2_label = x2_label
+        self.y2_label = y2_label
+        self.width_label = width_label
         
     def _connect_signals(self):
         """Подключение сигналов и слотов."""
@@ -438,7 +466,19 @@ class WallPropertiesWidget(BasePropertiesWidget):
             is_dark_theme: True для темной темы, False для светлой
         """
         self.apply_theme(is_dark_theme)
-    
+        
+        # Обновляем стиль для EditableLineEdit с ID стены
+        self.apply_field_style(self.id_edit)
+        
+        # Обновляем стили всех статических меток
+        self.apply_field_style(self.id_label)
+        self.apply_field_style(self.coords_label)
+        self.apply_field_style(self.x1_label)
+        self.apply_field_style(self.y1_label)
+        self.apply_field_style(self.x2_label)
+        self.apply_field_style(self.y2_label)
+        self.apply_field_style(self.width_label)
+        
     def update_properties(self, wall):
         """
         Обновление свойств виджета на основе объекта стены.
