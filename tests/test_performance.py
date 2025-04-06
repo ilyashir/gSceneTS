@@ -2,7 +2,7 @@ import unittest
 import time
 import logging
 from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QPushButton, QCheckBox, QLineEdit
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, QPointF
 import sys
 import os
 import gc
@@ -16,6 +16,7 @@ from custom_widgets import EditableLineEdit, ColorPickerButton
 from properties.robot_properties_widget import RobotPropertiesWidget
 from properties.wall_properties_widget import WallPropertiesWidget
 from properties.region_properties_widget import RegionPropertiesWidget
+from utils.xml_handler import XMLHandler
 
 # Счетчик вызовов set_theme
 set_theme_calls = 0
@@ -261,6 +262,247 @@ class TestPerformance(unittest.TestCase):
         logger.info(f"Количество вызовов set_theme при переключении со светлой на темную (сложный UI): {light_to_dark_complex_calls}")
         logger.info(f"Среднее время переключения темы (сложный UI): {(dark_to_light_complex_time + light_to_dark_complex_time) / 2:.6f} секунд")
 
+    def test_element_creation_performance(self):
+        """Тест производительности создания и удаления элементов сцены"""
+        # Обеспечиваем режим редактирования
+        if not self.main_window.field_widget.edit_mode:
+            self.main_window.field_widget.set_edit_mode(True)
+            QApplication.processEvents()
+        
+        # Измеряем время создания стены
+        num_walls = 20  # Количество стен для создания
+        wall_creation_times = []
+        
+        for i in range(num_walls):
+            # Создаем точки для стены в разных местах сцены
+            start_point = QPointF(i * 20 - 200, i * 20 - 200)
+            end_point = QPointF(i * 20 - 100, i * 20 - 100)
+            
+            # Измеряем время создания стены
+            start_time = time.time()
+            wall = self.main_window.field_widget.add_wall(start_point, end_point)
+            QApplication.processEvents()
+            wall_creation_times.append(time.time() - start_time)
+        
+        # Измеряем время создания региона
+        num_regions = 10  # Количество регионов для создания
+        region_creation_times = []
+        
+        for i in range(num_regions):
+            # Создаем точки для региона в разных местах сцены
+            points = [
+                QPointF(i * 30, i * 30),
+                QPointF(i * 30 + 100, i * 30),
+                QPointF(i * 30 + 100, i * 30 + 100),
+                QPointF(i * 30, i * 30 + 100)
+            ]
+            
+            # Измеряем время создания региона
+            start_time = time.time()
+            region = self.main_window.field_widget.add_region(points)
+            QApplication.processEvents()
+            region_creation_times.append(time.time() - start_time)
+        
+        # Измеряем время удаления стен
+        wall_deletion_times = []
+        walls = self.main_window.field_widget.walls.copy()
+        
+        for wall in walls:
+            # Выбираем стену
+            self.main_window.field_widget.select_item(wall)
+            QApplication.processEvents()
+            
+            # Измеряем время удаления стены
+            start_time = time.time()
+            self.main_window.field_widget.delete_selected_item()
+            QApplication.processEvents()
+            wall_deletion_times.append(time.time() - start_time)
+        
+        # Измеряем время удаления регионов
+        region_deletion_times = []
+        regions = self.main_window.field_widget.regions.copy()
+        
+        for region in regions:
+            # Выбираем регион
+            self.main_window.field_widget.select_item(region)
+            QApplication.processEvents()
+            
+            # Измеряем время удаления региона
+            start_time = time.time()
+            self.main_window.field_widget.delete_selected_item()
+            QApplication.processEvents()
+            region_deletion_times.append(time.time() - start_time)
+        
+        # Логируем результаты
+        avg_wall_creation_time = sum(wall_creation_times) / len(wall_creation_times) if wall_creation_times else 0
+        avg_region_creation_time = sum(region_creation_times) / len(region_creation_times) if region_creation_times else 0
+        avg_wall_deletion_time = sum(wall_deletion_times) / len(wall_deletion_times) if wall_deletion_times else 0
+        avg_region_deletion_time = sum(region_deletion_times) / len(region_deletion_times) if region_deletion_times else 0
+        
+        logger.info(f"Среднее время создания стены: {avg_wall_creation_time:.6f} секунд")
+        logger.info(f"Среднее время создания региона: {avg_region_creation_time:.6f} секунд")
+        logger.info(f"Среднее время удаления стены: {avg_wall_deletion_time:.6f} секунд")
+        logger.info(f"Среднее время удаления региона: {avg_region_deletion_time:.6f} секунд")
+    
+    def test_mode_switching_performance(self):
+        """Тест производительности переключения режимов работы"""
+        mode_switch_times = {}
+        
+        # Режимы в нашем приложении
+        # 1. Режим редактирования (edit_mode = True, draw_mode = False)
+        # 2. Режим рисования (edit_mode = False, draw_mode = True)
+        # 3. Режим наблюдения (edit_mode = False, draw_mode = False)
+        
+        # Измеряем время переключения между всеми комбинациями режимов
+        # Начинаем с режима редактирования
+        self.main_window.field_widget.set_edit_mode(True)
+        self.main_window.field_widget.set_drawing_mode(None)
+        QApplication.processEvents()
+        
+        # Время переключения в режим рисования
+        start_time = time.time()
+        self.main_window.field_widget.set_edit_mode(False)
+        self.main_window.field_widget.set_drawing_mode("wall")
+        QApplication.processEvents()
+        edit_to_draw_time = time.time() - start_time
+        
+        # Время переключения в режим наблюдения
+        start_time = time.time()
+        self.main_window.field_widget.set_edit_mode(False)
+        self.main_window.field_widget.set_drawing_mode(None)
+        QApplication.processEvents()
+        draw_to_observe_time = time.time() - start_time
+        
+        # Время переключения в режим редактирования
+        start_time = time.time()
+        self.main_window.field_widget.set_edit_mode(True)
+        self.main_window.field_widget.set_drawing_mode(None)
+        QApplication.processEvents()
+        observe_to_edit_time = time.time() - start_time
+        
+        # Логируем результаты
+        logger.info(f"Время переключения из режима редактирования в режим рисования: {edit_to_draw_time:.6f} секунд")
+        logger.info(f"Время переключения из режима рисования в режим наблюдения: {draw_to_observe_time:.6f} секунд")
+        logger.info(f"Время переключения из режима наблюдения в режим редактирования: {observe_to_edit_time:.6f} секунд")
+    
+    def test_zoom_performance(self):
+        """Тест производительности операций масштабирования"""
+        # Получаем текущий масштаб
+        initial_scale = self.main_window.field_widget.transform().m11()
+        
+        # Измеряем время увеличения масштаба
+        zoom_in_times = []
+        for _ in range(5):
+            start_time = time.time()
+            self.main_window.field_widget.zoomIn()
+            QApplication.processEvents()
+            zoom_in_times.append(time.time() - start_time)
+        
+        # Измеряем время уменьшения масштаба
+        zoom_out_times = []
+        for _ in range(5):
+            start_time = time.time()
+            self.main_window.field_widget.zoomOut()
+            QApplication.processEvents()
+            zoom_out_times.append(time.time() - start_time)
+        
+        # Измеряем время сброса масштаба
+        start_time = time.time()
+        self.main_window.field_widget.resetScale()
+        QApplication.processEvents()
+        reset_zoom_time = time.time() - start_time
+        
+        # Логируем результаты
+        avg_zoom_in_time = sum(zoom_in_times) / len(zoom_in_times)
+        avg_zoom_out_time = sum(zoom_out_times) / len(zoom_out_times)
+        
+        logger.info(f"Среднее время увеличения масштаба: {avg_zoom_in_time:.6f} секунд")
+        logger.info(f"Среднее время уменьшения масштаба: {avg_zoom_out_time:.6f} секунд")
+        logger.info(f"Время сброса масштаба: {reset_zoom_time:.6f} секунд")
+
+    def test_xml_generation_performance(self):
+        """Тест производительности генерации XML-представления сцены"""
+        # Подготовка сцены - создаем несколько стен и регионов
+        if not self.main_window.field_widget.edit_mode:
+            self.main_window.field_widget.set_edit_mode(True)
+            QApplication.processEvents()
+        
+        # Создаем стены
+        for i in range(10):
+            start_point = QPointF(i * 20 - 200, i * 20 - 200)
+            end_point = QPointF(i * 20 - 100, i * 20 - 100)
+            self.main_window.field_widget.add_wall(start_point, end_point)
+        
+        # Создаем регионы
+        for i in range(5):
+            points = [
+                QPointF(i * 30, i * 30),
+                QPointF(i * 30 + 100, i * 30),
+                QPointF(i * 30 + 100, i * 30 + 100),
+                QPointF(i * 30, i * 30 + 100)
+            ]
+            self.main_window.field_widget.add_region(points)
+        
+        QApplication.processEvents()
+        
+        # Измеряем время генерации XML
+        scene_width = self.main_window.scene_width
+        scene_height = self.main_window.scene_height
+        
+        # Используем только стены и регионы для генерации XML, чтобы избежать проблем с direction робота
+        start_time = time.time()
+        xml_handler = XMLHandler(scene_width=scene_width, scene_height=scene_height)
+        formatted_xml = xml_handler.generate_xml(
+            walls=self.main_window.field_widget.walls,
+            regions=self.main_window.field_widget.regions,
+            robot_model=None  # Не используем робота в тесте
+        )
+        xml_generation_time = time.time() - start_time
+        
+        # Измеряем повторную генерацию XML для большей точности
+        start_time = time.time()
+        xml_handler = XMLHandler(scene_width=scene_width, scene_height=scene_height)
+        formatted_xml = xml_handler.generate_xml(
+            walls=self.main_window.field_widget.walls,
+            regions=self.main_window.field_widget.regions,
+            robot_model=None  # Не используем робота в тесте
+        )
+        xml_generation_time_2 = time.time() - start_time
+        
+        # Измеряем время генерации XML для больших сцен (добавляем еще элементов)
+        for i in range(20):
+            start_point = QPointF(i * 20 + 100, i * 20 + 100)
+            end_point = QPointF(i * 20 + 200, i * 20 + 200)
+            self.main_window.field_widget.add_wall(start_point, end_point)
+        
+        for i in range(10):
+            points = [
+                QPointF(i * 30 + 200, i * 30 + 200),
+                QPointF(i * 30 + 300, i * 30 + 200),
+                QPointF(i * 30 + 300, i * 30 + 300),
+                QPointF(i * 30 + 200, i * 30 + 300)
+            ]
+            self.main_window.field_widget.add_region(points)
+        
+        QApplication.processEvents()
+        
+        start_time = time.time()
+        xml_handler = XMLHandler(scene_width=scene_width, scene_height=scene_height)
+        formatted_xml = xml_handler.generate_xml(
+            walls=self.main_window.field_widget.walls,
+            regions=self.main_window.field_widget.regions,
+            robot_model=None  # Не используем робота в тесте
+        )
+        xml_generation_time_large = time.time() - start_time
+        
+        # Логируем результаты
+        logger.info(f"Время генерации XML (малая сцена): {xml_generation_time:.6f} секунд")
+        logger.info(f"Время повторной генерации XML (малая сцена): {xml_generation_time_2:.6f} секунд")
+        logger.info(f"Время генерации XML (большая сцена): {xml_generation_time_large:.6f} секунд")
+        
+        # Выводим размер сгенерированного XML
+        logger.info(f"Размер сгенерированного XML: {len(formatted_xml)} байт")
+
 if __name__ == "__main__":
     # Запуск только одного теста для предотвращения ошибок с Qt
     import sys
@@ -275,8 +517,24 @@ if __name__ == "__main__":
             suite = unittest.TestSuite()
             suite.addTest(TestPerformance("test_theme_toggle_performance"))
             unittest.TextTestRunner().run(suite)
+        elif test_name == "elements":
+            suite = unittest.TestSuite()
+            suite.addTest(TestPerformance("test_element_creation_performance"))
+            unittest.TextTestRunner().run(suite)
+        elif test_name == "modes":
+            suite = unittest.TestSuite()
+            suite.addTest(TestPerformance("test_mode_switching_performance"))
+            unittest.TextTestRunner().run(suite)
+        elif test_name == "zoom":
+            suite = unittest.TestSuite()
+            suite.addTest(TestPerformance("test_zoom_performance"))
+            unittest.TextTestRunner().run(suite)
+        elif test_name == "xml":
+            suite = unittest.TestSuite()
+            suite.addTest(TestPerformance("test_xml_generation_performance"))
+            unittest.TextTestRunner().run(suite)
         else:
-            print("Укажите тип теста: simple или complex")
+            print("Укажите тип теста: simple, complex, elements, modes, zoom, xml")
     else:
-        print("Укажите тип теста: simple или complex")
+        print("Укажите тип теста: simple, complex, elements, modes, zoom, xml")
         print("Например: python tests/test_performance.py simple") 

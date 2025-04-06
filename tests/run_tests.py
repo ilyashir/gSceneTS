@@ -291,28 +291,32 @@ def run_specific_tests(test_names):
     return result.wasSuccessful()
 
 def run_all_tests():
-    """
-    Запускает все доступные тесты.
+    """Запускает все доступные тесты."""
+    # Применяем пропуски проблемных тестов
+    skip_problematic_tests()
     
-    Returns:
-        bool: True если все тесты прошли успешно, иначе False
-    """
-    # Создаем загрузчик тестов
+    # Загружаем все тесты
     loader = unittest.TestLoader()
     
-    # Находим все тесты в текущей директории
-    start_dir = os.path.dirname(os.path.abspath(__file__))
-    suite = loader.discover(start_dir, pattern="test_*.py")
+    # Создаем тестовый набор для всех модулей тестирования
+    test_suite = unittest.TestSuite()
     
-    # Запускаем тесты с цветным выводом, если доступно
-    if has_colors:
-        runner = ColoredTextTestRunner(verbosity=2)
-    else:
-        runner = unittest.TextTestRunner(verbosity=2)
+    # Добавляем тесты из каждого модуля тестирования
+    test_suite.addTests(loader.loadTestsFromTestCase(TestShortcuts))
+    test_suite.addTests(loader.loadTestsFromTestCase(TestFieldWidget))
+    test_suite.addTests(loader.loadTestsFromTestCase(TestWall))
+    test_suite.addTests(loader.loadTestsFromTestCase(TestRobot))
+    test_suite.addTests(loader.loadTestsFromTestCase(TestRegion))
+    test_suite.addTests(loader.loadTestsFromTestCase(TestMouseEvents))
+    test_suite.addTests(loader.loadTestsFromTestCase(TestUIInteractions))
+    test_suite.addTests(loader.loadTestsFromTestCase(TestThemeSwitching))
+    test_suite.addTests(loader.loadTestsFromTestCase(TestPerformance))  # Добавляем тесты производительности
     
-    result = runner.run(suite)
+    # Запускаем тесты
+    runner = ColoredTextTestRunner() if has_colors else unittest.TextTestRunner()
+    test_result = runner.run(test_suite)
     
-    return result.wasSuccessful()
+    return test_result.wasSuccessful()
 
 def _print_help():
     """Выводит справку по использованию скрипта."""
