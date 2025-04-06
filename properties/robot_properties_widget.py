@@ -4,7 +4,7 @@
 
 from PyQt6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, 
-    QFormLayout, QSlider, QPushButton
+    QFormLayout, QSlider, QPushButton, QLineEdit
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 import logging
@@ -39,8 +39,8 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         """Создание всех виджетов."""
         # ID робота (неизменяемый)
         self.id_label = QLabel("ID:")
-        self.robot_id_label = QLabel("trikKitRobot")
-        self.apply_field_style(self.robot_id_label)
+        self.robot_id_label = QLineEdit("trikKitRobot")
+        self.robot_id_label.setReadOnly(True)
         
         # Координата X с ползунком
         self.x_label = QLabel("X:")
@@ -445,13 +445,6 @@ class RobotPropertiesWidget(BasePropertiesWidget):
             is_dark_theme: True для темной темы, False для светлой
         """
         self.apply_theme(is_dark_theme)
-        
-        # Обновляем стиль для всех статических QLabel
-        self.apply_field_style(self.id_label)
-        self.apply_field_style(self.x_label)
-        self.apply_field_style(self.y_label)
-        self.apply_field_style(self.rotation_label)
-        self.apply_field_style(self.robot_id_label)
     
     def update_properties(self, robot):
         """

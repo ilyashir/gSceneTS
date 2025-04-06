@@ -39,14 +39,6 @@ class StartPositionPropertiesWidget(BasePropertiesWidget):
         # Применяем тему
         self.apply_theme(is_dark_theme)
         
-        # Создаем все элементы интерфейса
-        self.create_widgets()
-        self.create_layouts()
-        self.setup_connections()
-
-        # Сохраняем ссылку на текущий редактируемый объект
-        self.last_edited_item = None
-        
         # По умолчанию виджет скрыт
         self.hide()
     
@@ -249,9 +241,6 @@ class StartPositionPropertiesWidget(BasePropertiesWidget):
             int(start_position.direction())
         )
         
-        # Сохраняем ссылку на текущий редактируемый объект
-        self.last_edited_item = start_position
-        
         # Отображаем виджет
         self.show()
     
@@ -262,8 +251,6 @@ class StartPositionPropertiesWidget(BasePropertiesWidget):
         Args:
             start_position: Объект стартовой позиции
         """
-        # Сохраняем ссылку на текущий редактируемый объект
-        self.last_edited_item = start_position
         self.show_properties(start_position)
     
     def connect_to_field_widget(self, field_widget):

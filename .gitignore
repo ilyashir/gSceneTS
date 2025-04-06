@@ -74,3 +74,9 @@ privat/
 
 # Временные файлы
 temp/
+
+# Cursor settings
+.cursor/
+
+# Temporary commit message file
+commit_msg.txt

@@ -14,7 +14,7 @@
     },
     "grid": {
         "size": 50,
-        "snap_to_grid": true
+        "snap_to_grid": false
     },
     "scene": {
         "default_width": 1300,

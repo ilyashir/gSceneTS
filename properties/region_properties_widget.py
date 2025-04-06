@@ -35,7 +35,8 @@ class RegionPropertiesWidget(BasePropertiesWidget):
             is_dark_theme: Флаг темной темы
         """
         super().__init__("Свойства региона", parent)
-        self.apply_theme(is_dark_theme)
+        self.is_dark_theme = is_dark_theme
+        self.apply_theme(self.is_dark_theme)
         self.field_widget = None
         self.initial_values = {}
         self.setup_cursors()
@@ -44,17 +45,14 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         """Создание всех виджетов."""
         # ID региона
         self.id_label = QLabel("ID:")
-        self.apply_field_style(self.id_label)
         self.id_edit = EditableLineEdit()
-        self.apply_field_style(self.id_edit)
+        self.id_edit.set_theme(self.is_dark_theme)
         
         # Позиция
         self.position_label = QLabel("<b>Позиция</b>")
-        self.apply_field_style(self.position_label)
         
         # X с ползунком
         self.x_label = QLabel("X:")
-        self.apply_field_style(self.x_label)
         self.x_spinbox = CustomSpinBox()
         self.x_spinbox.setRange(-10000, 10000)
         self.x_spinbox.setMinimumWidth(70)
@@ -63,7 +61,6 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         
         # Y с ползунком
         self.y_label = QLabel("Y:")
-        self.apply_field_style(self.y_label)
         self.y_spinbox = CustomSpinBox()
         self.y_spinbox.setRange(-10000, 10000)
         self.y_spinbox.setMinimumWidth(70)
@@ -72,11 +69,9 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         
         # Размер
         self.size_label = QLabel("<b>Размер</b>")
-        self.apply_field_style(self.size_label)
         
         # Ширина с ползунком
         self.width_label = QLabel("Ширина:")
-        self.apply_field_style(self.width_label)
         self.width_spinbox = CustomSpinBox()
         self.width_spinbox.setRange(1, 1000)
         self.width_spinbox.setMinimumWidth(70)
@@ -85,7 +80,6 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         
         # Высота с ползунком
         self.height_label = QLabel("Высота:")
-        self.apply_field_style(self.height_label)
         self.height_spinbox = CustomSpinBox()
         self.height_spinbox.setRange(1, 1000)
         self.height_spinbox.setMinimumWidth(70)
@@ -94,7 +88,6 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         
         # Цвет
         self.color_label = QLabel("Цвет:")
-        self.apply_field_style(self.color_label)
         self.color_button = ColorPickerButton(is_dark_theme=self.is_dark_theme)
         
         # Кнопка сброса параметров
@@ -541,23 +534,12 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         Args:
             is_dark_theme: True для темной темы, False для светлой
         """
-        self.apply_theme(is_dark_theme)
-        
+        self.is_dark_theme = is_dark_theme
+        self.apply_theme(self.is_dark_theme)
         # Обновляем стиль для EditableLineEdit с ID региона
-        self.apply_field_style(self.id_edit)
-        
+        self.id_edit.set_theme(self.is_dark_theme)        
         # Обновляем тему для кнопки выбора цвета
-        self.color_button.set_theme(is_dark_theme)
-        
-        # Обновляем тему для всех статических QLabel
-        self.apply_field_style(self.id_label)
-        self.apply_field_style(self.position_label)
-        self.apply_field_style(self.x_label)
-        self.apply_field_style(self.y_label)
-        self.apply_field_style(self.size_label)
-        self.apply_field_style(self.width_label)
-        self.apply_field_style(self.height_label)
-        self.apply_field_style(self.color_label)
+        self.color_button.set_theme(self.is_dark_theme)
     
     def update_properties(self, region):
         """

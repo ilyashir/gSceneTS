@@ -36,7 +36,8 @@ class WallPropertiesWidget(BasePropertiesWidget):
             is_dark_theme: Флаг темной темы
         """
         super().__init__("Свойства стены", parent)
-        self.apply_theme(is_dark_theme)
+        self.is_dark_theme = is_dark_theme
+        self.apply_theme(self.is_dark_theme)
         self.field_widget = None
         self.initial_values = {}
         self.setup_cursors()
@@ -45,17 +46,14 @@ class WallPropertiesWidget(BasePropertiesWidget):
         """Создание всех виджетов."""
         # ID стены
         self.id_label = QLabel("ID:")
-        self.apply_field_style(self.id_label)
         self.id_edit = EditableLineEdit()
-        self.apply_field_style(self.id_edit)
+        self.id_edit.set_theme(self.is_dark_theme)
         
         # Метки
         self.coords_label = QLabel("<b>Координаты</b>")
-        self.apply_field_style(self.coords_label)
         
         # X1 с ползунком
         self.x1_label = QLabel("X1:")
-        self.apply_field_style(self.x1_label)
         self.x1_spinbox = CustomSpinBox()
         self.x1_spinbox.setRange(-10000, 10000)
         self.x1_spinbox.setMinimumWidth(70)
@@ -64,7 +62,6 @@ class WallPropertiesWidget(BasePropertiesWidget):
         
         # Y1 с ползунком
         self.y1_label = QLabel("Y1:")
-        self.apply_field_style(self.y1_label)
         self.y1_spinbox = CustomSpinBox()
         self.y1_spinbox.setRange(-10000, 10000)
         self.y1_spinbox.setMinimumWidth(70)
@@ -73,7 +70,6 @@ class WallPropertiesWidget(BasePropertiesWidget):
         
         # X2 с ползунком
         self.x2_label = QLabel("X2:")
-        self.apply_field_style(self.x2_label)
         self.x2_spinbox = CustomSpinBox()
         self.x2_spinbox.setRange(-10000, 10000)
         self.x2_spinbox.setMinimumWidth(70)
@@ -82,7 +78,6 @@ class WallPropertiesWidget(BasePropertiesWidget):
         
         # Y2 с ползунком
         self.y2_label = QLabel("Y2:")
-        self.apply_field_style(self.y2_label)
         self.y2_spinbox = CustomSpinBox()
         self.y2_spinbox.setRange(-10000, 10000)
         self.y2_spinbox.setMinimumWidth(70)
@@ -91,7 +86,6 @@ class WallPropertiesWidget(BasePropertiesWidget):
         
         # Ширина стены
         self.width_label = QLabel("Ширина:")
-        self.apply_field_style(self.width_label)
         self.wall_width_spinbox = CustomSpinBox()
         self.wall_width_spinbox.setRange(1, 50)
         self.wall_width_spinbox.setMinimumWidth(70)
@@ -458,19 +452,11 @@ class WallPropertiesWidget(BasePropertiesWidget):
         Args:
             is_dark_theme: True для темной темы, False для светлой
         """
-        self.apply_theme(is_dark_theme)
+        self.is_dark_theme = is_dark_theme
+        self.apply_theme(self.is_dark_theme)
         
         # Обновляем стиль для EditableLineEdit с ID стены
-        self.apply_field_style(self.id_edit)
-        
-        # Обновляем стили всех статических меток
-        self.apply_field_style(self.id_label)
-        self.apply_field_style(self.coords_label)
-        self.apply_field_style(self.x1_label)
-        self.apply_field_style(self.y1_label)
-        self.apply_field_style(self.x2_label)
-        self.apply_field_style(self.y2_label)
-        self.apply_field_style(self.width_label)
+        self.id_edit.set_theme(self.is_dark_theme)
         
     def update_properties(self, wall):
         """

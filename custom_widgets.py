@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QLineEdit, QPushButton,
-    QGraphicsOpacityEffect, QLabel, QColorDialog, QSpinBox
+    QGraphicsOpacityEffect, QLabel, QColorDialog, QSpinBox, QApplication
 )
 from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve, pyqtSignal, pyqtProperty, QSize
 from PyQt6.QtGui import QColor, QPainter, QPainterPath, QIcon
@@ -25,6 +25,7 @@ class EditableLineEdit(QWidget):
         self._is_edited = False
         self._linked_object = None  # Ссылка на связанный объект
         self._is_dark_theme = is_dark_theme
+        self._animation_initialized = False  # Флаг для контроля начальной инициализации
         
         # Основной layout
         self.layout = QHBoxLayout(self)
@@ -48,11 +49,14 @@ class EditableLineEdit(QWidget):
         self.cancel_button.clicked.connect(self._cancel_changes)
         self.layout.addWidget(self.cancel_button)
         
-        # Изначально скрываем кнопки
-        self.confirm_button.setVisible(False)
-        self.cancel_button.setVisible(False)
+        # Обновляем стили ПЕРЕД скрытием
+        self.update_styles(is_dark_theme)
         
-        # Эффекты прозрачности для анимации
+        # Изначально скрываем кнопки
+        self.confirm_button.hide()
+        self.cancel_button.hide()
+        
+        # Эффекты прозрачности для анимации (уже должны быть 0)
         self.confirm_opacity_effect = QGraphicsOpacityEffect(self.confirm_button)
         self.confirm_opacity_effect.setOpacity(0)
         self.confirm_button.setGraphicsEffect(self.confirm_opacity_effect)
@@ -70,35 +74,60 @@ class EditableLineEdit(QWidget):
         self.cancel_animation.setDuration(300)
         self.cancel_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
         
-        # Обновляем стили после создания всех необходимых объектов
-        self.update_styles(is_dark_theme)
+        # Отмечаем, что анимация инициализирована и готова к использованию
+        self._animation_initialized = True
         
     def update_styles(self, is_dark_theme=True):
         """Обновляет стили виджета в зависимости от темы"""
         self._is_dark_theme = is_dark_theme
         colors = AppStyles._get_theme_colors(is_dark_theme)
         
+        # Вычисляем цвета для эффектов
+        hover_bg = f"rgba({int(colors['primary'][1:3], 16)}, {int(colors['primary'][3:5], 16)}, {int(colors['primary'][5:7], 16)}, 0.1)"
+        focus_bg = f"rgba({int(colors['primary'][1:3], 16)}, {int(colors['primary'][3:5], 16)}, {int(colors['primary'][5:7], 16)}, 0.2)"
+        
         # Стиль для текстового поля
         self.text_field.setStyleSheet(f"""
-            background-color: {colors['secondary_dark']};
-            color: {colors['text']};
-            border: 1px solid {colors['border']};
-            border-radius: 3px;
-            padding: 3px;
+            QLineEdit {{
+                background-color: {colors['secondary_dark']};
+                color: {colors['text']};
+                border: 1px solid {colors['border']};
+                border-radius: 3px;
+                padding: 4px 8px;
+                min-height: 24px;
+            }}
+            QLineEdit:hover {{
+                background-color: {hover_bg};
+                border: 1px solid {colors['primary']};
+            }}
+            QLineEdit:focus {{
+                background-color: {focus_bg};
+                border: 2px solid {colors['primary']};
+            }}
         """)
         
         # Стиль для кнопки подтверждения
+        confirm_color = colors['success']
+        confirm_hover_border = "white"
         self.confirm_button.setStyleSheet(f"""
-            background-color: {colors['success']};
+            background-color: {confirm_color};
             color: {colors['text_highlight']};
             border-radius: 4px;
+            min-width: 24px;
+            min-height: 18px;
+            border: 0px solid {confirm_hover_border};
         """)
         
         # Стиль для кнопки отмены
+        cancel_color = colors['error']
+        cancel_hover_border = "white"
         self.cancel_button.setStyleSheet(f"""
-            background-color: {colors['error']};
+            background-color: {cancel_color};
             color: {colors['text_highlight']};
             border-radius: 4px;
+            min-width: 24px;
+            min-height: 18px;
+            border: 0px solid {cancel_hover_border};
         """)
         
     def set_theme(self, is_dark_theme=True):
@@ -112,9 +141,15 @@ class EditableLineEdit(QWidget):
     
     def setText(self, text):
         """Устанавливает текст в поле ввода."""
+        # Временно блокируем сигналы, чтобы избежать вызова _handle_text_changed
+        self.text_field.blockSignals(True)
         self.text_field.setText(text)
+        self.text_field.blockSignals(False)
+        
         self._original_value = text
+        # Убедимся, что флаг сброшен ПОСЛЕ установки текста и original_value
         self._is_edited = False
+        # Вызываем скрытие кнопок (без анимации, если они уже скрыты)
         self._hide_buttons()
     
     def _handle_text_changed(self, text):
@@ -131,9 +166,25 @@ class EditableLineEdit(QWidget):
     
     def _show_buttons(self):
         """Анимирует появление кнопок."""
-        self.confirm_button.setVisible(True)
-        self.cancel_button.setVisible(True)
+        # Проверяем, что анимация инициализирована
+        if not self._animation_initialized:
+            return
+            
+        # Сначала проверяем, что кнопки не в процессе анимации
+        if self.confirm_animation.state() == QPropertyAnimation.State.Running or self.cancel_animation.state() == QPropertyAnimation.State.Running:
+            return
+            
+        # Убеждаемся, что кнопки видимы перед началом анимации
+        self.confirm_button.show()
+        self.cancel_button.show()
         
+        # Отключаем соединения с предыдущей анимацией
+        try:
+            self.cancel_animation.finished.disconnect()
+        except TypeError:
+            pass
+        
+        # Запускаем анимацию появления
         self.confirm_animation.setStartValue(0.0)
         self.confirm_animation.setEndValue(1.0)
         self.confirm_animation.start()
@@ -144,21 +195,38 @@ class EditableLineEdit(QWidget):
     
     def _hide_buttons(self):
         """Анимирует скрытие кнопок."""
+        # Проверяем, что анимация инициализирована
+        if not self._animation_initialized:
+            return
+            
+        # Скрываем только если редактирование не активно
         if not self._is_edited:
+            # Сначала проверяем, что кнопки не в процессе анимации
+            if self.confirm_animation.state() == QPropertyAnimation.State.Running or self.cancel_animation.state() == QPropertyAnimation.State.Running:
+                return
+                
+            # Отключаем соединения с предыдущей анимацией
+            try:
+                self.cancel_animation.finished.disconnect()
+            except TypeError:
+                pass
+                
+            # Запускаем анимацию скрытия
             self.confirm_animation.setStartValue(1.0)
             self.confirm_animation.setEndValue(0.0)
             self.confirm_animation.start()
             
             self.cancel_animation.setStartValue(1.0)
             self.cancel_animation.setEndValue(0.0)
-            self.cancel_animation.finished.connect(lambda: self._hide_buttons_after_animation())
+            # Подключаем обработчик завершения анимации
+            self.cancel_animation.finished.connect(self._hide_buttons_after_animation)
             self.cancel_animation.start()
-            
+    
     def _hide_buttons_after_animation(self):
         """Скрывает кнопки после завершения анимации"""
         if not self._is_edited:
-            self.confirm_button.setVisible(False)
-            self.cancel_button.setVisible(False)
+            self.confirm_button.hide()
+            self.cancel_button.hide()
             # Отключаем соединение, чтобы избежать множественных вызовов
             try:
                 self.cancel_animation.finished.disconnect()
@@ -235,21 +303,79 @@ class FlatRoundButton(QPushButton):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(22, 22)
+        self.setFixedSize(24, 24)  # Чуть увеличиваем размер для лучшей кликабельности
         self.setFlat(True)
+        self._is_hovered = False
+        self._border_width = 0
+        self._border_color = QColor("white")
+        # Включаем отслеживание наведения мыши
+        self.setMouseTracking(True)
+        # Устанавливаем курсор
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+    
+    def enterEvent(self, event):
+        """Переопределяем событие входа курсора мыши в область кнопки"""
+        self._is_hovered = True
+        self._border_width = 2
+        self.update()  # Вызываем перерисовку
+        super().enterEvent(event)
+    
+    def leaveEvent(self, event):
+        """Переопределяем событие выхода курсора мыши из области кнопки"""
+        self._is_hovered = False
+        self._border_width = 0
+        self.update()  # Вызываем перерисовку
+        super().leaveEvent(event)
+    
+    def setStyleSheet(self, stylesheet):
+        """Переопределяем метод для извлечения цвета границы из styleSheet"""
+        super().setStyleSheet(stylesheet)
+        # Извлекаем цвет границы, если он указан
+        if "border:" in stylesheet:
+            try:
+                border_parts = stylesheet.split("border:")[1].split(";")[0]
+                # Извлекаем значение цвета
+                if "solid" in border_parts:
+                    color_str = border_parts.split("solid")[1].strip()
+                    self._border_color = QColor(color_str)
+            except Exception:
+                pass
     
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        # Определяем путь для скругленного прямоугольника
+        # Определяем путь для скругленного прямоугольника с учетом границы
         path = QPainterPath()
-        path.addRoundedRect(0, 0, self.width(), self.height(), 4, 4)
+        path.addRoundedRect(1, 1, self.width()-2, self.height()-2, 4, 4)
         
         # Заливаем фон
         if self.styleSheet():
-            color_str = self.styleSheet().split("background-color:")[1].split(";")[0].strip()
-            painter.fillPath(path, QColor(color_str))
+            # Получаем базовый цвет фона
+            try:
+                color_str = self.styleSheet().split("background-color:")[1].split(";")[0].strip()
+                bg_color = QColor(color_str)
+                
+                # Для эффекта наведения
+                if self._is_hovered and self._border_width > 0:
+                    # Настраиваем перо для рисования границы
+                    pen = painter.pen()
+                    pen.setWidth(self._border_width)
+                    pen.setColor(self._border_color)
+                    painter.setPen(pen)
+                    
+                    # Рисуем границу
+                    border_path = QPainterPath()
+                    border_path.addRoundedRect(1, 1, self.width()-2, self.height()-2, 4, 4)
+                    painter.drawPath(border_path)
+                else:
+                    painter.setPen(Qt.PenStyle.NoPen)
+                
+                # Заливка основным цветом
+                painter.fillPath(path, bg_color)
+            except Exception:
+                # В случае ошибки разбора styleSheet используем заливку по умолчанию
+                painter.fillPath(path, QColor("#333333"))
         
         # Рисуем текст
         painter.setPen(Qt.GlobalColor.white)

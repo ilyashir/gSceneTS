@@ -203,6 +203,11 @@ class AppStyles:
     def get_properties_style(cls, is_dark_theme=True):
         """Генерирует стиль для окна свойств"""
         colors = cls._get_theme_colors(is_dark_theme)
+        
+        # Вычисляем цвета для эффектов
+        hover_bg = f"rgba({int(colors['primary'][1:3], 16)}, {int(colors['primary'][3:5], 16)}, {int(colors['primary'][5:7], 16)}, 0.1)"
+        focus_bg = f"rgba({int(colors['primary'][1:3], 16)}, {int(colors['primary'][3:5], 16)}, {int(colors['primary'][5:7], 16)}, 0.2)"
+        
         return f"""
             QWidget {{
                 background-color: {colors['panel']};
@@ -210,41 +215,80 @@ class AppStyles:
             }}
             QLabel {{
                 color: {colors['text']};
+                padding: 2px;
             }}
             QSpinBox, QDoubleSpinBox {{
                 background-color: {colors['secondary_dark']};
                 color: {colors['text']};
                 border: 1px solid {colors['border']};
                 border-radius: 3px;
+                padding: 4px 8px;
+                min-height: 24px;
+                min-width: 80px;
             }}
-            QGroupBox {{
-                border: 1px solid {colors['border']};
-                border-radius: 5px;
-                margin-top: 10px;
+            QSpinBox:hover, QDoubleSpinBox:hover {{
+                background-color: {hover_bg};
+                border: 1px solid {colors['primary']};
+            }}
+            QSpinBox:focus, QDoubleSpinBox:focus {{
+                background-color: {focus_bg};
+                border: 2px solid {colors['primary']};
+            }}
+            QLineEdit {{
+                background-color: {colors['secondary_dark']};
                 color: {colors['text']};
-            }}
-            QGroupBox::title {{
-                subcontrol-origin: margin;
-                subcontrol-position: top left;
-                padding: 0 5px;
-            }}
-            QDockWidget {{
-                background-color: {colors['panel']};
-                color: {colors['text']};
-                border: 1px solid {colors['border']};
-            }}
-            QDockWidget::title {{
-                background-color: {colors['panel']};
-                color: {colors['text']};
-                padding: 5px;
-            }}
-            QDockWidget::close-button, QDockWidget::float-button {{
-                background-color: {colors['border'] if is_dark_theme else colors['secondary_dark']};
                 border: 1px solid {colors['border']};
                 border-radius: 3px;
+                padding: 4px 8px;
+                min-height: 24px;
             }}
-            QDockWidget::close-button:hover, QDockWidget::float-button:hover {{
+            QLineEdit:hover {{
+                background-color: {hover_bg};
+                border: 1px solid {colors['primary']};
+            }}
+            QLineEdit:focus {{
+                background-color: {focus_bg};
+                border: 2px solid {colors['primary']};
+            }}
+            QPushButton {{
+                background-color: {colors['secondary_dark']};
+                color: {colors['text']};
+                border: 1px solid {colors['border']};
+                border-radius: 3px;
+                padding: 6px 12px;
+                min-width: 80px;
+            }}
+            QPushButton:hover {{
                 background-color: {colors['primary']};
+                color: white;
+            }}
+            QPushButton:pressed {{
+                background-color: {colors['primary_dark']};
+            }}
+            QComboBox {{
+                background-color: {colors['secondary_dark']};
+                color: {colors['text']};
+                border: 1px solid {colors['border']};
+                border-radius: 3px;
+                padding: 4px 8px;
+                min-height: 24px;
+            }}
+            QComboBox:hover {{
+                background-color: {hover_bg};
+                border: 1px solid {colors['primary']};
+            }}
+            QComboBox:focus {{
+                background-color: {focus_bg};
+                border: 2px solid {colors['primary']};
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 20px;
+            }}
+            QComboBox::down-arrow {{
+                image: url(resources/icons/dropdown_arrow.png);
+                width: 12px;
+                height: 12px;
             }}
         """
     
