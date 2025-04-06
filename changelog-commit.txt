@@ -1,0 +1,9 @@
+docs(changelog): update for version 0.3.0
+
+Added the 0.3.0 release entry to the CHANGELOG.md file:
+- Listed all new features implemented for this version
+- Documented changes and improvements
+- Added fixed issues and bug corrections
+
+This prepares for the version bump from 0.2.9 to 0.3.0 as all planned 
+items in the roadmap for this version have been completed. 
