@@ -59,34 +59,34 @@ class StartPosition(QGraphicsItem):
         """
         Возвращает прямоугольник, содержащий элемент.
         """
-        # Половина размера клетки (зоны видимости)
-        half_size = 25
+        # Половина размера клетки (зоны видимости), уменьшена в 2 раза
+        half_size = 12
         return QRectF(-half_size, -half_size, 2 * half_size, 2 * half_size)
     
     def paint(self, painter, option, widget):
         """
-        Отрисовка креста стартовой позиции.
+        Отрисовка диагонального креста стартовой позиции.
         """
         # Настройка пера для рисования
         pen = QPen(Qt.GlobalColor.red)
-        pen.setWidth(5)
+        pen.setWidth(3)  # Уменьшаем толщину линии для соответствия уменьшенному размеру
         painter.setPen(pen)
         
-        # Рисуем крест
-        half_size = 25  # Половина размера клетки
-        painter.drawLine(-half_size, 0, half_size, 0)  # Горизонтальная линия
-        painter.drawLine(0, -half_size, 0, half_size)  # Вертикальная линия
+        # Рисуем диагональный крест (в 2 раза меньше)
+        half_size = 12
+        painter.drawLine(-half_size, -half_size, half_size, half_size)  # Диагональная линия "\"
+        painter.drawLine(-half_size, half_size, half_size, -half_size)  # Диагональная линия "/"
     
     def shape(self):
         """
-        Переопределяем shape(), чтобы стартовая позиция реагировала на нажатие в области креста.
+        Переопределяем shape(), чтобы стартовая позиция реагировала на нажатие в области диагонального креста.
         """
         path = QPainterPath()
-        half_size = 25
-        # Создаем форму для вертикальной линии
-        path.addRect(-2.5, -half_size, 5, 2 * half_size)
-        # Создаем форму для горизонтальной линии
-        path.addRect(-half_size, -2.5, 2 * half_size, 5)
+        half_size = 12
+        
+        # Просто используем квадрат вокруг креста для упрощения кликабельной области
+        path.addRect(-half_size, -half_size, 2 * half_size, 2 * half_size)
+        
         return path
     
     @property
