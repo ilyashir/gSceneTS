@@ -223,6 +223,7 @@ class AppStyles:
                 border: 1px solid {colors['border']};
                 border-radius: 3px;
                 padding: 4px 8px;
+                padding-right: 20px;
                 min-height: 24px;
                 min-width: 80px;
             }}

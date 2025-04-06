@@ -4,8 +4,12 @@
 """
 
 from abc import abstractmethod
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, QSlider, QGroupBox
-from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, QDoubleSpinBox,
+    QSlider, QPushButton, QSizePolicy, QSpacerItem, QGroupBox, QApplication, QStyle,
+    QCheckBox, QStyleOptionSpinBox, QStyleOptionSlider
+)
+from PyQt6.QtCore import Qt, pyqtSignal, QEvent
 from PyQt6.QtGui import QCursor
 from styles import AppStyles
 import logging
@@ -19,16 +23,17 @@ class BasePropertiesWidget(QGroupBox):
     Все виджеты свойств должны наследоваться от этого класса.
     """
     
-    def __init__(self, title, parent=None):
+    def __init__(self, title="Properties", parent=None, field_widget=None):
         """
         Инициализация базового виджета свойств.
         
         Args:
             title: Заголовок группы свойств
             parent: Родительский виджет
+            field_widget: Виджет поля
         """
         super().__init__(title, parent)
-        self.field_widget = None
+        self.field_widget = field_widget
         self.initial_values = {}
         self.is_dark_theme = False  # По умолчанию светлая тема
         
@@ -43,6 +48,8 @@ class BasePropertiesWidget(QGroupBox):
         self.create_widgets()
         self.create_layouts()
         self.setup_connections()
+        self.setup_cursors()
+        self._setup_interactive_cursors()
         
     @abstractmethod
     def create_widgets(self):
@@ -90,10 +97,8 @@ class BasePropertiesWidget(QGroupBox):
         """
         Установка курсоров для всех интерактивных элементов виджета.
         """
-        from PyQt6.QtWidgets import QPushButton, QToolButton, QSpinBox, QDoubleSpinBox, QCheckBox
-        
         # Устанавливаем курсоры для всех кнопок
-        for button in self.findChildren(QPushButton) + self.findChildren(QToolButton):
+        for button in self.findChildren(QPushButton):
             button.setCursor(Qt.CursorShape.PointingHandCursor)
         
         # Устанавливаем курсоры для чекбоксов
@@ -106,6 +111,53 @@ class BasePropertiesWidget(QGroupBox):
             for child in spinbox.findChildren(QWidget):
                 if 'Button' in child.__class__.__name__:
                     child.setCursor(Qt.CursorShape.PointingHandCursor)
+    
+    def _setup_interactive_cursors(self):
+        """Настраивает курсоры для сложных виджетов (SpinBox, Slider)."""
+        spin_boxes = self.findChildren(QSpinBox) + self.findChildren(QDoubleSpinBox)
+        sliders = self.findChildren(QSlider)
+
+        for widget in spin_boxes + sliders:
+            widget.setMouseTracking(True)
+            widget.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        # Обработка событий для SpinBox и Slider
+        if isinstance(obj, (QSpinBox, QDoubleSpinBox)):
+            if event.type() == QEvent.Type.MouseMove:
+                pos = event.pos()
+                opt = QStyleOptionSpinBox()
+                obj.initStyleOption(opt)
+                
+                # Проверка попадания в кнопки
+                up_rect = obj.style().subControlRect(QStyle.ComplexControl.CC_SpinBox, opt, QStyle.SubControl.SC_SpinBoxUp)
+                down_rect = obj.style().subControlRect(QStyle.ComplexControl.CC_SpinBox, opt, QStyle.SubControl.SC_SpinBoxDown)
+
+                if up_rect.contains(pos) or down_rect.contains(pos):
+                    obj.setCursor(Qt.CursorShape.PointingHandCursor)
+                else:
+                    obj.unsetCursor()
+            elif event.type() == QEvent.Type.Leave:
+                obj.unsetCursor()
+        
+        elif isinstance(obj, QSlider):
+            if event.type() == QEvent.Type.MouseMove:
+                pos = event.pos()
+                opt = QStyleOptionSlider()
+                obj.initStyleOption(opt)
+
+                # Проверка попадания в ползунок
+                handle_rect = obj.style().subControlRect(QStyle.ComplexControl.CC_Slider, opt, QStyle.SubControl.SC_SliderHandle)
+
+                if handle_rect.contains(pos):
+                    obj.setCursor(Qt.CursorShape.PointingHandCursor)
+                else:
+                    obj.unsetCursor()
+            elif event.type() == QEvent.Type.Leave:
+                obj.unsetCursor()
+
+        # Вызов стандартного обработчика
+        return super().eventFilter(obj, event)
     
     def set_field_widget(self, field_widget):
         """
