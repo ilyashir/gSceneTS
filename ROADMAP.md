@@ -22,8 +22,8 @@ This document outlines the planned development path for the project, including u
 ### Testing / Тестирование
 - [x] Add more UI interaction tests / Добавить больше тестов взаимодействия с интерфейсом
 - [x] Migrate tests from pytest to unittest for better integration / Перевести тесты с pytest на unittest для лучшей интеграции
-- [ ] Implement performance benchmarks / Внедрить тесты производительности
-- [ ] Improve test coverage / Улучшить покрытие кода тестами
+- [x] Implement performance benchmarks / Внедрить тесты производительности
+- [x] Improve test coverage / Улучшить покрытие кода тестами
 
 ## Medium-term goals (v0.4.0) / Среднесрочные цели
 

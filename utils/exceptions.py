@@ -63,4 +63,4 @@ def handle_application_error(error: ApplicationError) -> str:
     elif isinstance(error, EventError):
         return f"Ошибка события: {error.message}"
     else:
-        return f"Неизвестная ошибка: {error.message}" 
+        return f"Неизвестная ошибка: {str(error)}" 
