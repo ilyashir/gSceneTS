@@ -12,6 +12,9 @@ from region import Region
 from start_position import StartPosition
 from styles import AppStyles
 from hover_highlight import HoverHighlightMixin
+# Импортируем утилитные функции
+from utils.geometry_utils import (distance_to_line, line_intersects_rect, 
+                                  line_with_thickness_intersects_rect, snap_to_grid)
 
 import logging
 from math import sqrt, sin, cos, atan2, degrees, radians, pi
@@ -191,25 +194,8 @@ class FieldWidget(QGraphicsView):
         self.axes_layer.addToGroup(y_label)
         logger.debug("Drawing axes success")
 
-    def cut_coords(self, x, y):
-        if x > self.scene_width / 2:
-            x = self.scene_width / 2
-        if x < -self.scene_width / 2:
-            x = -self.scene_width / 2    
-        if y > self.scene_height / 2:
-            y = self.scene_height / 2
-        if y < -self.scene_height / 2:
-            y = -self.scene_height / 2  
-        return x, y    
-
     def snap_to_grid(self, pos):
-        if self.snap_to_grid_enabled:
-            x = round(pos.x() / self.grid_size) * self.grid_size
-            y = round(pos.y() / self.grid_size) * self.grid_size
-            x, y = self.cut_coords(x, y)       
-            return QPointF(x, y)
-        x, y = self.cut_coords(pos.x(), pos.y())       
-        return QPointF(x, y)
+        return snap_to_grid(pos, self.grid_size, self.snap_to_grid_enabled, self.scene_width, self.scene_height)
     
     def select_item(self, item):
         """Выделяет объект"""
@@ -279,33 +265,9 @@ class FieldWidget(QGraphicsView):
             thickness = temp_wall.stroke_width
         
         # Проверяем пересечение линии стены с прямоугольником робота с учетом толщины
-        return self.line_with_thickness_intersects_rect(wall_line, robot_rect, thickness)
+        # Используем утилитарную функцию
+        return line_with_thickness_intersects_rect(wall_line, robot_rect, thickness)
     
-    def line_intersects_rect(self, line, rect):
-        """
-        Проверяет, пересекает ли линия прямоугольник.
-        :param line: Линия (QLineF).
-        :param rect: Прямоугольник (QRectF).
-        :return: True, если линия пересекает прямоугольник, иначе False.
-        """
-        # Получаем стороны прямоугольника
-        top = QLineF(rect.topLeft(), rect.topRight())
-        right = QLineF(rect.topRight(), rect.bottomRight())
-        bottom = QLineF(rect.bottomLeft(), rect.bottomRight())
-        left = QLineF(rect.topLeft(), rect.bottomLeft())
-
-        # Проверяем пересечение линии с каждой стороной прямоугольника
-        for side in [top, right, bottom, left]:
-            intersection_type, intersection_point = line.intersects(side)
-            if intersection_type == QLineF.IntersectionType.BoundedIntersection:
-                return True  # Линия пересекает прямоугольник
-
-        # Проверяем, находится ли один из концов линии внутри прямоугольника
-        if rect.contains(line.p1()) or rect.contains(line.p2()):
-            return True
-
-        return False  # Линия не пересекает прямоугольник
-
     def add_wall(self, p1, p2, wall_id=None):
         """
         Добавляет стену на сцену с заданными координатами и идентификатором.
@@ -1701,32 +1663,6 @@ class FieldWidget(QGraphicsView):
         logger.debug(f"Робот успешно размещен в позиции {position}, id={self.robot_model.id}")
         return self.robot_model
         
-    def distance_to_line(self, point, line):
-        """
-        Вычисляет расстояние от точки до линии.
-        
-        Args:
-            point: Точка (QPointF)
-            line: Линия (QLineF)
-            
-        Returns:
-            float: Расстояние от точки до линии
-        """
-        # Формула для расстояния от точки до линии
-        x0, y0 = point.x(), point.y()
-        x1, y1 = line.x1(), line.y1()
-        x2, y2 = line.x2(), line.y2()
-        
-        # Если точки отрезка совпадают, возвращаем расстояние до одной из них
-        if x1 == x2 and y1 == y2:
-            return ((x0 - x1) ** 2 + (y0 - y1) ** 2) ** 0.5
-            
-        # Вычисляем расстояние
-        numerator = abs((y2 - y1) * x0 - (x2 - x1) * y0 + x2 * y1 - y2 * x1)
-        denominator = ((y2 - y1) ** 2 + (x2 - x1) ** 2) ** 0.5
-        
-        return numerator / denominator
-
     def place_region(self, points, region_id=None, color="#800000ff"):
         """
         Размещает регион на поле.
@@ -1935,34 +1871,6 @@ class FieldWidget(QGraphicsView):
                 obj._is_hovered = False
                 obj.set_hover_highlight(False)
                 
-    def line_with_thickness_intersects_rect(self, line, rect, thickness):
-        """
-        Проверяет, пересекает ли линия с заданной толщиной прямоугольник.
-        
-        Args:
-            line: Линия (QLineF)
-            rect: Прямоугольник (QRectF)
-            thickness: Толщина линии
-            
-        Returns:
-            bool: True, если линия с учетом толщины пересекает прямоугольник, иначе False
-        """
-        # Проверяем сначала обычное пересечение
-        if self.line_intersects_rect(line, rect):
-            return True
-            
-        # Если обычное пересечение не обнаружено, проверяем с учетом толщины
-        # Для этого создаем увеличенный прямоугольник с учетом половины толщины линии
-        inflated_rect = QRectF(
-            rect.x() - thickness / 2,
-            rect.y() - thickness / 2,
-            rect.width() + thickness,
-            rect.height() + thickness
-        )
-        
-        # Проверяем пересечение с увеличенным прямоугольником
-        return self.line_intersects_rect(line, inflated_rect)
-
     def robot_intersects_walls(self, robot_pos):
         """
         Проверяет, пересекается ли робот со стенами в указанной позиции.
@@ -1995,7 +1903,8 @@ class FieldWidget(QGraphicsView):
             thickness = wall.stroke_width
             
             # Проверяем пересечение линии стены с прямоугольником робота, учитывая толщину
-            if self.line_with_thickness_intersects_rect(line, robot_rect, thickness):
+            # Используем утилитарную функцию
+            if line_with_thickness_intersects_rect(line, robot_rect, thickness):
                 logger.debug(f"Robot intersects with wall {wall.id}")
                 return True
                 
