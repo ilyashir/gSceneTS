@@ -23,9 +23,7 @@ This document outlines the planned development path for the project, including u
 - [ ] Implement undo/redo functionality / Реализовать функциональность отмены/повтора действий
 
 ### Documentation / Документация
-- [ ] Create comprehensive user manual / Создать подробное руководство пользователя
 - [ ] Add code documentation / Добавить документацию кода
-- [ ] Create tutorials and examples / Создать обучающие материалы и примеры
 
 ## Long-term goals (v1.0.0 and beyond) / Долгосрочные цели
 
@@ -34,6 +32,10 @@ This document outlines the planned development path for the project, including u
 - [ ] Add ability to generate mazes from walls as object groups / Добавить возможность генерации лабиринтов из стен как группы объектов
 - [ ] Add ability to generate fields with lines and intersections as object groups / Добавить возможности генерации полей с линиями и перекрестками как группы объектов
 - [ ] Add ports to the robot and ability to install sensors on them / Добавить для робота порты и возможность устанавливать на них датчики
+
+### Documentation / Документация
+- [ ] Create comprehensive user manual / Создать подробное руководство пользователя
+- [ ] Create tutorials and examples / Создать обучающие материалы и примеры
 
 ### Platform / Платформа
 

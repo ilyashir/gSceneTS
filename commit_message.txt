@@ -1,7 +1,0 @@
-refactor(properties): standardize widget initialization structure
-
-- Add abstract methods create_widgets(), create_layouts(), setup_connections() to BasePropertiesWidget
-- Update all property widgets to use new initialization structure
-- Remove _initialize_ui() and _connect_signals() methods
-- Fix metaclass conflict in BasePropertiesWidget
-- Improve code organization and maintainability 

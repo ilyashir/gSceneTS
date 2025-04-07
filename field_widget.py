@@ -1,17 +1,21 @@
 from PyQt6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QGraphicsLineItem, QGraphicsRectItem,
-    QGraphicsTextItem, QGraphicsItemGroup, QGraphicsItem, QMessageBox, QInputDialog
+    QGraphicsTextItem, QGraphicsItemGroup, QGraphicsItem, QMessageBox, QInputDialog,
+    QGraphicsEllipseItem, QGraphicsPolygonItem, QGraphicsPathItem
 )
 from PyQt6.QtGui import QPainter, QPixmap, QPen, QBrush, QColor, QImage, QTransform, QPainterPath, QPolygonF
-from PyQt6.QtCore import Qt, QPointF, QRectF, QLineF, pyqtSignal, pyqtSlot, QThread, QTimer
+from PyQt6.QtCore import Qt, QPointF, QRectF, QLineF, pyqtSignal, pyqtSlot, QThread, QTimer, QDataStream, QIODevice, QByteArray
 from PyQt6.QtSvg import QSvgRenderer
 from robot import Robot
 from wall import Wall
 from region import Region
 from start_position import StartPosition
 from styles import AppStyles
+from hover_highlight import HoverHighlightMixin
 
 import logging
+from math import sqrt, sin, cos, atan2, degrees, radians, pi
+from collections import defaultdict
 
 # Настройка логгера
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -50,10 +54,15 @@ class FieldWidget(QGraphicsView):
         # Белый фон для сцены
         self.scene().setBackgroundBrush(QBrush(QColor("white")))
         
-        # Создаем группы для слоев
+        # Создаем слои для элементов сцены
         self.grid_layer = QGraphicsItemGroup()
         self.axes_layer = QGraphicsItemGroup()
         self.objects_layer = QGraphicsItemGroup()
+        
+        # Отключаем перехват событий для слоя объектов,
+        # чтобы события проходили к дочерним элементам (роботу, стенам и т.д.)
+        # В PyQt6 используется другой метод:
+        self.objects_layer.setFiltersChildEvents(False)
         
         # Устанавливаем z-index для слоев
         self.grid_layer.setZValue(0)
@@ -203,27 +212,41 @@ class FieldWidget(QGraphicsView):
         return QPointF(x, y)
     
     def select_item(self, item):
-        """Выделяеv объект"""
+        """Выделяет объект"""
         # Проверяем, не выделяем ли тот же объект
         logger.debug(f"Selecting item: {item}, а был выделен {self.selected_item}")
         if item == self.selected_item:
             logger.debug(f"Item {item} is already selected, skipping")
             return
+        
         if self.selected_item:
             self.deselect_item()
 
         if isinstance(item, (Wall, Robot, Region, StartPosition)):
             logger.debug(f"Selecting item: {item}")
             self.selected_item = item
+            
+            # Если это объект с поддержкой HoverHighlightMixin, отключаем hover_highlight
+            if isinstance(item, HoverHighlightMixin) and item._is_hovered:
+                logger.debug(f"Disabling hover highlight for selected item")
+                item.set_hover_highlight(False)
+                
+            # Активируем выделение объекта
             self.selected_item.set_highlight(True)
             self.item_selected.emit(item)
-
+            
     def deselect_item(self):
         """Снимает выделение с объекта."""
         if self.selected_item:
             logger.debug(f"Deselecting item: {self.selected_item}")
             if isinstance(self.selected_item, (Wall, Robot, Region, StartPosition)):
                 self.selected_item.set_highlight(False)
+                
+                # Восстанавливаем подсветку при наведении, если мышь всё ещё над объектом
+                if isinstance(self.selected_item, HoverHighlightMixin) and self.selected_item._is_hovered:
+                    logger.debug(f"Restoring hover highlight after deselection")
+                    self.selected_item.set_hover_highlight(True)
+                
             self.selected_item = None
             self.item_deselected.emit()
     
@@ -589,12 +612,13 @@ class FieldWidget(QGraphicsView):
         pos = self.snap_to_grid(posOriginal) # координаты с привязкой к сетке
 
         item = self.scene().itemAt(posOriginal, self.transform())
-        print("click", type(item))
+        logger.debug(f"CLICK: position={posOriginal}, item={type(item)}, parent={type(item.parentItem()) if item and item.parentItem() else None}")
+        
         if event.button() == Qt.MouseButton.LeftButton:
             
             # Если в режиме редактирования и нажали на объект, меняем курсор на "кулачок"
             if self.edit_mode and item and (isinstance(item, (Robot, Region, StartPosition, Wall)) or 
-                      (hasattr(item, 'data') and (item.data(0) == "its_wall" or item.data(0) == "wall_marker")) or 
+                      (hasattr(item, 'data') and (item.data(0) == "its_wall" or item.data(0) == "wall_marker" or item.data(0) == "hover_highlight")) or 
                       (item.parentItem() and isinstance(item.parentItem(), (Robot, Region, StartPosition, Wall)))):
                 self.setCursor(Qt.CursorShape.ClosedHandCursor)
             
@@ -602,25 +626,38 @@ class FieldWidget(QGraphicsView):
             if item:
                 # Проверяем, не является ли item частью уже выделенного объекта
                 parent_item = item.parentItem()
-                if parent_item and parent_item == self.selected_item:
-                    # Если кликнули на дочерний элемент выделенного объекта (например, рамку выделения)
-                    target_item = parent_item
-                # Иначе проверяем тип объекта
-                elif isinstance(item, (Robot, Region, StartPosition)) or (hasattr(item, 'data') and item.data(0) in ["its_wall", "wall_marker"]):
-                    # Выделяем объект или его родительский элемент
-                    if isinstance(item, (Robot, Region, StartPosition)):
-                        target_item = item
-                    else:
-                        target_item = item.parentItem()
-                    
+                
+                # Проверяем, не является ли это подсветкой при наведении
+                if hasattr(item, 'data') and item.data(0) == "hover_highlight" and parent_item:
+                    # Если это hover_highlight, то работаем с родительским элементом
+                    item = parent_item
+                
+                # Добавляем отладочную информацию
+                logger.debug(f"Mouse press on item: {item}, parent: {parent_item}")
+                
+                # Проверяем, является ли объект или его родитель поддерживаемым типом
+                if self.is_supported_item(item):
+                    target_item = item
+                    logger.debug(f"Clicked directly on supported item: {target_item}")
                     self.select_item(target_item)
+                elif parent_item and self.is_supported_item(parent_item):
+                    # Если кликнули на дочерний элемент поддерживаемого объекта (например, обводку)
+                    target_item = parent_item
+                    logger.debug(f"Clicked on child of supported item: {target_item}")
+                    self.select_item(target_item)
+                elif parent_item and parent_item == self.selected_item:
+                    # Если кликнули на дочерний элемент выделенного объекта
+                    target_item = parent_item
+                    logger.debug(f"Clicked on child of selected item: {target_item}")
                 else:
                     # Клик по другому объекту, не являющемуся выделяемым
-                    # Не будем снимать выделение при клике на объекты вне сцены (например, кнопки подтверждения)
+                    # Не будем снимать выделение при клике на объекты вне сцены
                     if item.scene() == self.scene():
+                        logger.debug(f"Clicked on non-selectable item: {item}")
                         self.deselect_item()
             else:
                 # Клик по пустому месту
+                logger.debug("Clicked on empty space")
                 self.deselect_item()
 
             # Обработка перемещения объектов в режиме редактирования
@@ -630,18 +667,48 @@ class FieldWidget(QGraphicsView):
                     self.dragging_item = None  # Сбрасываем перетаскиваемый объект
                     return
                 elif item and hasattr(item, 'data') and item.data(0) == "its_wall":
-                    self.dragging_item = item.parentItem()
-                    # Сохраняем точку захвата
-                    self.grab_point = pos
-                    # Сохраняем начальные координаты стены
-                    line = self.dragging_item.line()
-                    self.initial_line = QLineF(line.x1(), line.y1(), line.x2(), line.y2())
+                    # Получаем родительский объект (Wall)
+                    parent = item.parentItem()
+                    if parent and isinstance(parent, Wall):
+                        self.dragging_item = parent
+                        # Сохраняем точку захвата
+                        self.grab_point = pos
+                        # Сохраняем начальные координаты стены
+                        line = self.dragging_item.line()
+                        self.initial_line = QLineF(line.x1(), line.y1(), line.x2(), line.y2())
+                        return
+                elif item and hasattr(item, 'data') and item.data(0) == "hover_highlight":
+                    # Получаем родительский объект для hover_highlight
+                    parent = item.parentItem()
+                    if parent and isinstance(parent, Wall):
+                        # Для стены сохраняем точку захвата и начальные координаты
+                        self.dragging_item = parent
+                        self.grab_point = pos
+                        line = self.dragging_item.line()
+                        self.initial_line = QLineF(line.x1(), line.y1(), line.x2(), line.y2())
+                        return
+                    elif parent and isinstance(parent, (Robot, Region, StartPosition)):
+                        # Для других объектов
+                        self.dragging_item = parent
+                        self.drag_offset = pos - self.dragging_item.pos()
+                        return
+                elif item and (isinstance(item, (Robot, Region, StartPosition, Wall))):
+                    # Если кликнули непосредственно на объект
+                    self.dragging_item = item
+                    
+                    # Разная логика для разных типов объектов
+                    if isinstance(item, Wall):
+                        # Для стены сохраняем точку захвата и начальные координаты
+                        self.grab_point = pos
+                        line = self.dragging_item.line()
+                        self.initial_line = QLineF(line.x1(), line.y1(), line.x2(), line.y2())
+                    else:
+                        # Для объектов с позицией (Robot, Region, StartPosition)
+                        self.drag_offset = pos - self.dragging_item.pos()
                     return
-                elif item and (isinstance(item, (Robot, Region, StartPosition)) or 
-                              (parent_item and isinstance(parent_item, (Robot, Region, StartPosition)))):
-                    # Если кликнули на робота/регион или на его дочерний элемент
-                    drag_item = item if isinstance(item, (Robot, Region, StartPosition)) else parent_item
-                    self.dragging_item = drag_item
+                elif parent_item and isinstance(parent_item, (Robot, Region, StartPosition)):
+                    # Если кликнули на дочерний элемент
+                    self.dragging_item = parent_item
                     self.drag_offset = pos - self.dragging_item.pos()
                     return
 
@@ -679,11 +746,23 @@ class FieldWidget(QGraphicsView):
         # Проверяем, находится ли курсор над выделяемым объектом
         item = self.scene().itemAt(posOriginal, self.transform())
         
-        # Меняем курсор при наведении на объекты (редактируемые)
+        # Обработка наведения для объектов с HoverHighlightMixin
+        self.handle_hover_for_item(item, posOriginal)
+        
+        # Меняем курсор при наведении на объекты
         if self.edit_mode:
-            if item and (isinstance(item, (Robot, Region, StartPosition)) or 
+            # Проверяем, является ли объект подсветкой при наведении
+            hover_highlight = False
+            parent_item = None
+            
+            if hasattr(item, 'data') and item.data(0) == "hover_highlight" and item.parentItem():
+                hover_highlight = True
+                parent_item = item.parentItem()
+                
+            if item and (isinstance(item, (Robot, Region, StartPosition, Wall)) or 
                         (hasattr(item, 'data') and (item.data(0) == "its_wall" or item.data(0) == "wall_marker")) or 
-                        (item.parentItem() and isinstance(item.parentItem(), (Robot, Region, StartPosition)))):
+                        hover_highlight or
+                        (item.parentItem() and isinstance(item.parentItem(), (Robot, Region, StartPosition, Wall)))):
                 # Если перетаскиваем - устанавливаем курсор "кулачок"
                 if hasattr(self, 'dragging_item') and self.dragging_item:
                     self.setCursor(Qt.CursorShape.ClosedHandCursor)
@@ -695,9 +774,18 @@ class FieldWidget(QGraphicsView):
                 self.setCursor(Qt.CursorShape.ArrowCursor)
         # В режиме наблюдателя устанавливаем указательный палец при наведении на объекты
         elif not self.drawing_mode:  # Режим наблюдателя
-            if item and (isinstance(item, (Robot, Region, StartPosition)) or 
+            # Проверяем, является ли объект подсветкой при наведении
+            hover_highlight = False
+            parent_item = None
+            
+            if hasattr(item, 'data') and item.data(0) == "hover_highlight" and item.parentItem():
+                hover_highlight = True
+                parent_item = item.parentItem()
+                
+            if item and (isinstance(item, (Robot, Region, StartPosition, Wall)) or 
                        (hasattr(item, 'data') and (item.data(0) == "its_wall" or item.data(0) == "wall_marker")) or 
-                       (item.parentItem() and isinstance(item.parentItem(), (Robot, Region, StartPosition)))):
+                       hover_highlight or
+                       (item.parentItem() and isinstance(item.parentItem(), (Robot, Region, StartPosition, Wall)))):
                 # Устанавливаем курсор "указательный палец"
                 self.setCursor(Qt.CursorShape.PointingHandCursor)
             else:
@@ -1688,3 +1776,66 @@ class FieldWidget(QGraphicsView):
         y = round(pos.y() / half_grid_size) * half_grid_size
         
         return QPointF(x, y)
+
+    def is_supported_item(self, item):
+        """
+        Проверяет, является ли элемент поддерживаемым типом (Robot, Wall, Region, StartPosition).
+        Также проверяет наличие data("its_wall") или data("wall_marker").
+        """
+        # Проверка на прямую поддержку типа
+        if isinstance(item, (Robot, Region, StartPosition, Wall)):
+            return True
+        
+        # Проверка на элементы стены по data
+        if hasattr(item, 'data') and item.data(0) in ["its_wall", "wall_marker"]:
+            return True
+            
+        # Проверяем, не является ли это подсветкой при наведении
+        if hasattr(item, 'data') and item.data(0) == "hover_highlight":
+            # Для hover_highlight передаем родителя в is_supported_item
+            if item.parentItem():
+                return self.is_supported_item(item.parentItem())
+            return False
+            
+        # Проверка на родительский элемент
+        if item and item.parentItem():
+            if isinstance(item.parentItem(), (Robot, Region, StartPosition, Wall)):
+                return True
+            
+        return False
+        
+    def handle_hover_for_item(self, item, pos):
+        """
+        Обрабатывает наведение мыши для объекта под курсором.
+        Проверяет, имеет ли объект или его родитель поддержку HoverHighlightMixin.
+        
+        Args:
+            item: Объект под курсором
+            pos: Позиция курсора (QPointF)
+        """
+        # Находим целевой объект (либо сам элемент, либо его родитель)
+        target_item = None
+        
+        # Проверяем, является ли сам элемент поддерживаемым
+        if item and isinstance(item, HoverHighlightMixin):
+            target_item = item
+        # Проверяем родителя элемента
+        elif item and item.parentItem() and isinstance(item.parentItem(), HoverHighlightMixin):
+            target_item = item.parentItem()
+            
+        # Для всех зарегистрированных объектов с поддержкой наведения
+        for obj in [obj for obj in self.objects_layer.childItems() if isinstance(obj, HoverHighlightMixin)]:
+            # Если объект под курсором, обрабатываем наведение
+            if obj == target_item:
+                if not obj._is_hovered:
+                    logger.debug(f"Hover enter for {obj} at {pos}")
+                    obj._is_hovered = True
+                    # Показываем подсветку при наведении только если объект не выделен
+                    if obj != self.selected_item:
+                        obj.set_hover_highlight(True)
+            # Иначе убираем подсветку, если она была
+            elif obj._is_hovered:
+                logger.debug(f"Hover leave for {obj}")
+                obj._is_hovered = False
+                obj.set_hover_highlight(False)
+                

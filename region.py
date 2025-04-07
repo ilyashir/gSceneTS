@@ -1,12 +1,13 @@
 import logging
-from PyQt6.QtWidgets import QGraphicsPathItem, QGraphicsItem
+from PyQt6.QtWidgets import QGraphicsPathItem, QGraphicsItem, QGraphicsRectItem
 from PyQt6.QtGui import QPainterPath, QPen, QBrush, QColor, QPainter, QTransform
 from PyQt6.QtCore import Qt, QRectF, QPointF
 from contextlib import contextmanager
+from hover_highlight import HoverHighlightMixin
 
 logger = logging.getLogger(__name__)
 
-class Region(QGraphicsPathItem):
+class Region(QGraphicsPathItem, HoverHighlightMixin):
     _next_id = 1  # Статический счетчик для генерации ID
     _existing_ids = set()  # Множество для отслеживания существующих ID
     
@@ -43,6 +44,7 @@ class Region(QGraphicsPathItem):
             color: Цвет заливки региона в HEX-формате с альфа-каналом
         """
         super().__init__()
+        HoverHighlightMixin.__init__(self)
         
         # Создаем путь из точек
         path = QPainterPath()
@@ -114,6 +116,9 @@ class Region(QGraphicsPathItem):
         
         # Флаг для отслеживания изменений
         self._updating = False
+        
+        # Инициализация подсветки при наведении после настройки всех атрибутов
+        self.init_hover_highlight()
         
         # Записываем в лог только для не-временных регионов
         if not is_temp:

@@ -2,12 +2,13 @@ from PyQt6.QtWidgets import QGraphicsLineItem, QGraphicsEllipseItem, QGraphicsIt
 from PyQt6.QtGui import QPixmap, QPainter, QPen, QBrush, QColor, QTransform
 from PyQt6.QtCore import Qt, QRectF, QLineF, QPointF
 from contextlib import contextmanager
+from hover_highlight import HoverHighlightMixin
 import logging
 # Настройка логгера
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-class Wall(QGraphicsLineItem):
+class Wall(QGraphicsLineItem, HoverHighlightMixin):
     _next_id = 1  # Счетчик для генерации уникальных ID
     _existing_ids = set()  # Множество для хранения всех существующих ID
 
@@ -24,6 +25,7 @@ class Wall(QGraphicsLineItem):
             is_temp: Флаг, указывающий, является ли стена временной (для проверок)
         """
         super().__init__(p1.x(), p1.y(), p2.x(), p2.y())
+        HoverHighlightMixin.__init__(self)
         
         # Для временных стен не обновляем _existing_ids и не увеличиваем _next_id
         self.is_temp = is_temp
@@ -58,11 +60,13 @@ class Wall(QGraphicsLineItem):
         # Атрибуты стены
         self.stroke_color = "#ff000000"  # Цвет обводки (по умолчанию черный)
         self.stroke_width = width  # Ширина обводки (по умолчанию 10)
+        
+        # Инициализация подсветки при наведении должна происходить после установки атрибутов
+        self.init_hover_highlight()
 
         # Настройка пера
         self.normal_pen = QPen(QColor(self.stroke_color), self.stroke_width)  # Паттерн для линии
         self.highlight_pen = QPen(QColor("#00ff22")  , self.stroke_width+5)  # Контур при выделении
-
 
         # Создаем прямоугольник с паттерном кирпичной стены
         self.brick_rect = QGraphicsRectItem(self)
@@ -90,9 +94,46 @@ class Wall(QGraphicsLineItem):
         self.setZValue(10)
         self.brick_rect.setZValue(12)
 
-        # # Включаем обработку событий мыши
-        # self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
-        # self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
+    # Переопределенный метод для стены с учетом её особенностей
+    def create_hover_highlight(self):
+        """Создает подсветку при наведении для стены."""
+        line = self.line()
+        length = line.length()
+        angle = line.angle()
+        
+        # Создаем прямоугольник для подсветки при наведении
+        hover_rect = QGraphicsRectItem(self)
+        
+        # Настраиваем перо с пунктирной линией синего цвета
+        pen = QPen(QColor("#3399FF"), 2)
+        pen.setStyle(Qt.PenStyle.DashLine)
+        hover_rect.setPen(pen)
+        hover_rect.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+        
+        # Устанавливаем данные для идентификации объекта при кликах
+        hover_rect.setData(0, "hover_highlight")
+        
+        # Создаем прямоугольник, покрывающий линию
+        rect = QRectF(0, -self.stroke_width / 2, length, self.stroke_width)
+        hover_rect.setRect(rect)
+        
+        # Применяем поворот к прямоугольнику подсветки
+        transform = QTransform()
+        transform.translate(line.p1().x(), line.p1().y())
+        transform.rotate(-angle)
+        hover_rect.setTransform(transform)
+        hover_rect.setZValue(15)  # Между стеной и выделением
+        
+        # Отключаем обработку событий мыши для прямоугольника подсветки
+        hover_rect.setAcceptHoverEvents(False)
+        hover_rect.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, False)
+        hover_rect.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
+        hover_rect.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsPanel, False)
+        
+        # Скрываем прямоугольник по умолчанию
+        hover_rect.hide()
+        
+        return hover_rect
 
     def create_brick_pattern(self):
         """
@@ -137,6 +178,17 @@ class Wall(QGraphicsLineItem):
         transform.translate(line.p1().x(), line.p1().y())
         transform.rotate(-angle)
         self.brick_rect.setTransform(transform)
+        
+        # Обновляем подсветку при наведении, если она существует
+        if hasattr(self, 'hover_rect') and self.hover_rect:
+            rect = QRectF(0, -self.stroke_width / 2, length, self.stroke_width)
+            self.hover_rect.setRect(rect)
+            
+            # Применяем поворот к прямоугольнику подсветки
+            transform = QTransform()
+            transform.translate(line.p1().x(), line.p1().y())
+            transform.rotate(-angle)
+            self.hover_rect.setTransform(transform)
 
     def set_highlight(self, enabled):
         """

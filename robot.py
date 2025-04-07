@@ -3,19 +3,20 @@ from PyQt6.QtGui import QPixmap, QPainter, QTransform, QPen, QBrush, QPainterPat
 from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtCore import QRectF, Qt, QPointF, QSizeF
 import logging
+from hover_highlight import HoverHighlightMixin
 
 logger = logging.getLogger(__name__)
 
-class Robot(QGraphicsPixmapItem):
+class Robot(QGraphicsPixmapItem, HoverHighlightMixin):
     # Статический атрибут для хранения единственного экземпляра
     _instance = None
     # Фиксированный ID для робота
     _id = "trikKitRobot"
     
-    def __new__(cls, pos, robot_id=None, name="", direction=0):
+    @classmethod
+    def __new__(cls, *args, **kwargs):
         """
-        Реализует паттерн Singleton для класса Robot.
-        Позволяет создать только один экземпляр робота.
+        Реализация паттерна Singleton: гарантируем, что существует только один экземпляр робота.
         """
         if cls._instance is None:
             cls._instance = super(Robot, cls).__new__(cls)
@@ -35,6 +36,7 @@ class Robot(QGraphicsPixmapItem):
         # Проверяем, был ли уже инициализирован экземпляр
         if not hasattr(self, '_is_initialized') or not self._is_initialized:
             super().__init__()
+            HoverHighlightMixin.__init__(self)
             
             # Инициализация SVG-рендерера
             self.renderer = QSvgRenderer()
@@ -56,6 +58,9 @@ class Robot(QGraphicsPixmapItem):
             self.setZValue(1000)  # Робот всегда отображается поверх других объектов
             self.setRotation(direction)
             
+            # Инициализация подсветки при наведении после настройки внешнего вида
+            self.init_hover_highlight()
+            
             # Помечаем, что экземпляр уже инициализирован
             self._is_initialized = True
             
@@ -63,6 +68,7 @@ class Robot(QGraphicsPixmapItem):
         
         # Обновляем позицию при каждом вызове
         self.setPos(pos)
+        
         # Включаем обработку событий мыши
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
@@ -81,8 +87,8 @@ class Robot(QGraphicsPixmapItem):
         
     def set_highlight(self, enabled):
         """
-        Включает или выключает подсветку робота.
-        :param enabled: Если True, робот выделяется эллипсом.
+        Включает или выключает подсветку робота при выделении.
+        :param enabled: Если True, робот выделяется прямоугольником.
         """
         if enabled:
             # Создаем прямоугольник для выделения
@@ -97,9 +103,16 @@ class Robot(QGraphicsPixmapItem):
             # Показываем выделение (оно уже будет вращаться вместе с роботом, так как оно его дочерний элемент)
             self.highlight_rect.show()
             
+            # Скрываем обводку при наведении, если она есть
+            self.set_hover_highlight(False)
+            
         elif hasattr(self, 'highlight_rect') and self.highlight_rect:
             # Скрываем прямоугольник выделения
             self.highlight_rect.hide()
+            
+            # Если сейчас курсор наведен на объект, показываем обводку при наведении
+            if self._is_hovered:
+                self.set_hover_highlight(True)
         
     def set_name(self, name):
         """
@@ -143,6 +156,15 @@ class Robot(QGraphicsPixmapItem):
         path = QPainterPath()
         path.addRect(self.boundingRect())  # Добавляем прямоугольник, охватывающий весь робот
         return path
+        
+    def contains(self, point):
+        """
+        Проверяет, содержит ли робот указанную точку.
+        Точка должна быть передана в локальных координатах робота.
+        """
+        # Проверяем, находится ли точка внутри boundingRect
+        rect = QRectF(0, 0, 50, 50)  # Размер робота 50x50
+        return rect.contains(point)
 
     def update_appearance(self):
         """Обновляет внешний вид робота в зависимости от направления."""

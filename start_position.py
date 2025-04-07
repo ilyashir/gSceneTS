@@ -1,11 +1,12 @@
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsRectItem
-from PyQt6.QtGui import QPainter, QPen, QBrush, QPainterPath
+from PyQt6.QtGui import QPainter, QPen, QBrush, QPainterPath, QColor
 from PyQt6.QtCore import QRectF, Qt, QPointF
 import logging
+from hover_highlight import HoverHighlightMixin
 
 logger = logging.getLogger(__name__)
 
-class StartPosition(QGraphicsItem):
+class StartPosition(QGraphicsItem, HoverHighlightMixin):
     """
     Класс, представляющий стартовую позицию робота на сцене.
     Отображается в виде красного креста.
@@ -37,6 +38,7 @@ class StartPosition(QGraphicsItem):
         # Проверяем, был ли уже инициализирован экземпляр
         if not hasattr(self, '_is_initialized') or not self._is_initialized:
             super().__init__()
+            HoverHighlightMixin.__init__(self)
             
             # Настройка свойств
             self._x = pos.x()
@@ -48,6 +50,9 @@ class StartPosition(QGraphicsItem):
             
             # Настройка выделения
             self.highlight_rect = None
+            
+            # Инициализация подсветки при наведении после настройки всех атрибутов
+            self.init_hover_highlight()
             
             # Помечаем, что экземпляр уже инициализирован
             self._is_initialized = True
