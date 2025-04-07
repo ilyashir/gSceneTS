@@ -250,8 +250,18 @@ class FieldWidget(QGraphicsView):
             self.selected_item = None
             self.item_deselected.emit()
     
-    def wall_intersects_robot(self, x1, y1, x2, y2):
-        """Проверяет, пересекается ли стена с роботом."""
+    def wall_intersects_robot(self, x1, y1, x2, y2, thickness=None):
+        """
+        Проверяет, пересекается ли стена с роботом.
+        
+        Args:
+            x1, y1: Координаты первой точки стены
+            x2, y2: Координаты второй точки стены
+            thickness: Толщина стены (если None, будет использовано значение по умолчанию)
+            
+        Returns:
+            bool: True, если стена пересекается с роботом, False в противном случае
+        """
         if not self.robot_model: 
             return False
             
@@ -261,8 +271,15 @@ class FieldWidget(QGraphicsView):
         
         # Линия стены
         wall_line = QLineF(QPointF(x1, y1), QPointF(x2, y2))
-        # Проверяем пересечение линии стены с прямоугольником робота
-        return self.line_intersects_rect(wall_line, robot_rect)
+        
+        # Если толщина не указана, получаем её из временной стены
+        if thickness is None:
+            # Создаем временную стену для определения толщины линии
+            temp_wall = Wall(QPointF(x1, y1), QPointF(x2, y2), is_temp=True)
+            thickness = temp_wall.stroke_width
+        
+        # Проверяем пересечение линии стены с прямоугольником робота с учетом толщины
+        return self.line_with_thickness_intersects_rect(wall_line, robot_rect, thickness)
     
     def line_intersects_rect(self, line, rect):
         """
@@ -303,12 +320,15 @@ class FieldWidget(QGraphicsView):
         """
         logger.debug(f"Добавление стены: {p1} - {p2}, id={wall_id}")
         
-        # Проверяем пересечение с роботом
-        if self.wall_intersects_robot(p1.x(), p1.y(), p2.x(), p2.y()):
+        # Создаем новую стену сначала для получения толщины
+        temp_wall = Wall(p1, p2, wall_id=None, is_temp=True)
+        
+        # Проверяем пересечение с роботом, передавая толщину стены
+        if self.wall_intersects_robot(p1.x(), p1.y(), p2.x(), p2.y(), thickness=temp_wall.stroke_width):
             logger.warning("Стена пересекается с роботом - отмена добавления")
             return None
             
-        # Создаем новую стену
+        # Создаем новую стену для добавления на сцену
         wall = Wall(p1, p2, wall_id)
         wall_id = wall.id  # Сохраняем ID для возможной очистки
         
@@ -808,8 +828,14 @@ class FieldWidget(QGraphicsView):
                 
                 # Создаем временный объект для проверки
                 if isinstance(self.dragging_item, Robot):
-                    temp_robot = Robot(new_pos)  # Позиция уже устанавливается в конструкторе
-                    logger.debug(f"Checking robot position: pos=({new_pos.x()}, {new_pos.y()})")
+                    # Проверяем пересечение со стенами
+                    if self.robot_intersects_walls(new_pos):
+                        logger.debug(f"Robot would intersect with walls")
+                        # Не обновляем позицию робота, если он пересекается со стенами
+                        return
+                        
+                    # Проверяем границы сцены
+                    temp_robot = Robot(new_pos)
                     if not self.check_object_within_scene(temp_robot):
                         logger.debug(f"Robot would be out of bounds")
                         return
@@ -892,7 +918,7 @@ class FieldWidget(QGraphicsView):
                 temp_wall_id = temp_wall.id
                 
                 # Обновляем саму линию стены, смещая обе точки, если нет пересечения с роботом
-                if not self.wall_intersects_robot(new_pos_x1, new_pos_y1, new_pos_x2, new_pos_y2) and self.check_object_within_scene(temp_wall):
+                if not self.wall_intersects_robot(new_pos_x1, new_pos_y1, new_pos_x2, new_pos_y2, thickness=self.dragging_item.stroke_width) and self.check_object_within_scene(temp_wall):
                     with self.dragging_item.updating():
                         self.dragging_item.setLine(new_pos_x1, new_pos_y1, new_pos_x2, new_pos_y2)
                     self.properties_window.update_properties(self.dragging_item)
@@ -904,7 +930,7 @@ class FieldWidget(QGraphicsView):
             wall = self.selected_marker.parentItem()
             if self.selected_marker == wall.start_marker:
                 logger.debug(f"Moving wall start marker to {pos}")
-                if self.wall_intersects_robot(pos.x(), pos.y(), wall.line().x2(), wall.line().y2()):
+                if self.wall_intersects_robot(pos.x(), pos.y(), wall.line().x2(), wall.line().y2(), thickness=wall.stroke_width):
                     logger.debug(f"ERR robot intersects")
                     return 
                 else:
@@ -912,7 +938,7 @@ class FieldWidget(QGraphicsView):
                         wall.setLine(pos.x(), pos.y(), wall.line().x2(), wall.line().y2())
                     self.properties_window.update_properties(wall)  # Обновляем свойства
             else:
-                if self.wall_intersects_robot(wall.line().x1(), wall.line().y1(), pos.x(), pos.y()):
+                if self.wall_intersects_robot(wall.line().x1(), wall.line().y1(), pos.x(), pos.y(), thickness=wall.stroke_width):
                     logger.debug(f"ERR robot intersects")
                     return 
                 else:                    
@@ -951,9 +977,17 @@ class FieldWidget(QGraphicsView):
             elif hasattr(self, 'dragging_item') and self.dragging_item:
                 # Проверяем, находится ли объект в пределах сцены
                 if isinstance(self.dragging_item, Robot):
-                    # Создаем временный робот для проверки границ
-                    temp_robot = Robot(self.dragging_item.pos())
-                    if not self.check_object_within_scene(temp_robot):
+                    # Проверяем пересечение со стенами
+                    if self.robot_intersects_walls(self.dragging_item.pos()):
+                        logger.debug(f"Robot intersects with walls, resetting position")
+                        # Возвращаем робота в последнюю допустимую позицию
+                        if hasattr(self, 'last_valid_robot_pos'):
+                            self.dragging_item.setPos(self.last_valid_robot_pos)
+                        else:
+                            # Если нет последней допустимой позиции, возвращаем в центр
+                            self.dragging_item.setPos(0, 0)
+                    # Проверка на выход за границы сцены
+                    elif not self.check_object_within_scene(self.dragging_item):
                         logger.debug(f"Robot is out of bounds, resetting position")
                         # Возвращаем робота в последнюю допустимую позицию
                         if hasattr(self, 'last_valid_robot_pos'):
@@ -979,30 +1013,49 @@ class FieldWidget(QGraphicsView):
         Args:
             x: Новая координата X
             y: Новая координата Y
-            
         Returns:
             bool: True, если обновление прошло успешно, False в противном случае
-        """
+        """    
+
+        logger.debug(f"Updating robot position to {x}, {y}")
         if self.robot_model:
-            # Создаем временный объект для проверки границ сцены
-            temp_robot = Robot(QPointF(x, y))
+            new_pos = QPointF(x, y)
+            
+            # Проверяем пересечение со стенами
+            if self.robot_intersects_walls(new_pos):
+                logger.debug(f"Robot would intersect with walls, canceling update")
+                # Показываем предупреждение о пересечении со стенами
+                QMessageBox.warning(
+                    None,
+                    "Ошибка",
+                    "Робот пересекается со стенами. Пожалуйста, укажите другие координаты.",
+                    QMessageBox.StandardButton.Ok
+                )
+                # Обновляем свойства с правильными координатами
+                self.properties_updated.emit(self.robot_model)
+                return False
+            
+            # Создаем временного робота для проверки границ
+            temp_robot = Robot(new_pos)
+            
+            # Проверяем, находится ли робот в пределах сцены
             if not self.check_object_within_scene(temp_robot):
                 logger.warning(f"Robot position update to ({x}, {y}) rejected - would be out of scene bounds")
                 # Показываем предупреждение о выходе за границы сцены
                 QMessageBox.warning(
                     None,
                     "Ошибка",
-                    f"Робот выйдет за границы сцены. Пожалуйста, укажите другие координаты.",
+                    "Робот выходит за границы сцены. Пожалуйста, укажите другие координаты.",
                     QMessageBox.StandardButton.Ok
                 )
-                # Обновляем свойства с правильной позицией
+                # Обновляем свойства с правильными координатами
                 self.properties_updated.emit(self.robot_model)
                 return False
             
-            # Если проверка пройдена, обновляем позицию
-            self.robot_model.setPos(x, y)
-            # Сохраняем текущую позицию как последнюю допустимую
-            self.last_valid_robot_pos = QPointF(x, y)
+            # Устанавливаем новую позицию только если все проверки пройдены
+            self.robot_model.setPos(new_pos)
+            # Сохраняем как последнюю допустимую позицию
+            self.last_valid_robot_pos = new_pos
             return True
         return False
     
@@ -1075,8 +1128,16 @@ class FieldWidget(QGraphicsView):
             line = self.selected_item.line()
             x2, y2 = line.x2(), line.y2()
             
-            # Проверяем пересечение с роботом, передавая координаты
-            if self.wall_intersects_robot(x1, y1, x2, y2):
+            # Создаем временную стену для проверки пересечения с роботом
+            temp_wall = Wall(QPointF(x1, y1), QPointF(x2, y2), is_temp=True)
+            thickness = self.stroke_width
+            temp_wall_id = temp_wall.id
+            
+            # Проверяем пересечение с роботом, передавая координаты и толщину
+            if self.wall_intersects_robot(x1, y1, x2, y2, thickness=thickness):
+                # Очищаем временный ID
+                Wall.cleanup_temp_id(temp_wall_id)
+                
                 logger.debug(f"Wall would intersect with robot, canceling update")
                 # Показываем предупреждение о пересечении с роботом
                 QMessageBox.warning(
@@ -1088,10 +1149,6 @@ class FieldWidget(QGraphicsView):
                 # Обновляем свойства с правильными координатами
                 self.properties_updated.emit(self.selected_item)
                 return False
-            
-            # Создаем временную стену для проверки границ сцены
-            temp_wall = Wall(QPointF(x1, y1), QPointF(x2, y2), is_temp=True)
-            temp_wall_id = temp_wall.id
             
             if not self.check_object_within_scene(temp_wall):
                 # Очищаем временный ID
@@ -1126,8 +1183,16 @@ class FieldWidget(QGraphicsView):
             line = self.selected_item.line()
             x1, y1 = line.x1(), line.y1()
             
-            # Проверяем пересечение с роботом, передавая координаты
-            if self.wall_intersects_robot(x1, y1, x2, y2):
+            # Создаем временную стену для проверки пересечения с роботом
+            temp_wall = Wall(QPointF(x1, y1), QPointF(x2, y2), is_temp=True)
+            thickness = self.selected_item.stroke_width
+            temp_wall_id = temp_wall.id
+            
+            # Проверяем пересечение с роботом, передавая координаты и толщину
+            if self.wall_intersects_robot(x1, y1, x2, y2, thickness=thickness):
+                # Очищаем временный ID
+                Wall.cleanup_temp_id(temp_wall_id)
+                
                 logger.debug(f"Wall would intersect with robot, canceling update")
                 # Показываем предупреждение о пересечении с роботом
                 QMessageBox.warning(
@@ -1139,10 +1204,6 @@ class FieldWidget(QGraphicsView):
                 # Обновляем свойства с правильными координатами
                 self.properties_updated.emit(self.selected_item)
                 return False
-            
-            # Создаем временную стену для проверки границ сцены
-            temp_wall = Wall(QPointF(x1, y1), QPointF(x2, y2), is_temp=True)
-            temp_wall_id = temp_wall.id
             
             if not self.check_object_within_scene(temp_wall):
                 # Очищаем временный ID
@@ -1874,3 +1935,68 @@ class FieldWidget(QGraphicsView):
                 obj._is_hovered = False
                 obj.set_hover_highlight(False)
                 
+    def line_with_thickness_intersects_rect(self, line, rect, thickness):
+        """
+        Проверяет, пересекает ли линия с заданной толщиной прямоугольник.
+        
+        Args:
+            line: Линия (QLineF)
+            rect: Прямоугольник (QRectF)
+            thickness: Толщина линии
+            
+        Returns:
+            bool: True, если линия с учетом толщины пересекает прямоугольник, иначе False
+        """
+        # Проверяем сначала обычное пересечение
+        if self.line_intersects_rect(line, rect):
+            return True
+            
+        # Если обычное пересечение не обнаружено, проверяем с учетом толщины
+        # Для этого создаем увеличенный прямоугольник с учетом половины толщины линии
+        inflated_rect = QRectF(
+            rect.x() - thickness / 2,
+            rect.y() - thickness / 2,
+            rect.width() + thickness,
+            rect.height() + thickness
+        )
+        
+        # Проверяем пересечение с увеличенным прямоугольником
+        return self.line_intersects_rect(line, inflated_rect)
+
+    def robot_intersects_walls(self, robot_pos):
+        """
+        Проверяет, пересекается ли робот со стенами в указанной позиции.
+        
+        Args:
+            robot_pos: Позиция робота (QPointF) - верхний левый угол
+            
+        Returns:
+            bool: True, если робот пересекается хотя бы с одной стеной, False в противном случае
+        """
+        if not self.robot_model:
+            return False
+            
+        # Размер робота - 50x50 пикселей
+        robot_size = 50
+        
+        # Создаем прямоугольник робота
+        robot_rect = QRectF(
+            robot_pos.x(), 
+            robot_pos.y(),
+            robot_size, 
+            robot_size
+        )
+        
+        # Проверяем пересечение с каждой стеной
+        for wall in self.walls:
+            line = wall.line()
+            
+            # Получаем толщину стены из атрибута stroke_width
+            thickness = wall.stroke_width
+            
+            # Проверяем пересечение линии стены с прямоугольником робота, учитывая толщину
+            if self.line_with_thickness_intersects_rect(line, robot_rect, thickness):
+                logger.debug(f"Robot intersects with wall {wall.id}")
+                return True
+                
+        return False

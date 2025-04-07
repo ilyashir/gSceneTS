@@ -1,7 +1,8 @@
 import sys
 import os
 import unittest
-from PyQt6.QtCore import Qt, QPointF, QEvent, QPoint
+import math
+from PyQt6.QtCore import Qt, QPointF, QEvent, QPoint, QLineF
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtTest import QTest
 from unittest.mock import patch, MagicMock
@@ -16,13 +17,16 @@ from wall import Wall
 from region import Region
 from styles import AppStyles
 
-# Создаем экземпляр QApplication для тестов
-app = QApplication.instance()
-if app is None:
-    app = QApplication([])
-
 class TestUIInteractions(unittest.TestCase):
     """Тесты для UI взаимодействий"""
+    
+    @classmethod
+    def setUpClass(cls):
+        """Настройка класса тестов"""
+        # Создаем экземпляр QApplication для всех тестов
+        cls.app = QApplication.instance()
+        if cls.app is None:
+            cls.app = QApplication([])
     
     def setUp(self):
         """Настройка тестового окружения перед каждым тестом"""
@@ -33,16 +37,11 @@ class TestUIInteractions(unittest.TestCase):
         # Создаем главное окно для тестов
         self.window = MainWindow()
         self.window.show()
-        
-        # Поскольку qtbot.waitExposed в pytest нет в unittest, 
-        # используем processEvents для обработки событий
         QApplication.processEvents()
     
     def tearDown(self):
         """Очистка после каждого теста"""
         self.patcher_msg.stop()
-        
-        # Закрываем окно
         self.window.close()
         QApplication.processEvents()
     
@@ -253,6 +252,101 @@ class TestUIInteractions(unittest.TestCase):
         # Проверяем, что ID не изменился (операция не прошла)
         self.assertFalse(result2)
         self.assertEqual(region2.id, original_id)
+
+    def test_robot_wall_intersection_mouse_drag(self):
+        """Тест перетаскивания робота при наличии стены"""
+        self.window.set_mode("edit")
+        QApplication.processEvents()
+        
+        # Создаем стену
+        wall = Wall(QPointF(0, 200), QPointF(200, 0))
+        self.window.field_widget.scene().addItem(wall)
+        
+        # Создаем робота
+        robot = Robot(QPointF(50, 50))
+        self.window.field_widget.scene().addItem(robot)
+        
+        # Выбираем робота
+        self.window.field_widget.select_item(robot)
+        QApplication.processEvents()
+        
+        # Пытаемся переместить робота в точку пересечения со стеной
+        field_widget = self.window.field_widget
+        view_pos = field_widget.mapFromScene(robot.pos())
+        
+        QTest.mousePress(field_widget.viewport(), Qt.MouseButton.LeftButton, pos=view_pos)
+        QApplication.processEvents()
+        
+        # Пытаемся перетащить в точку (100, 50)
+        drag_pos = field_widget.mapFromScene(QPointF(100, 50))
+        QTest.mouseMove(field_widget.viewport(), pos=drag_pos)
+        QApplication.processEvents()
+        
+        QTest.mouseRelease(field_widget.viewport(), Qt.MouseButton.LeftButton, pos=drag_pos)
+        QApplication.processEvents()
+        
+        # Проверяем, что робот не пересекает стену
+        self.assertFalse(self.window.field_widget.robot_intersects_walls(robot))
+
+    def test_robot_wall_intersection_properties(self):
+        """Тест изменения позиции робота через свойства при наличии стены"""
+        self.window.set_mode("edit")
+        QApplication.processEvents()
+        
+        # Создаем стену
+        wall = Wall(QPointF(0, 200), QPointF(200, 0))
+        self.window.field_widget.scene().addItem(wall)
+        
+        # Создаем робота
+        robot = Robot(QPointF(50, 50))
+        self.window.field_widget.scene().addItem(robot)
+        
+        # Выбираем робота
+        initial_pos = robot.pos()
+        self.window.field_widget.select_item(robot)
+        QApplication.processEvents()
+        
+        # Эмулируем изменение свойств
+        self.window.properties_window.robot_x.setValue(100)
+        QApplication.processEvents()
+        self.window.properties_window.robot_y.setValue(50)
+        QApplication.processEvents()
+        
+        # Проверяем, что робот не пересекает стену
+        self.assertFalse(self.window.field_widget.robot_intersects_walls(robot))
+
+    def test_robot_wall_intersection_edge_cases(self):
+        """Тест граничных случаев пересечения робота со стенами"""
+        self.window.set_mode("edit")
+        QApplication.processEvents()
+        
+        # Создаем стены и добавляем их через field_widget для корректной обработки
+        walls = [
+            {'p1': QPointF(0, 100), 'p2': QPointF(200, 100)},   # Горизонтальная
+            {'p1': QPointF(100, 0), 'p2': QPointF(100, 200)},   # Вертикальная
+            {'p1': QPointF(0, 200), 'p2': QPointF(200, 0)}      # Диагональная
+        ]
+        
+        for wall_data in walls:
+            self.window.field_widget.add_wall(wall_data['p1'], wall_data['p2'])
+        QApplication.processEvents()
+        
+        # Получаем робота, который уже существует на сцене
+        robot = self.window.field_widget.robot_model
+        
+        test_positions = [
+            QPointF(100, 50),   # Возле вертикальной стены
+            QPointF(50, 100),   # Возле горизонтальной стены
+            QPointF(100, 100),  # На пересечении стен
+            QPointF(100, 150)   # Возле диагональной стены на расстоянии пересечения
+        ]
+        
+        for pos in test_positions:
+            robot.setPos(pos)
+            QApplication.processEvents()
+            # Проверяем пересечение
+            intersects = self.window.field_widget.robot_intersects_walls(pos)
+            self.assertTrue(intersects, f"Робот должен пересекать стену в позиции {pos}")
 
 if __name__ == '__main__':
     unittest.main() 
