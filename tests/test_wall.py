@@ -5,12 +5,10 @@ from PyQt6.QtCore import QPointF, QLineF
 from PyQt6.QtGui import QPen, QColor
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from unittest.mock import patch
+from scene.items import Wall
 
 # Добавляем корневую директорию проекта в sys.path
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
-
-# Импортируем класс стены
-from wall import Wall
 
 # Создаем экземпляр QApplication для тестов
 app = QApplication.instance()

@@ -6,7 +6,7 @@
 """
 
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QSizePolicy
-from PyQt6.QtCore import pyqtSignal, Qt
+from PyQt6.QtCore import pyqtSignal, Qt, QObject
 from PyQt6.QtGui import QFont
 import logging
 
@@ -15,6 +15,12 @@ from robot import Robot
 from wall import Wall
 from region import Region
 from start_position import StartPosition
+from .properties_window import PropertiesWindow
+from scene.items import Robot, Wall, Region, StartPosition
+from .robot_properties_widget import RobotPropertiesWidget
+from .wall_properties_widget import WallPropertiesWidget
+from .region_properties_widget import RegionPropertiesWidget
+from .start_position_properties_widget import StartPositionPropertiesWidget
 
 logger = logging.getLogger(__name__)
 

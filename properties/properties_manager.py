@@ -9,10 +9,9 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QLayout, QStacked
 from PyQt6.QtCore import Qt, pyqtSignal, QObject
 import logging
 
-from robot import Robot
-from wall import Wall
-from region import Region
-from start_position import StartPosition
+from .properties_window import PropertiesWindow
+from .properties_window_adapter import PropertiesWindowAdapter
+from scene.items import Robot, Wall, Region, StartPosition
 
 from properties.robot_properties_widget import RobotPropertiesWidget
 from properties.wall_properties_widget import WallPropertiesWidget

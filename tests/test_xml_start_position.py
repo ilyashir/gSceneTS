@@ -4,13 +4,14 @@ import unittest
 import xml.etree.ElementTree as ET
 from unittest.mock import MagicMock, patch
 from PyQt6.QtCore import QPointF
+from PyQt6.QtWidgets import QApplication
 
 # Добавляем корневую директорию проекта в путь к модулям
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Импортируем тестируемые модули
 from utils.xml_handler import XMLHandler
-from start_position import StartPosition
+from scene.items import StartPosition
 
 class TestXMLStartPosition(unittest.TestCase):
     """Тестирование экспорта/импорта стартовой позиции в XML формате"""

@@ -6,6 +6,9 @@ from PyQt6.QtWidgets import QApplication, QGraphicsScene, QMessageBox
 from PyQt6.QtTest import QTest
 import logging
 from unittest.mock import patch, MagicMock
+from scene.items import Robot, Wall, Region
+from field_widget import FieldWidget
+from properties_window import PropertiesWindow
 
 # Настройка логирования
 logging.basicConfig(level=logging.DEBUG,
@@ -13,12 +16,6 @@ logging.basicConfig(level=logging.DEBUG,
 
 # Добавляем корневую директорию проекта в sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from field_widget import FieldWidget
-from properties_window import PropertiesWindow
-from robot import Robot
-from wall import Wall
-from region import Region
 
 # Создаем экземпляр QApplication для всех тестов
 app = QApplication.instance()

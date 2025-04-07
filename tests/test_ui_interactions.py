@@ -2,19 +2,18 @@ import sys
 import os
 import unittest
 import math
-from PyQt6.QtCore import Qt, QPointF, QEvent, QPoint, QLineF
-from PyQt6.QtWidgets import QApplication, QMessageBox
+from PyQt6.QtCore import Qt, QPointF, QEvent, QPoint, QLineF, QRectF
+from PyQt6.QtWidgets import QApplication, QMessageBox, QGraphicsScene
 from PyQt6.QtTest import QTest
 from unittest.mock import patch, MagicMock
+from scene.items import Robot, Wall, Region
+from field_widget import FieldWidget
 
 # Добавляем корневую директорию проекта в sys.path
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 
 # Импортируем тестируемые модули
 from main_window import MainWindow
-from robot import Robot
-from wall import Wall
-from region import Region
 from styles import AppStyles
 
 class TestUIInteractions(unittest.TestCase):

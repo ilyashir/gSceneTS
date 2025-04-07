@@ -6,10 +6,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QPainter, QPixmap, QPen, QBrush, QColor, QImage, QTransform, QPainterPath, QPolygonF
 from PyQt6.QtCore import Qt, QPointF, QRectF, QLineF, pyqtSignal, pyqtSlot, QThread, QTimer, QDataStream, QIODevice, QByteArray
 from PyQt6.QtSvg import QSvgRenderer
-from robot import Robot
-from wall import Wall
-from region import Region
-from start_position import StartPosition
+from scene.items import Robot, Wall, Region, StartPosition
 from styles import AppStyles
 from hover_highlight import HoverHighlightMixin
 # Импортируем утилитные функции

@@ -1,14 +1,15 @@
-import sys
-import os
 import unittest
 from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtWidgets import QApplication
+import sys
+import os
 from PyQt6.QtGui import QColor, QPainterPath
 
 # Добавляем корневую директорию проекта в sys.path
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 
 # Импортируем тестируемые модули
-from region import Region
+from scene.items import Region
 
 class TestRegion(unittest.TestCase):
     """Тесты для класса Region"""

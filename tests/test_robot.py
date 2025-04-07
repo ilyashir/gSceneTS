@@ -4,11 +4,12 @@ import unittest
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QColor
 import math
+from PyQt6.QtWidgets import QApplication
 
 # Добавляем корневую директорию проекта в sys.path
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 
-from robot import Robot
+from scene.items import Robot
 
 class TestRobot(unittest.TestCase):
     """Тесты для класса Robot"""

@@ -1,20 +1,18 @@
 import sys
 import os
 import unittest
-from PyQt6.QtCore import Qt, QPointF, QEvent
+from PyQt6.QtCore import Qt, QPointF, QEvent, QRectF
 from PyQt6.QtWidgets import QApplication, QGraphicsSceneMouseEvent, QMessageBox
 from PyQt6.QtTest import QTest
 from PyQt6.QtGui import QMouseEvent
 from unittest.mock import patch, MagicMock
+from scene.items import Robot, Wall, Region
 
 # Добавляем корневую директорию проекта в sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from field_widget import FieldWidget
 from properties_window import PropertiesWindow
-from robot import Robot
-from wall import Wall
-from region import Region
 
 # Создаем экземпляр QApplication для тестов
 app = QApplication.instance()

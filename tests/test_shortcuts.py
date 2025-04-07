@@ -1,7 +1,7 @@
 import sys
 import os
 import unittest
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QGraphicsScene
 from PyQt6.QtTest import QTest
 from PyQt6.QtCore import Qt, QPoint, QPointF, QRectF
 from PyQt6.QtGui import QKeySequence
@@ -11,7 +11,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from main_window import MainWindow
 import logging
-import field_widget
+from scene.items import Wall, Region, Robot
+from field_widget import FieldWidget
 from robot import Robot  # Явно импортируем Robot для сброса экземпляра
 
 # Настраиваем логирование для тестов
@@ -30,7 +31,7 @@ logging.disable(logging.CRITICAL)
 # logging.basicConfig(level=logging.DEBUG)
 
 # Патчим класс FieldWidget до его импорта и использования
-original_init_robot = field_widget.FieldWidget.init_robot
+original_init_robot = FieldWidget.init_robot
 
 def patched_init_robot(self, pos):
     logging.info("ПАТЧ: Вызван patched_init_robot глобально")
@@ -60,16 +61,16 @@ def patched_init_robot(self, pos):
     return True
 
 # Заменяем оригинальный метод патченным на уровне класса
-field_widget.FieldWidget.init_robot = patched_init_robot
+FieldWidget.init_robot = patched_init_robot
 
 # Делаем то же самое для check_object_within_scene
-original_check_object = field_widget.FieldWidget.check_object_within_scene
+original_check_object = FieldWidget.check_object_within_scene
 
 def patched_check_object(self, item):
     logging.info("ПАТЧ: Вызван patched_check_object_within_scene глобально")
     return True
 
-field_widget.FieldWidget.check_object_within_scene = patched_check_object
+FieldWidget.check_object_within_scene = patched_check_object
 
 class TestShortcuts(unittest.TestCase):
     """Тесты для проверки работы горячих клавиш"""
@@ -81,7 +82,7 @@ class TestShortcuts(unittest.TestCase):
         cls.app = QApplication(sys.argv)
         
         # Сохраняем оригинальный метод init_robot
-        cls.original_init_robot = field_widget.FieldWidget.init_robot
+        cls.original_init_robot = FieldWidget.init_robot
         
         # Создаем заглушку для init_robot
         def mock_init_robot(self, pos):
@@ -114,23 +115,23 @@ class TestShortcuts(unittest.TestCase):
             return True
         
         # Заменяем оригинальный метод моком
-        field_widget.FieldWidget.init_robot = mock_init_robot
+        FieldWidget.init_robot = mock_init_robot
         
         # Также заменяем check_object_within_scene для предотвращения проблем с проверкой границ
-        cls.original_check_object = field_widget.FieldWidget.check_object_within_scene
+        cls.original_check_object = FieldWidget.check_object_within_scene
         
-        def mock_check_object_within_scene(self, item):
+        def mock_check_object_within_scene(item):
             logging.debug(f"Mock: check_object_within_scene вызван")
             return True
             
-        field_widget.FieldWidget.check_object_within_scene = mock_check_object_within_scene
+        FieldWidget.check_object_within_scene = mock_check_object_within_scene
         
     @classmethod
     def tearDownClass(cls):
         """Восстанавливаем оригинальные методы после всех тестов"""
         # Восстанавливаем оригинальные методы класса
-        field_widget.FieldWidget.init_robot = cls.original_init_robot
-        field_widget.FieldWidget.check_object_within_scene = cls.original_check_object
+        FieldWidget.init_robot = cls.original_init_robot
+        FieldWidget.check_object_within_scene = cls.original_check_object
         
     def setUp(self):
         """Создаем главное окно перед каждым тестом"""
