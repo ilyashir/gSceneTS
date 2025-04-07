@@ -7,17 +7,18 @@ This document outlines the planned development path for the project, including u
 ## Current Release (v0.4.0) / Текущий релиз
 
 ### Features / Функции
-- [ ] Add robot start position marker as a red cross / Добавить метку старта робота в виде красного крестика
+- [x] Add robot start position marker as a red cross / Добавить метку старта робота в виде красного крестика
 - [ ] Add ability to draw lines on the scene / Добавить возможность рисовать линии на сцене
 - [ ] Add option to display regions on top of other objects in edit mode for easier movement / Добавить в режиме редактирования возможность отображать регионы поверх остальных объектов для перемещения
 - [ ] Add "Realistic Physics" section with 3 checkpoints / Добавить раздел "Реалистичная физика" с 3мя чекпоинтами
 - [ ] Update menu style and add new functionality / Обновить стиль меню и добавить новую функциональность
 
-### Improvements / Улучшения
+### Improvements / Улучшения 
 - [ ] Refactor codebase for better maintainability / Рефакторинг кодовой базы для улучшения сопровождаемости
 - [ ] Enhance error handling throughout the application / Улучшить обработку ошибок во всем приложении
 - [ ] Optimize memory usage / Оптимизировать использование памяти
 - [ ] Improve the scene rendering system / Улучшить систему рендеринга сцены
+- [x] Enhance robot-wall intersection checks with proper wall thickness handling / Улучшить проверку пересечения робота со стенами с учетом толщины стены
 - [ ] Align object properties with current TRIK Studio scene tag attributes format / Привести свойства объектов к текущему формату атрибутов тегов сцен TRIK Studio
 - [ ] Optimize performance for large scenes / Оптимизировать производительность для больших сцен
 - [ ] Implement undo/redo functionality / Реализовать функциональность отмены/повтора действий
