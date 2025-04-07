@@ -410,6 +410,12 @@ class FieldWidget(QGraphicsView):
 
     def init_robot(self, pos):
         logger.debug(f"Setting robot position to {pos}")
+        # Проверяем, находится ли робот в пределах сцены
+        temp_robot = Robot(pos)
+        if not self.check_object_within_scene(temp_robot):
+            logger.warning(f"Robot position {pos} is out of bounds - using default position (0, 0)")
+            pos = QPointF(0, 0)
+            
         if self.robot_model is not None:
             logger.debug("Removing existing robot from scene")
             self.scene().removeItem(self.robot_model)
@@ -529,6 +535,10 @@ class FieldWidget(QGraphicsView):
         if (self.robot_model.pos().x() < -width // 2 or self.robot_model.pos().x() + self.robot_model.boundingRect().width() > width // 2 or
             self.robot_model.pos().y() < -height // 2 or self.robot_model.pos().y() + self.robot_model.boundingRect().height() > height // 2):
                 return False
+        
+        if (self.start_position_model.pos().x() < -width // 2 or self.start_position_model.pos().x() + self.start_position_model.boundingRect().width() > width // 2 or
+            self.start_position_model.pos().y() < -height // 2 or self.start_position_model.pos().y() + self.start_position_model.boundingRect().height() > height // 2):
+                return False
 
         return True
     
@@ -550,10 +560,10 @@ class FieldWidget(QGraphicsView):
             # Для стены проверяем обе точки линии
             line = item.line()
             return (
-                -scene_width / 2 + 25 <= line.x1() <= scene_width / 2 - 25 and
-                -scene_height / 2 + 25 <= line.y1() <= scene_height / 2 - 25 and
-                -scene_width / 2 + 25 <= line.x2() <= scene_width / 2 - 25 and
-                -scene_height / 2 + 25 <= line.y2() <= scene_height / 2 - 25
+                -scene_width / 2 <= line.x1() <= scene_width / 2 and
+                -scene_height / 2 <= line.y1() <= scene_height / 2 and
+                -scene_width / 2 <= line.x2() <= scene_width / 2 and
+                -scene_height / 2 <= line.y2() <= scene_height / 2
             )
         
         # Проверяем, является ли элемент регионом
@@ -588,9 +598,11 @@ class FieldWidget(QGraphicsView):
             logger.debug(f"Scene bounds: x=({-scene_width/2}, {scene_width/2}), y=({-scene_height/2}, {scene_height/2})")
             
             # Проверяем, что робот полностью находится в пределах сцены
+            # с учетом его размеров (50x50 пикселей)
+            # Используем точные размеры робота, а не размеры boundingRect
             return (
-                -scene_width / 2 <= pos.x() <= scene_width / 2 - 50 and
-                -scene_height / 2 <= pos.y() <= scene_height / 2 - 50
+                -scene_width / 2 <= pos.x() and pos.x() + 50 <= scene_width / 2 and
+                -scene_height / 2 <= pos.y() and pos.y() + 50 <= scene_height / 2
             )
             
         elif isinstance(item, StartPosition):
@@ -612,21 +624,19 @@ class FieldWidget(QGraphicsView):
         pos = self.snap_to_grid(posOriginal) # координаты с привязкой к сетке
 
         item = self.scene().itemAt(posOriginal, self.transform())
-        logger.debug(f"CLICK: position={posOriginal}, item={type(item)}, parent={type(item.parentItem()) if item and item.parentItem() else None}")
+        parent_item = item.parentItem() if item else None
+        logger.debug(f"CLICK: position={posOriginal}, item={type(item)}, parent={type(parent_item) if parent_item else None}")
         
         if event.button() == Qt.MouseButton.LeftButton:
             
             # Если в режиме редактирования и нажали на объект, меняем курсор на "кулачок"
             if self.edit_mode and item and (isinstance(item, (Robot, Region, StartPosition, Wall)) or 
                       (hasattr(item, 'data') and (item.data(0) == "its_wall" or item.data(0) == "wall_marker" or item.data(0) == "hover_highlight")) or 
-                      (item.parentItem() and isinstance(item.parentItem(), (Robot, Region, StartPosition, Wall)))):
+                      (parent_item and isinstance(parent_item, (Robot, Region, StartPosition, Wall)))):
                 self.setCursor(Qt.CursorShape.ClosedHandCursor)
             
             # Проверка клика по выделяемому объекту или его дочернему элементу
             if item:
-                # Проверяем, не является ли item частью уже выделенного объекта
-                parent_item = item.parentItem()
-                
                 # Проверяем, не является ли это подсветкой при наведении
                 if hasattr(item, 'data') and item.data(0) == "hover_highlight" and parent_item:
                     # Если это hover_highlight, то работаем с родительским элементом
@@ -668,9 +678,8 @@ class FieldWidget(QGraphicsView):
                     return
                 elif item and hasattr(item, 'data') and item.data(0) == "its_wall":
                     # Получаем родительский объект (Wall)
-                    parent = item.parentItem()
-                    if parent and isinstance(parent, Wall):
-                        self.dragging_item = parent
+                    if parent_item and isinstance(parent_item, Wall):
+                        self.dragging_item = parent_item
                         # Сохраняем точку захвата
                         self.grab_point = pos
                         # Сохраняем начальные координаты стены
@@ -679,17 +688,16 @@ class FieldWidget(QGraphicsView):
                         return
                 elif item and hasattr(item, 'data') and item.data(0) == "hover_highlight":
                     # Получаем родительский объект для hover_highlight
-                    parent = item.parentItem()
-                    if parent and isinstance(parent, Wall):
+                    if parent_item and isinstance(parent_item, Wall):
                         # Для стены сохраняем точку захвата и начальные координаты
-                        self.dragging_item = parent
+                        self.dragging_item = parent_item
                         self.grab_point = pos
                         line = self.dragging_item.line()
                         self.initial_line = QLineF(line.x1(), line.y1(), line.x2(), line.y2())
                         return
-                    elif parent and isinstance(parent, (Robot, Region, StartPosition)):
+                    elif parent_item and isinstance(parent_item, (Robot, Region, StartPosition)):
                         # Для других объектов
-                        self.dragging_item = parent
+                        self.dragging_item = parent_item
                         self.drag_offset = pos - self.dragging_item.pos()
                         return
                 elif item and (isinstance(item, (Robot, Region, StartPosition, Wall))):
@@ -800,11 +808,17 @@ class FieldWidget(QGraphicsView):
                 
                 # Создаем временный объект для проверки
                 if isinstance(self.dragging_item, Robot):
-                    temp_robot = Robot(new_pos)
-                    logger.debug(f"from: {temp_robot.x(), temp_robot.y(), temp_robot.x() + temp_robot.boundingRect().width(), temp_robot.y() + temp_robot.boundingRect().height()}")  
+                    temp_robot = Robot(new_pos)  # Позиция уже устанавливается в конструкторе
+                    logger.debug(f"Checking robot position: pos=({new_pos.x()}, {new_pos.y()})")
                     if not self.check_object_within_scene(temp_robot):
-                        logger.debug(f"ERR robot would be out of bounds")
+                        logger.debug(f"Robot would be out of bounds")
                         return
+                    # Устанавливаем позицию реального робота только если проверка пройдена
+                    self.dragging_item.setPos(new_pos)
+                    # Сохраняем текущую позицию как последнюю допустимую
+                    self.last_valid_robot_pos = new_pos
+                    # Обновляем свойства в окне свойств в режиме реального времени
+                    self.properties_window.update_properties(self.dragging_item)
                 elif isinstance(self.dragging_item, Region):                        
                     # Создаем временный путь для проверки границ региона
                     path = self.dragging_item.path()
@@ -839,9 +853,9 @@ class FieldWidget(QGraphicsView):
                         logger.debug(f"ERR region would be out of bounds")
                         return
                 
-                self.dragging_item.setPos(new_pos)
-                # Обновляем свойства в окне свойств в режиме реального времени
-                self.properties_window.update_properties(self.dragging_item)
+                    self.dragging_item.setPos(new_pos)
+                    # Обновляем свойства в окне свойств в режиме реального времени
+                    self.properties_window.update_properties(self.dragging_item)
             elif isinstance(self.dragging_item, StartPosition):
                 # Для стартовой позиции используем половинный шаг сетки
                 if self.snap_to_grid_enabled:
@@ -935,6 +949,22 @@ class FieldWidget(QGraphicsView):
                 logger.debug("Clearing selected marker")
                 self.selected_marker = None
             elif hasattr(self, 'dragging_item') and self.dragging_item:
+                # Проверяем, находится ли объект в пределах сцены
+                if isinstance(self.dragging_item, Robot):
+                    # Создаем временный робот для проверки границ
+                    temp_robot = Robot(self.dragging_item.pos())
+                    if not self.check_object_within_scene(temp_robot):
+                        logger.debug(f"Robot is out of bounds, resetting position")
+                        # Возвращаем робота в последнюю допустимую позицию
+                        if hasattr(self, 'last_valid_robot_pos'):
+                            self.dragging_item.setPos(self.last_valid_robot_pos)
+                        else:
+                            # Если нет последней допустимой позиции, возвращаем в центр
+                            self.dragging_item.setPos(0, 0)
+                    else:
+                        # Сохраняем текущую позицию как последнюю допустимую
+                        self.last_valid_robot_pos = self.dragging_item.pos()
+                
                 # Обновляем свойства в окне свойств после завершения перетаскивания
                 logger.debug(f"Updating properties after dragging for: {self.dragging_item}")
                 self.properties_window.update_properties(self.dragging_item)
@@ -971,6 +1001,8 @@ class FieldWidget(QGraphicsView):
             
             # Если проверка пройдена, обновляем позицию
             self.robot_model.setPos(x, y)
+            # Сохраняем текущую позицию как последнюю допустимую
+            self.last_valid_robot_pos = QPointF(x, y)
             return True
         return False
     
@@ -1601,6 +1633,9 @@ class FieldWidget(QGraphicsView):
         # Настраиваем обработку событий для робота
         self.robot_model.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.robot_model.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
+        
+        # Сохраняем текущую позицию как последнюю допустимую
+        self.last_valid_robot_pos = position
         
         logger.debug(f"Робот успешно размещен в позиции {position}, id={self.robot_model.id}")
         return self.robot_model
