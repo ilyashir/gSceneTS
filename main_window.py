@@ -6,6 +6,7 @@ from PyQt6.QtGui import QIcon, QAction
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QPointF
 from field_widget import FieldWidget
 from properties.properties_window_adapter import PropertiesWindow
+from properties.properties_manager import PropertiesManager
 import xml.etree.ElementTree as ET
 from xml.dom import minidom 
 import logging
@@ -68,43 +69,44 @@ class MainWindow(QMainWindow):
         
         self.coords_panel.setLayout(coords_layout)
 
-        # Создаем окно свойств
-        logger.debug(f"Создаем окно свойств, is_dark_theme: {self.is_dark_theme}")
-        self.properties_window = PropertiesWindow(self, is_dark_theme=self.is_dark_theme)
+        # Сначала создаем менеджер свойств
+        logger.debug(f"Создаем менеджер свойств, is_dark_theme: {self.is_dark_theme}")
+        self.properties_manager = PropertiesManager(parent=self, is_dark_theme=self.is_dark_theme)
+
+        # Затем создаем адаптер окна свойств и передаем ему менеджер
+        logger.debug("Создаем адаптер окна свойств")
+        self.properties_window = PropertiesWindow(self.properties_manager, is_dark_theme=self.is_dark_theme)
         
-        # Устанавливаем тему для окна свойств
+        # Устанавливаем тему для окна свойств (адаптера)
         if hasattr(self.properties_window, 'set_theme'):
-            logger.debug("Вызываем set_theme для окна свойств")
+            logger.debug("Вызываем set_theme для адаптера окна свойств")
             self.properties_window.set_theme(self.is_dark_theme)
-        else:
-            logger.debug("Метод set_theme не найден, применяем стиль напрямую")
-            self.properties_window.setStyleSheet(
-                AppStyles.DARK_PROPERTIES_WINDOW if self.is_dark_theme else AppStyles.LIGHT_PROPERTIES_WINDOW
-            )
+        
         self.properties_dock = QDockWidget("Свойства", self)
         self.properties_dock.setWidget(self.properties_window)
         self.properties_dock.setStyleSheet(
             AppStyles.DARK_PROPERTIES_WINDOW if self.is_dark_theme else AppStyles.LIGHT_PROPERTIES_WINDOW
         )
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.properties_dock)
-        self.properties_dock.show()  # Явно показываем dock-виджет
+        self.properties_dock.show() 
         logger.debug(f"Dock-виджет свойств создан, видимость: {self.properties_dock.isVisible()}")
 
         # Создаем контейнер для координат и FieldWidget
         container = QWidget()
         layout = QVBoxLayout()
-        layout.addWidget(self.coords_panel)  # Добавляем панель с координатами и переключателем
+        layout.addWidget(self.coords_panel)
         
         # Добавляем окно с полем с параметрами из конфигурации
+        # Передаем адаптер properties_window в FieldWidget
         self.field_widget = FieldWidget(self.properties_window, 
                                         scene_width=self.scene_width, 
                                         scene_height=self.scene_height,
                                         grid_size=self.grid_size)
 
-        # Явно подключаем field_widget к properties_window
-        if hasattr(self.properties_window, 'connect_to_field_widget'):
-            logger.debug("Явно подключаем field_widget к properties_window")
-            self.properties_window.connect_to_field_widget(self.field_widget)
+        # Явно подключаем field_widget к properties_manager (не к адаптеру)
+        if hasattr(self.properties_manager, 'connect_to_field_widget'):
+            logger.debug("Явно подключаем field_widget к properties_manager")
+            self.properties_manager.connect_to_field_widget(self.field_widget)
 
         vsb, hsb = apply_scrollbars_to_graphics_view(
             self.field_widget,
@@ -1071,24 +1073,31 @@ class MainWindow(QMainWindow):
             return False
 
     def _connect_signals(self):
-        """Подключение сигналов."""
-        # Подключаем сигналы от окна свойств
+        """Подключаем сигналы приложения."""
+        # Сигналы от FieldWidget
+        self.field_widget.mouse_coords_updated.connect(self.update_coords_label)
+        self.field_widget.item_selected.connect(self.properties_window.update_properties)
+        self.field_widget.item_deselected.connect(self.properties_window.clear_properties)
+        self.field_widget.properties_updated.connect(self.properties_window.update_properties)
+        self.field_widget.grid_snap_changed.connect(self.properties_manager.on_grid_snap_changed)
+
+        # Сигналы от PropertiesWindow (адаптера)
+        # Робот
         self.properties_window.robot_position_changed.connect(self.field_widget.update_robot_position)
         self.properties_window.robot_rotation_changed.connect(self.field_widget.update_robot_rotation)
+        
+        # Стена
         self.properties_window.wall_position_point1_changed.connect(self.field_widget.update_wall_point1)
         self.properties_window.wall_position_point2_changed.connect(self.field_widget.update_wall_point2)
-        self.properties_window.wall_size_changed.connect(self.field_widget.update_wall_size)
+        self.properties_window.wall_stroke_width_changed.connect(self.field_widget.update_wall_stroke_width)
+        self.properties_window.wall_id_changed.connect(self.field_widget.update_wall_id)
+        
+        # Регион
         self.properties_window.region_position_changed.connect(self.field_widget.update_region_position)
         self.properties_window.region_size_changed.connect(self.field_widget.update_region_size)
         self.properties_window.region_color_changed.connect(self.field_widget.update_region_color)
-        
-        # Подключаем сигналы изменения ID от окна свойств
-        self.properties_window.wall_id_changed.connect(self.field_widget.update_wall_id)
         self.properties_window.region_id_changed.connect(self.field_widget.update_region_id)
         
-        # Подключаем сигналы для стартовой позиции
-        self.properties_window.start_position_position_changed.connect(self.field_widget.update_start_position)
+        # Стартовая позиция
+        self.properties_window.start_position_position_changed.connect(self.field_widget.update_start_position_position)
         self.properties_window.start_position_direction_changed.connect(self.field_widget.update_start_position_direction)
-        
-        # Подключаем сигналы изменения координат мыши
-        self.field_widget.mouse_coords_updated.connect(self.update_coords_label)

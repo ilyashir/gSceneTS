@@ -1,22 +1,20 @@
 """
-Пакет свойств для элементов сцены.
-
-Содержит виджеты и утилиты для управления свойствами различных элементов:
-- Робот
-- Стена
-- Регион
+Properties package.
+Contains classes for managing object properties.
 """
 
-from properties.base_properties_widget import BasePropertiesWidget
-from properties.robot_properties_widget import RobotPropertiesWidget
-from properties.wall_properties_widget import WallPropertiesWidget
-from properties.region_properties_widget import RegionPropertiesWidget
-from properties.properties_manager import PropertiesManager
+from .properties_manager import PropertiesManager
+from .properties_window_adapter import PropertiesWindow
+from .robot_properties_widget import RobotPropertiesWidget
+from .wall_properties_widget import WallPropertiesWidget
+from .region_properties_widget import RegionPropertiesWidget
+from .start_position_properties_widget import StartPositionPropertiesWidget
 
 __all__ = [
-    'BasePropertiesWidget',
-    'RobotPropertiesWidget',
-    'WallPropertiesWidget',
+    'PropertiesManager', 
+    'PropertiesWindow', 
+    'RobotPropertiesWidget', 
+    'WallPropertiesWidget', 
     'RegionPropertiesWidget',
-    'PropertiesManager'
+    'StartPositionPropertiesWidget'
 ] 

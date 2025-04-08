@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QGraphicsLineItem, QGraphicsEllipseItem, QGraphicsItem, QGraphicsRectItem
-from PyQt6.QtGui import QPixmap, QPainter, QPen, QBrush, QColor, QTransform
+from PyQt6.QtGui import QPixmap, QPainter, QPen, QBrush, QColor, QTransform, QPainterPath, QPainterPathStroker
 from PyQt6.QtCore import Qt, QRectF, QLineF, QPointF
 from contextlib import contextmanager
 from .base_item import BaseSceneItem
@@ -25,11 +25,13 @@ class Wall(BaseSceneItem):
             color: Цвет стены в HEX-формате
             is_temp: Флаг, указывающий, является ли стена временной (для проверок)
         """
-        # Инициализация базового класса
-        super().__init__(item_type="wall", item_id=wall_id, is_temp=is_temp, z_value=10)
-        
-        # Создаем линию
+        # Инициализируем линию ПЕРЕД вызовом super().__init__
         self._line = QLineF(p1.x(), p1.y(), p2.x(), p2.y())
+        # Инициализируем толщину ПЕРЕД вызовом super().__init__
+        self.stroke_width = width
+        
+        # Инициализация базового класса (теперь _line и stroke_width уже существуют)
+        super().__init__(item_type="wall", item_id=wall_id, is_temp=is_temp, z_value=10)
         
         # Для временных стен не обновляем _existing_ids и не увеличиваем _next_id
         if wall_id:
@@ -48,88 +50,77 @@ class Wall(BaseSceneItem):
                 Wall._existing_ids.add(self.id)
 
         # Настройка внешнего вида стены
-        self.brick_width = 10  # Ширина кирпича
-        self.brick_height = 5  # Высота кирпича
-        self.brick_color = QColor(color)  # Цвет кирпича
-        self.mortar_color = QColor("#8b4513")  # Цвет раствора между кирпичами
-
-        # Создаем паттерн для кирпичной стены
+        self.brick_width = 10
+        self.brick_height = 5
+        self.brick_color = QColor(color)
+        self.mortar_color = QColor("#8b4513")
         self.brick_pattern = self.create_brick_pattern()
 
-        # Атрибуты стены
-        self.stroke_color = "#ff000000"  # Цвет обводки (по умолчанию черный)
-        self.stroke_width = width  # Ширина обводки (по умолчанию 10)
+        # Атрибуты пера для контура (если понадобится)
+        # self.stroke_color = "#ff000000"
+        # self._pen = QPen(...) # Перо больше не нужно здесь
 
-        # Настройка пера
-        self._normal_pen = QPen(QColor(self.stroke_color), self.stroke_width)  # Паттерн для линии
-        self._highlight_pen = QPen(QColor("#00ff22"), self.stroke_width+5)  # Контур при выделении
-        self.setPen(self._normal_pen)
-
-        # Создаем прямоугольник с паттерном кирпичной стены
+        # --- Возвращаем QGraphicsRectItem для отрисовки паттерна --- 
         self.brick_rect = QGraphicsRectItem(self)
-        self.brick_rect.setBrush(QBrush(self.create_brick_pattern()))
-        self.brick_rect.setPen(QPen(Qt.GlobalColor.transparent))  # Прозрачная обводка
-        self.brick_rect.setData(0, "its_wall")
-        self.brick_rect.setZValue(12)
+        self.brick_rect.setBrush(QBrush(self.brick_pattern))
+        self.brick_rect.setPen(QPen(Qt.GlobalColor.transparent)) # Без обводки самого прямоугольника
+        self.brick_rect.setData(0, "its_wall") # Данные для идентификации
+        self.brick_rect.setZValue(10) # Z-индекс такой же, как у Wall
+        self.update_brick_rect_geometry() # Устанавливаем геометрию и трансформацию
+        # -----------------------------------------------------------
 
-        # Обновляем прямоугольник в соответствии с линией
-        self.update_brick_rect()
-
-        # Добавляем маркеры на концах стены
-        self.start_marker = QGraphicsEllipseItem(p1.x() - self.stroke_width // 2 - 1, 
-                                                p1.y() - self.stroke_width // 2 - 1, 
-                                                self.stroke_width + 2, 
-                                                self.stroke_width + 2, self)
+        # Маркеры: радиус зависит от stroke_width
+        marker_radius = max(3, self.stroke_width / 2) # Минимум 3, или половина толщины
+        self.start_marker = QGraphicsEllipseItem(-marker_radius, -marker_radius, marker_radius*2, marker_radius*2, self)
         self.start_marker.setBrush(QBrush(Qt.GlobalColor.red))
         self.start_marker.setData(0, "wall_marker")
+        self.start_marker.setPos(p1)
+        self.start_marker.setZValue(12) # Поверх стены
         
-        self.end_marker = QGraphicsEllipseItem(p2.x() - self.stroke_width // 2 - 1, 
-                                              p2.y() - self.stroke_width // 2 - 1, 
-                                              self.stroke_width + 2, 
-                                              self.stroke_width + 2, self)
+        self.end_marker = QGraphicsEllipseItem(-marker_radius, -marker_radius, marker_radius*2, marker_radius*2, self)
         self.end_marker.setBrush(QBrush(Qt.GlobalColor.red))
         self.end_marker.setData(0, "wall_marker")
+        self.end_marker.setPos(p2)
+        self.end_marker.setZValue(12) # Поверх стены
+
+        # Обновляем подсветку при наведении, если она была создана в super().__init__
+        if hasattr(self, 'hover_rect') and self.hover_rect:
+            self.update_hover_rect_geometry(self.hover_rect)
 
     def create_hover_highlight(self):
         """Создает подсветку при наведении для стены."""
-        line = self._line
-        length = line.length()
-        angle = line.angle()
-        
-        # Создаем прямоугольник для подсветки при наведении
         hover_rect = QGraphicsRectItem(self)
-        
-        # Настраиваем перо с пунктирной линией синего цвета
         pen = QPen(QColor("#3399FF"), 2)
         pen.setStyle(Qt.PenStyle.DashLine)
         hover_rect.setPen(pen)
         hover_rect.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        
-        # Устанавливаем данные для идентификации объекта при кликах
         hover_rect.setData(0, "hover_highlight")
-        
-        # Создаем прямоугольник, покрывающий линию
+        # Обновляем геометрию подсветки
+        self.update_hover_rect_geometry(hover_rect)
+        hover_rect.setZValue(15)
+        hover_rect.setAcceptHoverEvents(False)
+        hover_rect.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, False)
+        hover_rect.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
+        hover_rect.hide()
+        return hover_rect
+
+    def update_hover_rect_geometry(self, hover_rect):
+        """Обновляет геометрию и трансформацию прямоугольника подсветки."""
+        line = self._line
+        length = line.length()
+        angle = line.angle()
+        # --- Убираем padding --- 
+        # padding = 5 
+        # Используем только stroke_width
         rect = QRectF(0, -self.stroke_width / 2, length, self.stroke_width)
+        # ----------------------
         hover_rect.setRect(rect)
         
-        # Применяем поворот к прямоугольнику подсветки
         transform = QTransform()
         transform.translate(line.p1().x(), line.p1().y())
         transform.rotate(-angle)
         hover_rect.setTransform(transform)
-        hover_rect.setZValue(15)  # Между стеной и выделением
         
-        # Отключаем обработку событий мыши для прямоугольника подсветки
-        hover_rect.setAcceptHoverEvents(False)
-        hover_rect.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, False)
-        hover_rect.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
-        hover_rect.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsPanel, False)
-        
-        # Скрываем прямоугольник по умолчанию
-        hover_rect.hide()
-        
-        return hover_rect
-
     def create_brick_pattern(self):
         """
         Создает паттерн для кирпичной стены.
@@ -141,7 +132,7 @@ class Wall(BaseSceneItem):
         # Рисуем кирпичи
         painter = QPainter(pattern)
         painter.setBrush(QBrush(self.brick_color))
-        painter.setPen(QPen(self.mortar_color, 2))
+        painter.setPen(QPen(self.mortar_color, 1)) # Уменьшил толщину раствора
 
         # Первый ряд кирпичей
         painter.drawRect(0, 0, self.brick_width, self.brick_height)
@@ -149,56 +140,56 @@ class Wall(BaseSceneItem):
 
         # Второй ряд кирпичей (со смещением)
         painter.drawRect(self.brick_width // 2, self.brick_height, self.brick_width, self.brick_height)
-        painter.drawRect(self.brick_width // 2 + self.brick_width, self.brick_height, self.brick_width, self.brick_height)
-        painter.setPen(Qt.GlobalColor.transparent)
-        painter.drawRect(0, self.brick_height, self.brick_width // 2, self.brick_height)   
+        
+        # --- Добавляем отрисовку половинок кирпичей --- 
+        # Левая половинка второго ряда
+        painter.drawRect(0, self.brick_height, self.brick_width // 2, self.brick_height)
+        # Правая половинка второго ряда (отрезаем от полного кирпича)
+        painter.drawRect(self.brick_width // 2 + self.brick_width, self.brick_height, self.brick_width // 2, self.brick_height)
+        # ------------------------------------------------
 
         painter.end()
         return pattern
     
-    def update_brick_rect(self):
-        """
-        Обновляет прямоугольник с паттерном в соответствии с линией.
-        """
-        line = self._line
-        length = line.length()
-        angle = line.angle()
-
-        # Создаем прямоугольник, покрывающий линию
-        rect = QRectF(0, -self.stroke_width / 2, length, self.stroke_width)
-        self.brick_rect.setRect(rect)
-
-        # Поворачиваем прямоугольник в соответствии с углом линии
-        transform = QTransform()
-        transform.translate(line.p1().x(), line.p1().y())
-        transform.rotate(-angle)
-        self.brick_rect.setTransform(transform)
-        
-        # Обновляем подсветку при наведении, если она существует
-        if hasattr(self, 'hover_rect') and self.hover_rect:
-            rect = QRectF(0, -self.stroke_width / 2, length, self.stroke_width)
-            self.hover_rect.setRect(rect)
-            
-            # Применяем поворот к прямоугольнику подсветки
-            transform = QTransform()
-            transform.translate(line.p1().x(), line.p1().y())
-            transform.rotate(-angle)
-            self.hover_rect.setTransform(transform)
-
     def set_highlight(self, enabled):
         """
         Включает или выключает подсветку стены.
         :param enabled: Если True, стена выделяется зеленым контуром.
         """
-        self.setPen(self._highlight_pen if enabled else self._normal_pen)
+        self.setZValue(11 if enabled else 10)
+        # Обновляем внешний вид, чтобы перерисовалось выделение
+        self.update()
 
     def boundingRect(self):
         """Возвращает прямоугольник, охватывающий стену"""
-        return self.childrenBoundingRect()
+        return self.shape().controlPointRect()
 
     def paint(self, painter, option, widget):
-        """Отрисовка стены не требуется, так как используется QGraphicsRectItem"""
-        pass
+        """Рисуем стену с паттерном и выделением."""
+        # Отрисовка происходит через brick_rect, но рисуем выделение вручную
+        if self.zValue() == 11: # Проверяем ZValue для выделения
+            pen = QPen(QColor("#00ff22"), 2) # Зеленое, тонкое
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            # Рисуем контур вокруг формы стены
+            path = self.shape()
+            painter.drawPath(path)
+
+    def shape(self):
+        path = QPainterPath()
+        # Создаем путь, соответствующий линии с ее толщиной
+        # Используем QPainterPathStroker
+        stroker = QPainterPathStroker()
+        stroker.setWidth(self.stroke_width + 4)  # +4 для небольшого запаса
+        stroker.setCapStyle(Qt.PenCapStyle.FlatCap)
+        
+        linePath = QPainterPath()
+        linePath.moveTo(self._line.p1())
+        linePath.lineTo(self._line.p2())
+        
+        # Создаем контур с помощью экземпляра stroker
+        path = stroker.createStroke(linePath)
+        return path
 
     def line(self):
         """Возвращает линию стены"""
@@ -206,5 +197,48 @@ class Wall(BaseSceneItem):
 
     def setLine(self, line):
         """Устанавливает новую линию для стены"""
-        self._line = line
-        self.update_brick_rect() 
+        if self._line != line:
+            self.prepareGeometryChange()
+            self._line = line
+            # Обновляем позицию маркеров
+            self.start_marker.setPos(line.p1())
+            self.end_marker.setPos(line.p2())
+            # Обновляем геометрию brick_rect
+            self.update_brick_rect_geometry()
+            # Обновляем геометрию подсветки при наведении
+            if hasattr(self, 'hover_rect') and self.hover_rect:
+                self.update_hover_rect_geometry(self.hover_rect)
+            self.update()  # Перерисовываем элемент
+
+    def set_stroke_width(self, width):
+        """Устанавливает толщину линии стены."""
+        if self.stroke_width != width:
+            self.prepareGeometryChange()
+            self.stroke_width = width
+            # Обновляем геометрию brick_rect
+            self.update_brick_rect_geometry()
+            # Обновляем размер маркеров
+            marker_radius = max(3, self.stroke_width / 2)
+            rect = QRectF(-marker_radius, -marker_radius, marker_radius*2, marker_radius*2)
+            self.start_marker.setRect(rect)
+            self.end_marker.setRect(rect)
+            # Обновляем геометрию подсветки при наведении
+            if hasattr(self, 'hover_rect') and self.hover_rect:
+                self.update_hover_rect_geometry(self.hover_rect)
+            self.update() # Перерисовываем элемент 
+
+    # --- Добавляем метод для обновления геометрии brick_rect --- 
+    def update_brick_rect_geometry(self):
+        """Обновляет геометрию и трансформацию прямоугольника с паттерном."""
+        line = self._line
+        length = line.length()
+        angle = line.angle()
+        # Прямоугольник центрирован относительно линии
+        rect = QRectF(0, -self.stroke_width / 2, length, self.stroke_width)
+        self.brick_rect.setRect(rect)
+        
+        transform = QTransform()
+        transform.translate(line.p1().x(), line.p1().y())
+        transform.rotate(-angle)
+        self.brick_rect.setTransform(transform)
+    # ------------------------------------------------------------- 

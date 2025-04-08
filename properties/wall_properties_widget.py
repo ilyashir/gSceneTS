@@ -5,10 +5,11 @@
 from PyQt6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, 
     QFormLayout, QSlider, QPushButton,
-    QToolButton
+    QToolButton, QWidget, QLineEdit, QFrame, 
+    QSizePolicy
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QIcon
+from PyQt6.QtGui import QColor, QIcon, QIntValidator
 import logging
 from properties.base_properties_widget import BasePropertiesWidget
 from properties.utils.grid_snap_utils import snap_to_grid, is_snap_enabled
@@ -42,12 +43,14 @@ class WallPropertiesWidget(BasePropertiesWidget):
         self.initial_values = {}
         self.setup_cursors()
         
+        # Добавляем атрибут для хранения состояния привязки
+        self._snap_enabled = True
+        
     def create_widgets(self):
         """Создание всех виджетов."""
         # ID стены
         self.id_label = QLabel("ID:")
-        self.id_edit = EditableLineEdit()
-        self.id_edit.set_theme(self.is_dark_theme)
+        self.id_edit = QLineEdit()
         
         # Метки
         self.coords_label = QLabel("<b>Координаты</b>")
@@ -188,7 +191,7 @@ class WallPropertiesWidget(BasePropertiesWidget):
         self.wall_width_spinbox.editingFinished.connect(self.on_width_editing_finished)
         
         # Редактирование ID
-        self.id_edit.valueChanged.connect(self.on_id_changed)
+        self.id_edit.editingFinished.connect(self.on_id_changed)
         
         # Кнопка сброса
         self.reset_button.clicked.connect(self.reset_properties)
@@ -241,7 +244,7 @@ class WallPropertiesWidget(BasePropertiesWidget):
                 
                 # Обновляем ID если он предоставлен
                 if wall_id:
-                    self.id_edit.setValue(wall_id)
+                    self.id_edit.setText(wall_id)
         except Exception as e:
             logger.error(f"Ошибка при установке свойств стены: {e}")
             
@@ -422,16 +425,12 @@ class WallPropertiesWidget(BasePropertiesWidget):
         except Exception as e:
             logger.error(f"Ошибка при изменении ширины: {e}")
             
-    def on_id_changed(self, new_id, item=None):
+    def on_id_changed(self):
         """
         Обработчик изменения ID стены.
-        
-        Args:
-            new_id: Новый ID
-            item: Элемент стены (опционально)
         """
         try:
-            self.id_changed.emit(new_id)
+            self.id_changed.emit(self.id_edit.text())
         except Exception as e:
             logger.error(f"Ошибка при изменении ID стены: {e}")
             
@@ -455,15 +454,12 @@ class WallPropertiesWidget(BasePropertiesWidget):
         self.is_dark_theme = is_dark_theme
         self.apply_theme(self.is_dark_theme)
         
-        # Обновляем стиль для EditableLineEdit с ID стены
-        self.id_edit.set_theme(self.is_dark_theme)
-        
-    def update_properties(self, wall):
+    def update_properties(self, item):
         """
         Обновление свойств виджета на основе объекта стены.
         
         Args:
-            wall: Объект стены
+            item: Объект стены
         """
         if self.field_widget:
             self.update_ranges(
@@ -473,15 +469,26 @@ class WallPropertiesWidget(BasePropertiesWidget):
                 int(self.field_widget.scene().sceneRect().bottom())
             )
         
-        line = wall.line()
-        self.set_properties(
-            int(line.x1()), 
-            int(line.y1()),
-            int(line.x2()), 
-            int(line.y2()),
-            wall.pen().width(),
-            wall.wall_id
-        )
+        self.id_edit.blockSignals(True)
+        self.x1_spinbox.blockSignals(True)
+        self.y1_spinbox.blockSignals(True)
+        self.x2_spinbox.blockSignals(True)
+        self.y2_spinbox.blockSignals(True)
+        self.wall_width_spinbox.blockSignals(True)
+
+        self.id_edit.setText(item.id)
+        self.x1_spinbox.setValue(int(item.line().x1()))
+        self.y1_spinbox.setValue(int(item.line().y1()))
+        self.x2_spinbox.setValue(int(item.line().x2()))
+        self.y2_spinbox.setValue(int(item.line().y2()))
+        self.wall_width_spinbox.setValue(int(item.stroke_width))
+        
+        self.id_edit.blockSignals(False)
+        self.x1_spinbox.blockSignals(False)
+        self.y1_spinbox.blockSignals(False)
+        self.x2_spinbox.blockSignals(False)
+        self.y2_spinbox.blockSignals(False)
+        self.wall_width_spinbox.blockSignals(False)
     
     def connect_to_field_widget(self, field_widget):
         """
@@ -689,4 +696,10 @@ class WallPropertiesWidget(BasePropertiesWidget):
             # Оповещаем об изменении ширины
             self.width_changed.emit(value)
         except Exception as e:
-            logger.error(f"Ошибка при завершении редактирования ширины: {e}") 
+            logger.error(f"Ошибка при завершении редактирования ширины: {e}")
+
+    # --- Добавляем метод set_snap_enabled --- 
+    def set_snap_enabled(self, enabled):
+        self._snap_enabled = enabled
+        # Пока ничего не делаем с этим состоянием
+        logger.debug(f"WallPropertiesWidget snap state set to: {enabled}") 

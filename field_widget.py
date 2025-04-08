@@ -7,6 +7,7 @@ from PyQt6.QtGui import QPainter, QPixmap, QPen, QBrush, QColor, QImage, QTransf
 from PyQt6.QtCore import Qt, QPointF, QRectF, QLineF, pyqtSignal, pyqtSlot, QThread, QTimer, QDataStream, QIODevice, QByteArray
 from PyQt6.QtSvg import QSvgRenderer
 from scene.items import Robot, Wall, Region, StartPosition
+from scene.managers import SceneManager
 from styles import AppStyles
 from hover_highlight import HoverHighlightMixin
 # Импортируем утилитные функции
@@ -59,9 +60,7 @@ class FieldWidget(QGraphicsView):
         self.axes_layer = QGraphicsItemGroup()
         self.objects_layer = QGraphicsItemGroup()
         
-        # Отключаем перехват событий для слоя объектов,
-        # чтобы события проходили к дочерним элементам (роботу, стенам и т.д.)
-        # В PyQt6 используется другой метод:
+        # Отключаем перехват событий для слоя объектов
         self.objects_layer.setFiltersChildEvents(False)
         
         # Устанавливаем z-index для слоев
@@ -74,28 +73,31 @@ class FieldWidget(QGraphicsView):
         self.scene().addItem(self.axes_layer)
         self.scene().addItem(self.objects_layer)
         
-        self.grid_size = grid_size  # размер графической сетки из конфигурации
-        self.snap_to_grid_enabled = True  # Привязка к сетке включена по умолчанию
+        self.grid_size = grid_size
+        self.snap_to_grid_enabled = True
 
         self.drawing_mode = None
         self.edit_mode = False
         self.selected_item = None
         self.selected_marker = None
+        self.dragging_item = None # <-- Инициализируем здесь
         
         self.temp_wall = None
-        self.wall_start = None  # Начальная точка стены
+        self.wall_start = None
 
-        self.region_start = None  # Начальная точка региона
-        self.temp_region = None  # Временный прямоугольник для отрисовки региона
+        self.region_start = None
+        self.temp_region = None
+        
+        # Инициализируем менеджер сцены
+        self.scene_manager = SceneManager(scene_width, scene_height)
+
+        self._current_robot_item = None
+        self._current_start_item = None
         
         # Состояния объектов
-        self.walls = []
-        self.regions = []
-        self.robot_model = None
-        self.start_position_model = None  
         self.dragging_robot = False
         self.robot_offset = QPointF()
-        self.scene_width = scene_width  # размеры сцены из конфигурации
+        self.scene_width = scene_width
         self.scene_height = scene_height
 
         # Инициализация масштаба
@@ -104,15 +106,13 @@ class FieldWidget(QGraphicsView):
         self._max_scale = 3.0
         self._scale_step = 0.5
 
-        # Ссылка на менеджер скроллбаров, который будет установлен из main_window.py
         self._scroll_manager = None
 
         self.draw_grid()
         self.draw_axes()
-        self.init_robot(QPointF(0, 0))  # Робот по умолчанию в (0, 0)
-        self.init_start_position(QPointF(25, 25))  # Стартовая позиция по умолчанию
+        self.init_robot(QPointF(0, 0))
+        self.init_start_position(QPointF(25, 25))
         
-        # Устанавливаем размер сцены
         self.scene().setSceneRect(-self.scene_width/2, -self.scene_height/2, self.scene_width, self.scene_height)
 
     # отрисовка сетки
@@ -245,12 +245,14 @@ class FieldWidget(QGraphicsView):
         Returns:
             bool: True, если стена пересекается с роботом, False в противном случае
         """
-        if not self.robot_model: 
+        # Используем self.scene_manager.robot
+        if not self.scene_manager.robot:
             return False
             
-        robot_rect = self.robot_model.boundingRect()
-        # Учитываем позицию робота при проверке пересечения
-        robot_rect.translate(self.robot_model.pos())
+        # Получаем bounding rect из менеджера
+        robot_rect = self.scene_manager.robot.boundingRect()
+        # Учитываем позицию робота из менеджера
+        robot_rect.translate(self.scene_manager.robot.pos())
         
         # Линия стены
         wall_line = QLineF(QPointF(x1, y1), QPointF(x2, y2))
@@ -260,161 +262,79 @@ class FieldWidget(QGraphicsView):
             # Создаем временную стену для определения толщины линии
             temp_wall = Wall(QPointF(x1, y1), QPointF(x2, y2), is_temp=True)
             thickness = temp_wall.stroke_width
+            Wall.cleanup_temp_id(temp_wall.id)
         
         # Проверяем пересечение линии стены с прямоугольником робота с учетом толщины
         # Используем утилитарную функцию
         return line_with_thickness_intersects_rect(wall_line, robot_rect, thickness)
     
     def add_wall(self, p1, p2, wall_id=None):
-        """
-        Добавляет стену на сцену с заданными координатами и идентификатором.
-        
-        Args:
-            p1: Начальная точка стены (QPointF)
-            p2: Конечная точка стены (QPointF)
-            wall_id: Идентификатор стены (если None, будет сгенерирован)
-            
-        Returns:
-            Wall: Добавленная стена или None, если добавление не удалось
-        """
-        logger.debug(f"Добавление стены: {p1} - {p2}, id={wall_id}")
-        
-        # Создаем новую стену сначала для получения толщины
-        temp_wall = Wall(p1, p2, wall_id=None, is_temp=True)
-        
-        # Проверяем пересечение с роботом, передавая толщину стены
-        if self.wall_intersects_robot(p1.x(), p1.y(), p2.x(), p2.y(), thickness=temp_wall.stroke_width):
-            logger.warning("Стена пересекается с роботом - отмена добавления")
-            return None
-            
-        # Создаем новую стену для добавления на сцену
-        wall = Wall(p1, p2, wall_id)
-        wall_id = wall.id  # Сохраняем ID для возможной очистки
-        
-        # Проверяем, находится ли стена в пределах сцены
-        if not self.check_object_within_scene(wall):
-            logger.warning("Стена выходит за границы сцены - отмена добавления")
-            # Очищаем ID, так как стена не будет добавлена
-            Wall._existing_ids.remove(wall_id)
-            return None
-            
-        # Добавляем стену на сцену
-        self.objects_layer.addToGroup(wall)
-        self.walls.append(wall)
-        
-        # Настраиваем обработку событий для стены
-        wall.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
-        wall.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
-        
-        logger.debug(f"Стена успешно добавлена с id={wall.id}")
-        
-        # Автоматически выделяем созданную стену
-        self.select_item(wall)         
-
-        return wall
-        
-    def add_region(self, rect_or_points, region_id=None, color=None):
-        """
-        Добавляет новый регион на сцену.
-        
-        Args:
-            rect_or_points: Прямоугольник (QRectF) или список точек для создания региона
-            region_id: Идентификатор региона (опционально)
-            color: Цвет заливки региона (опционально)
-            
-        Returns:
-            Region: Добавленный регион или None, если добавление не удалось
-        """
-        logger.debug(f"Добавление региона: {rect_or_points}, id={region_id}, color={color}")
-        
-        # Проверяем, что за тип передан
-        if isinstance(rect_or_points, QRectF):
-            # Извлекаем позицию и размеры из прямоугольника
-            x = rect_or_points.x()
-            y = rect_or_points.y()
-            width = rect_or_points.width()
-            height = rect_or_points.height()
-            
-            # Создаем точки для региона используя (0,0) как базовую точку
-            # Потом мы установим позицию региона, чтобы правильно расположить его
-            points = [
-                QPointF(0, 0),
-                QPointF(width, 0),
-                QPointF(width, height),
-                QPointF(0, height)
-            ]
-            
-            # Создаем новый регион
-            region = Region(points, region_id, color=color if color else "#800000ff")
-            
-            # Устанавливаем позицию региона
-            region.setPos(x, y)
-        elif isinstance(rect_or_points, list):
-            # Список точек напрямую передается в конструктор Region
-            region = Region(rect_or_points, region_id, color=color if color else "#800000ff")
+        """Добавляет стену на сцену."""
+        wall_item = self.scene_manager.add_wall(p1, p2, wall_id)
+        if wall_item:
+            self.objects_layer.addToGroup(wall_item)
+            logger.debug(f"Графический элемент стены добавлен: id={wall_item.id}")
+            # --- Выделяем стену после добавления --- 
+            self.select_item(wall_item)
+            # --------------------------------------
+            return wall_item
         else:
-            logger.error(f"Неподдерживаемый тип для создания региона: {type(rect_or_points)}")
+            logger.warning("Не удалось добавить стену (менеджер сцены)")
             return None
+
+    def add_region(self, rect_or_points, region_id=None, color=None):
+        """Добавляет регион на сцену."""
+        region_item = self.scene_manager.add_region(rect_or_points, region_id, color)
+        if region_item:
+            self.objects_layer.addToGroup(region_item)
+            logger.debug(f"Графический элемент региона добавлен: id={region_item.id}")
+            # --- Выделяем регион после добавления --- 
+            self.select_item(region_item)
+            # ---------------------------------------
+            return region_item
+        else:
+            logger.warning("Не удалось добавить регион (менеджер сцены)")
+            return None
+
+    def init_robot(self, position, name="", direction=0):
+        """Инициализирует или обновляет позицию робота."""
+        # Пытаемся разместить/обновить робота через менеджер
+        robot_item = self.scene_manager.place_robot(position, name, direction)
         
-        # Проверяем, находится ли регион в пределах сцены
-        if not self.check_object_within_scene(region):
-            logger.warning("Регион выходит за границы сцены - отмена добавления")
+        if robot_item:
+            # Если менеджер вернул объект робота (успешное размещение)
+            # Удаляем старый графический элемент робота со сцены, если он был
+            if self._current_robot_item and self._current_robot_item.scene():
+                self.objects_layer.removeFromGroup(self._current_robot_item)
             
-            # Освобождаем ID региона, если он был создан
-            try:
-                if region.id in Region._existing_ids:
-                    Region._existing_ids.remove(region.id)
-                    logger.debug(f"Освободили ID {region.id} неудачно созданного региона")
-            except Exception as e:
-                logger.debug(f"Ошибка при освобождении ID: {e}")
+            # Сохраняем ссылку на новый графический элемент и добавляем его на сцену
+            self._current_robot_item = robot_item
+            self.objects_layer.addToGroup(self._current_robot_item)
+            logger.debug(f"Робот обновлен/добавлен на сцену: pos={position}, name={name}, direction={direction}")
+        else:
+            # Если менеджер вернул None (размещение не удалось)
+            logger.warning("Не удалось разместить робота (менеджер сцены)")
+            # Старый графический элемент остается на месте, если он был
+
+    def init_start_position(self, position, direction=0):
+        """Инициализирует или обновляет стартовую позицию."""
+        # Пытаемся разместить/обновить стартовую позицию через менеджер
+        start_item = self.scene_manager.place_start_position(position, direction)
+        
+        if start_item:
+            # Если менеджер вернул объект старта (успешное размещение)
+            # Удаляем старый графический элемент старта со сцены, если он был
+            if self._current_start_item and self._current_start_item.scene():
+                self.objects_layer.removeFromGroup(self._current_start_item)
                 
-            return None
-            
-        # Добавляем регион на сцену через слой объектов
-        self.objects_layer.addToGroup(region)
-        
-        # Сохраняем ссылку на регион в списке для быстрого доступа
-        self.regions.append(region)
-        
-        # Настраиваем обработку событий для региона
-        region.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
-        region.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
-        
-        logger.debug(f"Регион успешно добавлен с id={region.id}")
-        
-        # Автоматически выделяем созданный регион
-        self.select_item(region) 
-
-        return region
-
-    def init_robot(self, pos):
-        logger.debug(f"Setting robot position to {pos}")
-        # Проверяем, находится ли робот в пределах сцены
-        temp_robot = Robot(pos)
-        if not self.check_object_within_scene(temp_robot):
-            logger.warning(f"Robot position {pos} is out of bounds - using default position (0, 0)")
-            pos = QPointF(0, 0)
-            
-        if self.robot_model is not None:
-            logger.debug("Removing existing robot from scene")
-            self.scene().removeItem(self.robot_model)
-        self.robot_model = Robot(pos)
-        self.objects_layer.addToGroup(self.robot_model)
-    
-    def init_start_position(self, pos, direction=0):
-        """
-        Инициализирует стартовую позицию робота на сцене.
-        
-        Args:
-            pos: Позиция стартовой позиции (QPointF)
-            direction: Начальное направление стартовой позиции
-        """
-        logger.debug(f"Setting start position to {pos}, direction: {direction}")
-        if self.start_position_model is not None:
-            logger.debug("Removing existing start position from scene")
-            self.scene().removeItem(self.start_position_model)
-        self.start_position_model = StartPosition(pos, direction)
-        self.objects_layer.addToGroup(self.start_position_model)
+            # Сохраняем ссылку на новый графический элемент и добавляем его на сцену
+            self._current_start_item = start_item
+            self.objects_layer.addToGroup(self._current_start_item)
+            logger.debug(f"Стартовая позиция обновлена/добавлена на сцену: pos={position}, direction={direction}")
+        else:
+            # Если менеджер вернул None (размещение не удалось)
+            logger.warning("Не удалось разместить стартовую позицию (менеджер сцены)")
+            # Старый графический элемент остается на месте, если он был
 
     def set_drawing_mode(self, mode):
         # Если меняем режим рисования, снимаем выделение с текущего объекта
@@ -497,12 +417,13 @@ class FieldWidget(QGraphicsView):
         logger.debug("Grid redrawn")
 
     def check_objects_within_bounds(self, width, height):
-        for wall in self.walls:
+        # Используем self.scene_manager.walls вместо self.walls
+        for wall in self.scene_manager.walls:
             if (wall.line().x1() < -width // 2 or wall.line().x2() > width // 2 or
                 wall.line().y1() < -height // 2 or wall.line().y2() > height // 2):
                 return False
-
-        for region in self.regions:
+        # Используем self.scene_manager.regions вместо self.regions
+        for region in self.scene_manager.regions:
             rect = region.path().boundingRect()
             pos = region.pos()
             if (pos.x() + rect.x() < -width // 2 or 
@@ -598,332 +519,255 @@ class FieldWidget(QGraphicsView):
         
         return False
     
+    def is_supported_item(self, item):
+        """
+        Проверяет, является ли элемент поддерживаемым типом для выделения/взаимодействия
+        (Robot, Wall, Region, StartPosition).
+        """
+        return isinstance(item, (Robot, Wall, Region, StartPosition))
+        
+    def get_selectable_parent(self, item):
+        logger.debug(f"[GET_PARENT] Checking item: {item}") # <-- Лог входа
+        if not item:
+            logger.debug("[GET_PARENT] Item is None, returning None")
+            return None
+
+        # Если сам элемент подходит
+        if self.is_supported_item(item):
+            logger.debug(f"[GET_PARENT] Item itself is supported: {item}, returning item")
+            return item
+
+        # Проверяем родителя
+        parent = item.parentItem()
+        if parent and self.is_supported_item(parent):
+            logger.debug(f"[GET_PARENT] Parent is supported: {parent}, returning parent")
+            return parent
+            
+        # Особый случай для маркеров стены (они не QGraphicsItemGroup)
+        if hasattr(item, 'data') and item.data(0) == "wall_marker" and parent and isinstance(parent, Wall):
+             logger.debug(f"[GET_PARENT] Item is wall_marker, returning parent Wall: {parent}")
+             return parent # Возвращаем стену, если кликнули на маркер
+             
+        # Рекурсивно идем вверх (на всякий случай, если вложенность > 1)
+        current = parent
+        while current:
+            if self.is_supported_item(current):
+                 logger.debug(f"[GET_PARENT] Found supported ancestor: {current}, returning ancestor")
+                 return current
+            current = current.parentItem()
+            
+        logger.debug("[GET_PARENT] No supported parent/ancestor found, returning None")
+        return None
+        
     def mousePressEvent(self, event):
-        posOriginal = self.mapToScene(event.pos()) # оригинальные координаты
-        pos = self.snap_to_grid(posOriginal) # координаты с привязкой к сетке
+        posOriginal = self.mapToScene(event.pos())
+        pos = self.snap_to_grid(posOriginal)
 
-        item = self.scene().itemAt(posOriginal, self.transform())
-        parent_item = item.parentItem() if item else None
-        logger.debug(f"CLICK: position={posOriginal}, item={type(item)}, parent={type(parent_item) if parent_item else None}")
-        
+        item_at_click = self.scene().itemAt(posOriginal, self.transform())
+        # Ищем родительский элемент, который можно выделить
+        target_item_for_selection = self.get_selectable_parent(item_at_click)
+
+        logger.debug(f"CLICK: position={posOriginal}, item={type(item_at_click)}, parent={type(item_at_click.parentItem()) if item_at_click else None}, target={target_item_for_selection}")
+            
         if event.button() == Qt.MouseButton.LeftButton:
-            
-            # Если в режиме редактирования и нажали на объект, меняем курсор на "кулачок"
-            if self.edit_mode and item and (isinstance(item, (Robot, Region, StartPosition, Wall)) or 
-                      (hasattr(item, 'data') and (item.data(0) == "its_wall" or item.data(0) == "wall_marker" or item.data(0) == "hover_highlight")) or 
-                      (parent_item and isinstance(parent_item, (Robot, Region, StartPosition, Wall)))):
-                self.setCursor(Qt.CursorShape.ClosedHandCursor)
-            
-            # Проверка клика по выделяемому объекту или его дочернему элементу
-            if item:
-                # Проверяем, не является ли это подсветкой при наведении
-                if hasattr(item, 'data') and item.data(0) == "hover_highlight" and parent_item:
-                    # Если это hover_highlight, то работаем с родительским элементом
-                    item = parent_item
+            if target_item_for_selection: # Если нашли объект для выделения
+                self.select_item(target_item_for_selection) # Передаем найденный родительский объект
                 
-                # Добавляем отладочную информацию
-                logger.debug(f"Mouse press on item: {item}, parent: {parent_item}")
-                
-                # Проверяем, является ли объект или его родитель поддерживаемым типом
-                if self.is_supported_item(item):
-                    target_item = item
-                    logger.debug(f"Clicked directly on supported item: {target_item}")
-                    self.select_item(target_item)
-                elif parent_item and self.is_supported_item(parent_item):
-                    # Если кликнули на дочерний элемент поддерживаемого объекта (например, обводку)
-                    target_item = parent_item
-                    logger.debug(f"Clicked on child of supported item: {target_item}")
-                    self.select_item(target_item)
-                elif parent_item and parent_item == self.selected_item:
-                    # Если кликнули на дочерний элемент выделенного объекта
-                    target_item = parent_item
-                    logger.debug(f"Clicked on child of selected item: {target_item}")
-                else:
-                    # Клик по другому объекту, не являющемуся выделяемым
-                    # Не будем снимать выделение при клике на объекты вне сцены
-                    if item.scene() == self.scene():
-                        logger.debug(f"Clicked on non-selectable item: {item}")
-                        self.deselect_item()
-            else:
-                # Клик по пустому месту
-                logger.debug("Clicked on empty space")
-                self.deselect_item()
-
-            # Обработка перемещения объектов в режиме редактирования
-            if self.edit_mode:
-                if item and hasattr(item, 'data') and item.data(0) == "wall_marker":  # Проверяем свойство
-                    self.selected_marker = item
-                    self.dragging_item = None  # Сбрасываем перетаскиваемый объект
-                    return
-                elif item and hasattr(item, 'data') and item.data(0) == "its_wall":
-                    # Получаем родительский объект (Wall)
-                    if parent_item and isinstance(parent_item, Wall):
-                        self.dragging_item = parent_item
-                        # Сохраняем точку захвата
-                        self.grab_point = pos
-                        # Сохраняем начальные координаты стены
-                        line = self.dragging_item.line()
-                        self.initial_line = QLineF(line.x1(), line.y1(), line.x2(), line.y2())
-                        return
-                elif item and hasattr(item, 'data') and item.data(0) == "hover_highlight":
-                    # Получаем родительский объект для hover_highlight
-                    if parent_item and isinstance(parent_item, Wall):
-                        # Для стены сохраняем точку захвата и начальные координаты
-                        self.dragging_item = parent_item
-                        self.grab_point = pos
-                        line = self.dragging_item.line()
-                        self.initial_line = QLineF(line.x1(), line.y1(), line.x2(), line.y2())
-                        return
-                    elif parent_item and isinstance(parent_item, (Robot, Region, StartPosition)):
-                        # Для других объектов
-                        self.dragging_item = parent_item
-                        self.drag_offset = pos - self.dragging_item.pos()
-                        return
-                elif item and (isinstance(item, (Robot, Region, StartPosition, Wall))):
-                    # Если кликнули непосредственно на объект
-                    self.dragging_item = item
-                    
-                    # Разная логика для разных типов объектов
-                    if isinstance(item, Wall):
-                        # Для стены сохраняем точку захвата и начальные координаты
-                        self.grab_point = pos
-                        line = self.dragging_item.line()
-                        self.initial_line = QLineF(line.x1(), line.y1(), line.x2(), line.y2())
-                    else:
-                        # Для объектов с позицией (Robot, Region, StartPosition)
-                        self.drag_offset = pos - self.dragging_item.pos()
-                    return
-                elif parent_item and isinstance(parent_item, (Robot, Region, StartPosition)):
-                    # Если кликнули на дочерний элемент
-                    self.dragging_item = parent_item
-                    self.drag_offset = pos - self.dragging_item.pos()
-                    return
-
-            # Обработка рисования стен и регионов
-            if self.drawing_mode == "wall":  
-                if self.wall_start is None:
-                    self.wall_start = pos  # Устанавливаем начальную точку стены
-                else:
-                    self.add_wall(self.wall_start, pos)  # Добавляем стену
-                    self.wall_start = None  # Сбрасываем начальную точку
-                    if self.temp_wall:
-                        self.scene().removeItem(self.temp_wall)
-                        self.temp_wall = None
-
-            elif self.drawing_mode == "region":
-                if self.region_start is None:
-                    # Первый клик: устанавливаем начальную точку
-                    self.region_start = pos
-                    logger.debug(f"Region start: {self.region_start}")
-                else:
-                    # Второй клик: создаем регион
-                    self.add_region(QRectF(self.region_start, pos).normalized())
-                    self.region_start = None  # Сбрасываем начальную точку
-                    if self.temp_region:
-                        self.scene().removeItem(self.temp_region)
-                        self.temp_region = None
-    
-    def mouseMoveEvent(self, event):
-        posOriginal = self.mapToScene(event.pos()) # оригинальные координаты
-        pos = self.snap_to_grid(posOriginal) # координаты с привязкой к сетке
-        
-        # Отправляем сигнал с координатами        
-        self.mouse_coords_updated.emit(posOriginal.x(), posOriginal.y())
-        
-        # Проверяем, находится ли курсор над выделяемым объектом
-        item = self.scene().itemAt(posOriginal, self.transform())
-        
-        # Обработка наведения для объектов с HoverHighlightMixin
-        self.handle_hover_for_item(item, posOriginal)
-        
-        # Меняем курсор при наведении на объекты
-        if self.edit_mode:
-            # Проверяем, является ли объект подсветкой при наведении
-            hover_highlight = False
-            parent_item = None
-            
-            if hasattr(item, 'data') and item.data(0) == "hover_highlight" and item.parentItem():
-                hover_highlight = True
-                parent_item = item.parentItem()
-                
-            if item and (isinstance(item, (Robot, Region, StartPosition, Wall)) or 
-                        (hasattr(item, 'data') and (item.data(0) == "its_wall" or item.data(0) == "wall_marker")) or 
-                        hover_highlight or
-                        (item.parentItem() and isinstance(item.parentItem(), (Robot, Region, StartPosition, Wall)))):
-                # Если перетаскиваем - устанавливаем курсор "кулачок"
-                if hasattr(self, 'dragging_item') and self.dragging_item:
+                # Если в режиме редактирования, меняем курсор и готовимся к перетаскиванию
+                if self.edit_mode:
                     self.setCursor(Qt.CursorShape.ClosedHandCursor)
-                else:
-                    # Иначе устанавливаем курсор "ладошка"
-                    self.setCursor(Qt.CursorShape.OpenHandCursor)
-            else:
-                # Если не над объектом, возвращаем стандартный курсор
-                self.setCursor(Qt.CursorShape.ArrowCursor)
-        # В режиме наблюдателя устанавливаем указательный палец при наведении на объекты
-        elif not self.drawing_mode:  # Режим наблюдателя
-            # Проверяем, является ли объект подсветкой при наведении
-            hover_highlight = False
-            parent_item = None
-            
-            if hasattr(item, 'data') and item.data(0) == "hover_highlight" and item.parentItem():
-                hover_highlight = True
-                parent_item = item.parentItem()
-                
-            if item and (isinstance(item, (Robot, Region, StartPosition, Wall)) or 
-                       (hasattr(item, 'data') and (item.data(0) == "its_wall" or item.data(0) == "wall_marker")) or 
-                       hover_highlight or
-                       (item.parentItem() and isinstance(item.parentItem(), (Robot, Region, StartPosition, Wall)))):
-                # Устанавливаем курсор "указательный палец"
-                self.setCursor(Qt.CursorShape.PointingHandCursor)
-            else:
-                # Если не над объектом, возвращаем стандартный курсор
-                self.setCursor(Qt.CursorShape.ArrowCursor)
-        
-        if self.edit_mode and hasattr(self, 'dragging_item') and self.dragging_item:
-            logger.debug(f"Dragging {self.dragging_item}")            
-            if isinstance(self.dragging_item, (Robot, Region)):
-                # Вычисляем новую позицию
-                new_pos = pos - self.drag_offset
-                
-                # Создаем временный объект для проверки
-                if isinstance(self.dragging_item, Robot):
-                    # Проверяем пересечение со стенами
-                    if self.robot_intersects_walls(new_pos):
-                        logger.debug(f"Robot would intersect with walls")
-                        # Не обновляем позицию робота, если он пересекается со стенами
-                        return
+                    # Если кликнули на маркер стены
+                    if item_at_click and hasattr(item_at_click, 'data') and item_at_click.data(0) == "wall_marker":
+                         self.selected_marker = item_at_click
+                         self.dragging_item = None # Не перетаскиваем всю стену, а только маркер
+                    else:
+                        # Перетаскиваем основной объект
+                        self.dragging_item = target_item_for_selection
+                        if isinstance(target_item_for_selection, Wall):
+                            self.grab_point = pos
+                            line = self.dragging_item.line()
+                            self.initial_line = QLineF(line.x1(), line.y1(), line.x2(), line.y2())
+                        elif isinstance(target_item_for_selection, (Robot, Region, StartPosition)):
+                            self.drag_offset = pos - self.dragging_item.pos()
+                    return # Завершаем обработку, т.к. начали перетаскивание/выделение
+            else: # Если кликнули не на поддерживаемый объект или пустое место
+                 if item_at_click and item_at_click.scene() == self.scene():
+                     logger.debug(f"Clicked on non-selectable item: {item_at_click}")
+                 else:
+                     logger.debug("Clicked on empty space or outside scene")
+                 self.deselect_item()
+                 self.setCursor(Qt.CursorShape.ArrowCursor)
+
+            # --- Обработка режимов РИСОВАНИЯ --- 
+            if not self.edit_mode:
+                if self.drawing_mode == "wall": 
+                    if self.wall_start is None:
+                        self.wall_start = pos
+                    else:
+                        self.add_wall(self.wall_start, pos)
+                        self.wall_start = None
+                        if self.temp_wall:
+                            self.scene().removeItem(self.temp_wall)
+                            self.temp_wall = None
+                elif self.drawing_mode == "region":
+                    if self.region_start is None:
+                        self.region_start = pos
+                        logger.debug(f"Region start: {self.region_start}")
+                    else:
+                        # --- Возвращаем синий цвет по умолчанию --- 
+                        self.add_region(QRectF(self.region_start, pos).normalized(), color="#800000FF")
+                        # ---------------------------------------
+                        self.region_start = None
+                        if self.temp_region:
+                            self.scene().removeItem(self.temp_region)
+                            self.temp_region = None
                         
-                    # Проверяем границы сцены
-                    temp_robot = Robot(new_pos)
-                    if not self.check_object_within_scene(temp_robot):
-                        logger.debug(f"Robot would be out of bounds")
-                        return
-                    # Устанавливаем позицию реального робота только если проверка пройдена
-                    self.dragging_item.setPos(new_pos)
-                    # Сохраняем текущую позицию как последнюю допустимую
-                    self.last_valid_robot_pos = new_pos
-                    # Обновляем свойства в окне свойств в режиме реального времени
-                    self.properties_window.update_properties(self.dragging_item)
-                elif isinstance(self.dragging_item, Region):                        
-                    # Создаем временный путь для проверки границ региона
-                    path = self.dragging_item.path()
-                    bounds = path.boundingRect()
-                    
-                    # Создаем временный регион для проверки
-                    temp_points = [
-                        QPointF(new_pos.x() + bounds.x(), new_pos.y() + bounds.y()), 
-                        QPointF(new_pos.x() + bounds.x() + bounds.width(), new_pos.y() + bounds.y()),
-                        QPointF(new_pos.x() + bounds.x() + bounds.width(), new_pos.y() + bounds.y() + bounds.height()),
-                        QPointF(new_pos.x() + bounds.x(), new_pos.y() + bounds.y() + bounds.height())
-                    ]
-                    
-                    # Создаем временный регион используя специальный метод
-                    temp_region = Region.create_temp_region(temp_points)
-                    temp_region_id = temp_region.id
-                    
-                    logger.debug(f"Current region: pos=({self.dragging_item.pos().x()}, {self.dragging_item.pos().y()}), bounds=({bounds.x()}, {bounds.y()}, {bounds.width()}, {bounds.height()})")
-                    
-                    # Проверяем границы
-                    within_scene = self.check_object_within_scene(temp_region)
-                    
-                    # Освобождаем ID временного региона
-                    try:
-                        if temp_region_id in Region._existing_ids:
-                            Region._existing_ids.remove(temp_region_id)
-                            logger.debug(f"Освободили временный ID {temp_region_id}")
-                    except Exception as e:
-                        logger.debug(f"Ошибка при освобождении ID временного региона: {e}")
-                    
-                    if not within_scene:
-                        logger.debug(f"ERR region would be out of bounds")
-                        return
-                
-                    self.dragging_item.setPos(new_pos)
-                    # Обновляем свойства в окне свойств в режиме реального времени
-                    self.properties_window.update_properties(self.dragging_item)
-            elif isinstance(self.dragging_item, StartPosition):
-                # Для стартовой позиции используем половинный шаг сетки
-                if self.snap_to_grid_enabled:
-                    # Вычисляем позицию с половинным шагом сетки
-                    half_grid_pos = self.snap_to_half_grid(posOriginal - self.drag_offset)
-                    new_pos = half_grid_pos
-                else:
-                    new_pos = posOriginal - self.drag_offset
-                
-                # Создаем временную стартовую позицию для проверки
-                temp_start = StartPosition(new_pos)
-                if not self.check_object_within_scene(temp_start):
-                    logger.debug(f"ERR start position would be out of bounds")
-                    # Ограничиваем позицию в пределах сцены
-                    x = max(min(new_pos.x(), self.scene_width/2 - 25), -self.scene_width/2 + 25)
-                    y = max(min(new_pos.y(), self.scene_height/2 - 25), -self.scene_height/2 + 25)
-                    new_pos = QPointF(x, y)
-                
-                # Обновляем позицию и свойства
-                self.dragging_item.setPos(new_pos)
-                self.properties_window.update_properties(self.dragging_item)
-            elif isinstance(self.dragging_item, Wall):
-                # Вычисляем смещение относительно точки захвата
-                dx = pos.x() - self.grab_point.x()
-                dy = pos.y() - self.grab_point.y()
-                new_pos_x1 = self.initial_line.x1() + dx
-                new_pos_y1 = self.initial_line.y1() + dy
-                new_pos_x2 = self.initial_line.x2() + dx
-                new_pos_y2 = self.initial_line.y2() + dy
-                logger.debug(f"to: {new_pos_x1, new_pos_y1, new_pos_x2, new_pos_y2}")
-                
-                # Создаем временную стену для проверки границ
-                temp_wall = Wall(QPointF(new_pos_x1, new_pos_y1), QPointF(new_pos_x2, new_pos_y2), is_temp=True)
-                temp_wall_id = temp_wall.id
-                
-                # Обновляем саму линию стены, смещая обе точки, если нет пересечения с роботом
-                if not self.wall_intersects_robot(new_pos_x1, new_pos_y1, new_pos_x2, new_pos_y2, thickness=self.dragging_item.stroke_width) and self.check_object_within_scene(temp_wall):
-                    with self.dragging_item.updating():
-                        self.dragging_item.setLine(new_pos_x1, new_pos_y1, new_pos_x2, new_pos_y2)
-                    self.properties_window.update_properties(self.dragging_item)
-                    
-                # Очищаем временный ID
-                Wall.cleanup_temp_id(temp_wall_id)
-            return
-        elif self.edit_mode and self.selected_marker:            
-            wall = self.selected_marker.parentItem()
-            if self.selected_marker == wall.start_marker:
-                logger.debug(f"Moving wall start marker to {pos}")
-                if self.wall_intersects_robot(pos.x(), pos.y(), wall.line().x2(), wall.line().y2(), thickness=wall.stroke_width):
-                    logger.debug(f"ERR robot intersects")
-                    return 
-                else:
-                    with wall.updating():
-                        wall.setLine(pos.x(), pos.y(), wall.line().x2(), wall.line().y2())
-                    self.properties_window.update_properties(wall)  # Обновляем свойства
+        # Обработка клика правой кнопкой (например, для удаления)
+        elif event.button() == Qt.MouseButton.RightButton:
+            if target_item_for_selection:
+                logger.debug(f"Right click on: {target_item_for_selection}")
+                # TODO: Показать контекстное меню для удаления?
+                # Временно удаляем объект по правому клику
+                # self.delete_item(target_item_for_selection)
             else:
-                if self.wall_intersects_robot(wall.line().x1(), wall.line().y1(), pos.x(), pos.y(), thickness=wall.stroke_width):
-                    logger.debug(f"ERR robot intersects")
-                    return 
-                else:                    
-                    with wall.updating():
-                        wall.setLine(wall.line().x1(), wall.line().y1(), pos.x(), pos.y())
-                    self.properties_window.update_properties(wall)  # Обновляем свойства
-            return
+                logger.debug("Right click on empty space")
 
-        if self.drawing_mode == "wall" and self.wall_start:
-            if self.temp_wall:
-                self.scene().removeItem(self.temp_wall)
-            self.temp_wall = QGraphicsLineItem(self.wall_start.x(), self.wall_start.y(), pos.x(), pos.y())
-            self.temp_wall.setPen(QPen(Qt.GlobalColor.gray, 10))
-            self.scene().addItem(self.temp_wall)
-        elif self.drawing_mode == "region" and self.region_start:
-            # Логика для отрисовки временного региона
-            if self.temp_region:
-                self.scene().removeItem(self.temp_region)
-            # Создаем временный прямоугольник
-            rect = QRectF(self.region_start, pos).normalized()
-            self.temp_region = QGraphicsRectItem(rect)
-            self.temp_region.setPen(QPen(Qt.GlobalColor.gray, 2, Qt.PenStyle.DashLine))
-            self.temp_region.setBrush(QBrush(Qt.GlobalColor.transparent))
-            self.scene().addItem(self.temp_region)   
+    def mouseMoveEvent(self, event):
+        posOriginal = self.mapToScene(event.pos())
+        pos = self.snap_to_grid(posOriginal)
+        self.mouse_coords_updated.emit(pos.x(), pos.y())
+        
+        # --- Режим РИСОВАНИЯ (Остается в начале) --- 
+        logger.debug(f"[DRAW_CHECK] edit={self.edit_mode}, draw_mode={self.drawing_mode}, wall_start={self.wall_start is not None}, region_start={self.region_start is not None}")
+        if self.drawing_mode:
+            logger.debug(f"[DRAW_INSIDE] Entered 'if self.drawing_mode'. draw_mode='{self.drawing_mode}', wall_start set: {self.wall_start is not None}")
+            if self.drawing_mode == "wall" and self.wall_start:
+                if self.temp_wall:
+                    self.scene().removeItem(self.temp_wall)
+                self.temp_wall = QGraphicsLineItem(QLineF(self.wall_start, pos))
+                pen = QPen(Qt.GlobalColor.gray, 2, Qt.PenStyle.DashLine)
+                self.temp_wall.setPen(pen)
+                self.temp_wall.setZValue(3)
+                self.scene().addItem(self.temp_wall)
+                self.scene().update(self.sceneRect()) # Обновляем сцену
+                logger.debug(f"[DRAW_WALL_MOVE] Added temp_wall to scene: {self.temp_wall}")
+            elif self.drawing_mode == "region" and self.region_start:
+                if self.temp_region:
+                     self.scene().removeItem(self.temp_region)
+                rect = QRectF(self.region_start, pos).normalized()
+                self.temp_region = QGraphicsRectItem(rect)
+                pen = QPen(Qt.GlobalColor.gray, 2, Qt.PenStyle.DashLine)
+                self.temp_region.setPen(pen)
+                self.temp_region.setBrush(QBrush(Qt.GlobalColor.transparent))
+                self.temp_region.setZValue(3)
+                self.scene().addItem(self.temp_region)
+                self.scene().update(self.sceneRect()) # Обновляем сцену
+                logger.debug(f"[DRAW_REGION_MOVE] Added temp_region to scene: {self.temp_region}")
+        # --- Конец блока РИСОВАНИЯ ---
 
-        super().mouseMoveEvent(event)    
+        # --- Логика перетаскивания объектов (перемещена обратно внутрь if event.buttons) ---
+        # if self.edit_mode and self.dragging_item and not self.selected_marker: 
+        #    # ... (этот блок теперь ниже)
+        # --- Конец перемещенной логики ---
+
+        if event.buttons() == Qt.MouseButton.LeftButton:
+            if self.edit_mode:
+                if self.selected_marker:
+                    # --- Восстанавливаем логику перетаскивания маркера --- 
+                    if self.selected_item and isinstance(self.selected_item, Wall):
+                        new_line = None
+                        if self.selected_marker == self.selected_item.start_marker:
+                            new_line = QLineF(pos, self.selected_item.line().p2())
+                        elif self.selected_marker == self.selected_item.end_marker:
+                            new_line = QLineF(self.selected_item.line().p1(), pos)
+                        
+                        if new_line:
+                            can_move = True
+                            # ... (проверки пересечений и границ) ...
+                            if self.scene_manager.robot and \
+                               self.scene_manager.wall_intersects_robot(new_line.x1(), new_line.y1(), new_line.x2(), new_line.y2(), self.selected_item.stroke_width):
+                                can_move = False
+                            if not self.scene_manager._check_wall_within_scene(Wall(new_line.p1(), new_line.p2(), is_temp=True)):
+                                can_move = False
+                            if can_move:
+                                self.selected_item.setLine(new_line)
+                                self.properties_updated.emit(self.selected_item)
+                    # --- Конец логики маркера ---
+                elif self.dragging_item:
+                    if isinstance(self.dragging_item, Wall):
+                         # --- Восстанавливаем логику перетаскивания стены --- 
+                        delta = pos - self.grab_point
+                        new_line = self.initial_line.translated(delta)
+                        can_move = True
+                        # ... (проверки пересечений и границ для стены) ...
+                        if self.scene_manager.robot and \
+                           self.scene_manager.wall_intersects_robot(new_line.x1(), new_line.y1(), new_line.x2(), new_line.y2(), self.dragging_item.stroke_width):
+                            can_move = False
+                        if not self.scene_manager._check_wall_within_scene(Wall(new_line.p1(), new_line.p2(), is_temp=True)):
+                            can_move = False
+                        if can_move:
+                            self.dragging_item.setLine(new_line)
+                            self.properties_updated.emit(self.dragging_item)
+                        # --- Конец логики стены ---
+                    elif isinstance(self.dragging_item, (Robot, Region, StartPosition)):
+                        logger.debug(f"[DRAG_MOVE] Moving item: {self.dragging_item} with button pressed") 
+                        new_pos = pos - self.drag_offset
+                        can_move = True
+                        # ... (проверки пересечений и границ для Robot, Region, StartPosition) ...
+                        if isinstance(self.dragging_item, Robot):
+                            if self.robot_intersects_walls(new_pos):
+                                logger.debug("[DRAG_MOVE] Robot intersects wall, cancel")
+                                can_move = False
+                            if not self.scene_manager._check_robot_within_scene(Robot(new_pos)):
+                                logger.debug("[DRAG_MOVE] Robot out of bounds, cancel")
+                                can_move = False
+                        elif isinstance(self.dragging_item, Region):
+                            if not self.scene_manager._check_region_within_scene(Region(self.dragging_item.boundingRect().translated(new_pos), is_temp=True)):
+                                logger.debug("[DRAG_MOVE] Region out of bounds, cancel")
+                                can_move = False
+                        elif isinstance(self.dragging_item, StartPosition):
+                            temp_start_pos = StartPosition(new_pos, self.dragging_item.rotation())
+                            if not self.scene_manager._check_start_position_within_scene(temp_start_pos):
+                                logger.debug("[DRAG_MOVE] StartPos out of bounds, cancel")
+                                can_move = False
+                            StartPosition.reset_instance()
+                        
+                        if can_move:
+                            logger.debug(f"[DRAG_MOVE] Setting pos for {self.dragging_item} to {new_pos}")
+                            self.dragging_item.setPos(new_pos)
+                            self.properties_updated.emit(self.dragging_item) # Обновляем свойства при перетаскивании
+                        else:
+                            logger.debug(f"[DRAG_MOVE] Move cancelled for {self.dragging_item}")
+            # --- Конец блока РЕДАКТИРОВАНИЯ ---
+        # --- Конец блока if event.buttons() ... ---
+
+        # --- Обработка наведения --- 
+        item_under_cursor = self.scene().itemAt(posOriginal, self.transform())
+        self.handle_hover_for_item(item_under_cursor, posOriginal)
+        # --- Конец обработки наведения ---
+
+        # --- Управление курсором (Добавляем логирование) --- 
+        target_item = self.get_selectable_parent(item_under_cursor)
+        if self.edit_mode:
+            is_wall_marker = item_under_cursor and hasattr(item_under_cursor, 'data') and item_under_cursor.data(0) == "wall_marker"
+            logger.debug(f"[CURSOR_EDIT] dragging={self.dragging_item is not None}, marker={self.selected_marker is not None}, target={target_item}, is_marker={is_wall_marker}") # <-- Лог состояния
+            if self.dragging_item or self.selected_marker:
+                cursor = Qt.CursorShape.ClosedHandCursor
+            elif target_item or is_wall_marker:
+                cursor = Qt.CursorShape.OpenHandCursor
+            else:
+                cursor = Qt.CursorShape.ArrowCursor
+            self.setCursor(cursor)
+            logger.debug(f"[CURSOR_EDIT] Set cursor: {cursor}") # <-- Лог установки
+        elif self.drawing_mode:
+            self.setCursor(Qt.CursorShape.CrossCursor)
+        elif target_item: # Режим наблюдения и курсор над объектом
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+        else:
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+        # --- Конец управления курсором ---
+
+        super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
         # После отпускания кнопки мыши возвращаем стандартный курсор, если не над объектом
@@ -1240,123 +1084,20 @@ class FieldWidget(QGraphicsView):
         return False
     
     def update_region_size(self, width, height):
-        """Обновляет размеры выбранного региона."""
-        if not self.selected_item or not isinstance(self.selected_item, Region):
-            return
-        
-        # Статическая переменная для отслеживания показа диалога
-        if not hasattr(self, '_showing_warning_dialog'):
-            self._showing_warning_dialog = False
-        
-        logger.debug(f"===== НАЧАЛО update_region_size: width={width}, height={height} =====")
-        
-        # Получаем текущие координаты (позицию) региона
-        pos = self.selected_item.pos()
-        x = pos.x()
-        y = pos.y()
-        
-        # Сохраняем текущий ID и цвет
-        current_id = self.selected_item.id
-        current_color = self.selected_item.color
-        
-        # Создаем временный регион для проверки границ
-        temp_points = [
-            QPointF(0, 0),
-            QPointF(width, 0),
-            QPointF(width, height),
-            QPointF(0, height)
-        ]
-        
-        # Создаем временный регион используя специальный метод
-        temp_region = Region.create_temp_region(temp_points)
-        temp_region_id = temp_region.id
-        temp_region.setPos(x, y)
-        
-        # Проверяем границы
-        within_scene = self.check_object_within_scene(temp_region)
-        
-        # Освобождаем ID временного региона
-        try:
-            if temp_region_id in Region._existing_ids:
-                Region._existing_ids.remove(temp_region_id)
-                logger.debug(f"Освободили временный ID {temp_region_id}")
-        except Exception as e:
-            logger.debug(f"Ошибка при освобождении ID временного региона: {e}")
-        
-        # Если новый регион выходит за границы сцены, показываем ошибку и не меняем размер
-        if not within_scene:
-            logger.warning(f"Регион с новыми размерами выходит за границы сцены - отмена изменения размера")
-            
-            # Показываем предупреждение только если оно еще не отображается
-            if not self._showing_warning_dialog:
-                logger.warning(f"[ДИАЛОГ_1] Показываю предупреждение о выходе за границы в update_region_size")
-                self._showing_warning_dialog = True
-                
-                # Показываем сообщение один раз
-                QMessageBox.warning(
-                    None,
-                    "Ошибка",
-                    f"Регион с новыми размерами выходит за границы сцены.",
-                    QMessageBox.StandardButton.Ok
-                )
-                
-                self._showing_warning_dialog = False
-            else:
-                logger.warning(f"Диалог уже отображается, пропускаем показ")
-            
-            # Обновляем значения в окне свойств до текущих значений
-            # Блокируем сигналы, чтобы не вызывать повторное обновление
-            self.properties_window.region_width.blockSignals(True)
-            self.properties_window.region_height.blockSignals(True)
-            
-            # Устанавливаем текущие значения размеров
-            current_width = self.selected_item.path().boundingRect().width()
-            current_height = self.selected_item.path().boundingRect().height()
-            self.properties_window.region_width.setValue(int(current_width))
-            self.properties_window.region_height.setValue(int(current_height))
-            
-            # Разблокируем сигналы
-            self.properties_window.region_width.blockSignals(False)
-            self.properties_window.region_height.blockSignals(False)
-            
-            logger.debug(f"===== КОНЕЦ update_region_size (выход за границы) =====")
-            return
-        
-        # Освобождаем ID региона перед его удалением
-        try:
-            logging.debug(f"Освобождаем ID {current_id} из Region._existing_ids")
-            Region._existing_ids.remove(current_id)
-        except Exception as e:
-            logger.debug(f"Ошибка при освобождении ID: {e}")
-        
-        # Удаляем старый регион из списка и сцены
-        self.regions.remove(self.selected_item)
-        self.scene().removeItem(self.selected_item)
-        
-        # Создаем новый регион с теми же ID и цветом, используя (0,0) как базовую точку
-        new_points = [
-            QPointF(0, 0),
-            QPointF(width, 0),
-            QPointF(width, height),
-            QPointF(0, height)
-        ]
-        
-        # Создаем новый регион с теми же ID и цветом
-        new_region = Region(new_points, region_id=current_id, color=current_color)
-        
-        # Устанавливаем позицию региона
-        new_region.setPos(x, y)
-        
-        # Добавляем новый регион на сцену
-        self.objects_layer.addToGroup(new_region)
-        self.regions.append(new_region)
-        
-        # Обновляем выбранный элемент
-        self.selected_item = new_region
-        self.item_selected.emit(new_region)
-        
-        logger.debug(f"Регион обновлен с id={current_id}, позиция=({x}, {y}), размер=({width}, {height})")
-        logger.debug(f"===== КОНЕЦ update_region_size (успешно) =====")
+        """Обновляет размер выбранного региона."""
+        if self.selected_item and isinstance(self.selected_item, Region):
+            logger.debug(f"Обновление размера региона {self.selected_item.id} на {width}x{height}")
+            # Используем setRect вместо set_size
+            try:
+                # Устанавливаем прямоугольник в локальных координатах (0,0) с новыми размерами
+                self.selected_item.prepareGeometryChange() # Важно вызвать перед изменением геометрии
+                self.selected_item.setRect(0, 0, width, height)
+                self.scene().update() # Обновляем сцену для перерисовки
+                self.properties_updated.emit(self.selected_item) # Обновляем свойства
+            except Exception as e:
+                logger.error(f"Ошибка при обновлении размера региона: {e}")
+        else:
+            logger.warning("Попытка обновить размер, но регион не выбран")
     
     def update_region_color(self, color):
         """Обновляет цвет региона."""
@@ -1548,61 +1289,25 @@ class FieldWidget(QGraphicsView):
             logger.debug("Снято выделение с объекта (заглушка)")
 
     def clear_scene(self):
-        """
-        Полностью очищает сцену от всех объектов, кроме сетки и осей.
-        """
-        logger.debug("Clearing scene...")
+        """Очищает сцену от всех объектов."""
+        # Очищаем состояние в менеджере (удаляет ссылки на объекты Robot, Wall и т.д.)
+        self.scene_manager.clear()
         
-        # Удаляем все стены
-        for wall in self.walls[:]:
-            logger.debug(f"Removing wall {wall}")
-            self.scene().removeItem(wall)
-            self.walls.remove(wall)
+        # Удаляем все графические элементы из слоя объектов
+        # childItems() возвращает копию, поэтому безопасно удалять в цикле
+        for item in self.objects_layer.childItems():
+            self.objects_layer.removeFromGroup(item)
         
-        # Удаляем все регионы
-        for region in self.regions[:]:
-            logger.debug(f"Removing region {region}")
-            region.remove_from_scene()
-            self.regions.remove(region)
+        # Сбрасываем ссылки на текущие графические элементы робота и старта
+        self._current_robot_item = None
+        self._current_start_item = None
         
-        # Удаляем робота
-        if self.robot_model:
-            logger.debug("Removing robot")
-            self.scene().removeItem(self.robot_model)
-            self.robot_model = None
-            # Освобождаем экземпляр робота
-            Robot.reset_instance()
-            
-        # Удаляем стартовую позицию
-        if self.start_position_model:
-            logger.debug("Removing start position")
-            self.scene().removeItem(self.start_position_model)
-            self.start_position_model = None
-            # Освобождаем экземпляр стартовой позиции
-            StartPosition.reset_instance()
-        
-        # Сбрасываем режим рисования
-        self.drawing_mode = None
+        # Сбрасываем выделение и режим рисования
         self.selected_item = None
+        self.drawing_mode = None
+        self.item_deselected.emit() # Сообщаем окну свойств
         
-        # Очищаем другие выделенные элементы
-        if self.selected_marker:
-            self.scene().removeItem(self.selected_marker)
-            self.selected_marker = None
-        
-        # Отправляем сигнал о том, что не выделено ни одного элемента
-        self.item_deselected.emit()
-        
-        # Сбрасываем временные переменные
-        self.wall_start = None
-        self.region_start = None
-        self.temp_wall = None
-        self.temp_region = None
-        
-        # Обновляем сцену
-        self.update()
-        
-        logger.debug("Scene cleared successfully")
+        logger.debug("Графическая сцена очищена")
 
     def place_robot(self, position, robot_id=None, name="", direction=0):
         """
@@ -1806,33 +1511,6 @@ class FieldWidget(QGraphicsView):
         
         return QPointF(x, y)
 
-    def is_supported_item(self, item):
-        """
-        Проверяет, является ли элемент поддерживаемым типом (Robot, Wall, Region, StartPosition).
-        Также проверяет наличие data("its_wall") или data("wall_marker").
-        """
-        # Проверка на прямую поддержку типа
-        if isinstance(item, (Robot, Region, StartPosition, Wall)):
-            return True
-        
-        # Проверка на элементы стены по data
-        if hasattr(item, 'data') and item.data(0) in ["its_wall", "wall_marker"]:
-            return True
-            
-        # Проверяем, не является ли это подсветкой при наведении
-        if hasattr(item, 'data') and item.data(0) == "hover_highlight":
-            # Для hover_highlight передаем родителя в is_supported_item
-            if item.parentItem():
-                return self.is_supported_item(item.parentItem())
-            return False
-            
-        # Проверка на родительский элемент
-        if item and item.parentItem():
-            if isinstance(item.parentItem(), (Robot, Region, StartPosition, Wall)):
-                return True
-            
-        return False
-        
     def handle_hover_for_item(self, item, pos):
         """
         Обрабатывает наведение мыши для объекта под курсором.
@@ -1869,40 +1547,199 @@ class FieldWidget(QGraphicsView):
                 obj.set_hover_highlight(False)
                 
     def robot_intersects_walls(self, robot_pos):
-        """
-        Проверяет, пересекается ли робот со стенами в указанной позиции.
-        
-        Args:
-            robot_pos: Позиция робота (QPointF) - верхний левый угол
-            
-        Returns:
-            bool: True, если робот пересекается хотя бы с одной стеной, False в противном случае
-        """
-        if not self.robot_model:
+        # Используем self.scene_manager.robot
+        if not self.scene_manager.robot:
+            logger.warning("robot_intersects_walls вызван без робота на сцене")
             return False
             
-        # Размер робота - 50x50 пикселей
-        robot_size = 50
+        robot_size = 50 # TODO: Получать размер из Robot?
+        robot_rect = QRectF(robot_pos.x(), robot_pos.y(), robot_size, robot_size)
         
-        # Создаем прямоугольник робота
-        robot_rect = QRectF(
-            robot_pos.x(), 
-            robot_pos.y(),
-            robot_size, 
-            robot_size
-        )
-        
-        # Проверяем пересечение с каждой стеной
-        for wall in self.walls:
+        # Используем self.scene_manager.walls
+        for wall in self.scene_manager.walls:
             line = wall.line()
-            
-            # Получаем толщину стены из атрибута stroke_width
             thickness = wall.stroke_width
-            
-            # Проверяем пересечение линии стены с прямоугольником робота, учитывая толщину
-            # Используем утилитарную функцию
             if line_with_thickness_intersects_rect(line, robot_rect, thickness):
-                logger.debug(f"Robot intersects with wall {wall.id}")
+                logger.debug(f"Robot at {robot_pos} intersects with wall {wall.id}")
                 return True
                 
         return False
+
+    @pyqtSlot(int, int)
+    def update_robot_position(self, x, y):
+        if self.scene_manager.robot:
+            new_pos = QPointF(x, y)
+            # Сначала проверяем в менеджере, можно ли туда ставить
+            if self.scene_manager.robot_intersects_walls(new_pos):
+                logger.warning(f"Нельзя переместить робота в ({x},{y}), пересечение со стеной.")
+                # Восстанавливаем старые значения в properties
+                self.properties_updated.emit(self.scene_manager.robot)
+                return
+            if not self.scene_manager._check_robot_within_scene(Robot(new_pos)): # Используем временный объект
+                 logger.warning(f"Нельзя переместить робота в ({x},{y}), выходит за границы.")
+                 self.properties_updated.emit(self.scene_manager.robot)
+                 return
+
+            self.scene_manager.robot.setPos(new_pos)
+            self.properties_updated.emit(self.scene_manager.robot)
+            logger.debug(f"Позиция робота обновлена на ({x}, {y})")
+        else:
+            logger.warning("Попытка обновить позицию несуществующего робота")
+
+    @pyqtSlot(int)
+    def update_robot_rotation(self, rotation):
+        if self.scene_manager.robot:
+            self.scene_manager.robot.setRotation(rotation)
+            self.properties_updated.emit(self.scene_manager.robot)
+            logger.debug(f"Направление робота обновлено на {rotation}")
+        else:
+            logger.warning("Попытка обновить направление несуществующего робота")
+
+    @pyqtSlot(int, int)
+    def update_wall_point1(self, x, y):
+        if self.selected_item and isinstance(self.selected_item, Wall):
+            line = self.selected_item.line()
+            new_p1 = QPointF(x, y)
+            new_line = QLineF(new_p1, line.p2())
+            
+            # Проверяем пересечение с роботом
+            if self.scene_manager.robot and \
+               self.scene_manager.wall_intersects_robot(new_p1.x(), new_p1.y(), line.x2(), line.y2(), self.selected_item.stroke_width):
+                logger.warning(f"Нельзя переместить точку стены p1 в ({x},{y}), пересечение с роботом.")
+                self.properties_updated.emit(self.selected_item)
+                return
+            # Проверяем выход за границы
+            if not (-self.scene_width / 2 <= x <= self.scene_width / 2 and -self.scene_height / 2 <= y <= self.scene_height / 2):
+                logger.warning(f"Нельзя переместить точку стены p1 в ({x},{y}), выходит за границы.")
+                self.properties_updated.emit(self.selected_item)
+                return
+            
+            self.selected_item.setLine(new_line)
+            self.properties_updated.emit(self.selected_item)
+            logger.debug(f"Позиция точки p1 стены {self.selected_item.id} обновлена на ({x}, {y})")
+        else:
+            logger.warning("Попытка обновить точку p1 невыделенной или неверной стены")
+
+    @pyqtSlot(int, int)
+    def update_wall_point2(self, x, y):
+        if self.selected_item and isinstance(self.selected_item, Wall):
+            line = self.selected_item.line()
+            new_p2 = QPointF(x, y)
+            new_line = QLineF(line.p1(), new_p2)
+            
+            # Проверяем пересечение с роботом
+            if self.scene_manager.robot and \
+               self.scene_manager.wall_intersects_robot(line.x1(), line.y1(), new_p2.x(), new_p2.y(), self.selected_item.stroke_width):
+                logger.warning(f"Нельзя переместить точку стены p2 в ({x},{y}), пересечение с роботом.")
+                self.properties_updated.emit(self.selected_item)
+                return
+            # Проверяем выход за границы
+            if not (-self.scene_width / 2 <= x <= self.scene_width / 2 and -self.scene_height / 2 <= y <= self.scene_height / 2):
+                logger.warning(f"Нельзя переместить точку стены p2 в ({x},{y}), выходит за границы.")
+                self.properties_updated.emit(self.selected_item)
+                return
+            
+            self.selected_item.setLine(new_line)
+            self.properties_updated.emit(self.selected_item)
+            logger.debug(f"Позиция точки p2 стены {self.selected_item.id} обновлена на ({x}, {y})")
+        else:
+            logger.warning("Попытка обновить точку p2 невыделенной или неверной стены")
+            
+    # --- Добавляем слот для обновления толщины стены --- 
+    @pyqtSlot(int)
+    def update_wall_stroke_width(self, width):
+        if self.selected_item and isinstance(self.selected_item, Wall):
+            # Проверяем пересечение с роботом при новой толщине
+            line = self.selected_item.line()
+            if self.scene_manager.robot and \
+               self.scene_manager.wall_intersects_robot(line.x1(), line.y1(), line.x2(), line.y2(), width):
+                logger.warning(f"Нельзя изменить толщину стены на {width}, пересечение с роботом.")
+                self.properties_updated.emit(self.selected_item)
+                return
+                
+            self.selected_item.set_stroke_width(width)
+            self.properties_updated.emit(self.selected_item) # Обновляем свойства
+            logger.debug(f"Толщина стены {self.selected_item.id} обновлена на {width}")
+        else:
+            logger.warning("Попытка обновить толщину невыделенной или неверной стены")
+            
+    @pyqtSlot(str)
+    def update_wall_id(self, new_id):
+        if self.selected_item and isinstance(self.selected_item, Wall):
+            old_id = self.selected_item.id
+            # TODO: Добавить валидацию ID в SceneManager или здесь?
+            self.selected_item.id = new_id
+            # Обновляем ID в менеджере? (Пока нет явной необходимости)
+            self.properties_updated.emit(self.selected_item)
+            logger.debug(f"ID стены {old_id} изменен на {new_id}")
+        else:
+            logger.warning("Попытка обновить ID невыделенной или неверной стены")
+
+    @pyqtSlot(int, int)
+    def update_region_position(self, x, y):
+        if self.selected_item and isinstance(self.selected_item, Region):
+            new_pos = QPointF(x, y)
+            # TODO: Проверка границ/пересечений?
+            self.selected_item.setPos(new_pos)
+            self.properties_updated.emit(self.selected_item)
+            logger.debug(f"Позиция региона {self.selected_item.id} обновлена на ({x}, {y})")
+        else:
+            logger.warning("Попытка обновить позицию невыделенного или неверного региона")
+
+    @pyqtSlot(int, int)
+    def update_region_size(self, width, height):
+        if self.selected_item and isinstance(self.selected_item, Region):
+            # TODO: Проверка границ/пересечений?
+            self.selected_item.set_size(width, height)
+            self.properties_updated.emit(self.selected_item)
+            logger.debug(f"Размер региона {self.selected_item.id} обновлен на {width}x{height}")
+        else:
+            logger.warning("Попытка обновить размер невыделенного или неверного региона")
+
+    @pyqtSlot(str)
+    def update_region_color(self, color_hex):
+        if self.selected_item and isinstance(self.selected_item, Region):
+            self.selected_item.set_color(color_hex)
+            self.properties_updated.emit(self.selected_item)
+            logger.debug(f"Цвет региона {self.selected_item.id} обновлен на {color_hex}")
+        else:
+            logger.warning("Попытка обновить цвет невыделенного или неверного региона")
+            
+    @pyqtSlot(str)
+    def update_region_id(self, new_id):
+        if self.selected_item and isinstance(self.selected_item, Region):
+            old_id = self.selected_item.id
+            # TODO: Добавить валидацию ID
+            self.selected_item.id = new_id
+            self.properties_updated.emit(self.selected_item)
+            logger.debug(f"ID региона {old_id} изменен на {new_id}")
+        else:
+            logger.warning("Попытка обновить ID невыделенного или неверного региона")
+            
+    @pyqtSlot(float, float)
+    def update_start_position_position(self, x, y):
+        if self.scene_manager.start_position:
+            new_pos = QPointF(x, y)
+            # Проверка границ
+            temp_start = StartPosition(new_pos)
+            if not self.scene_manager._check_start_position_within_scene(temp_start):
+                logger.warning(f"Нельзя переместить стартовую позицию в ({x},{y}), выходит за границы.")
+                self.properties_updated.emit(self.scene_manager.start_position)
+                StartPosition.reset_instance() # Сбрасываем временный объект
+                return
+            StartPosition.reset_instance() # Сбрасываем временный объект
+            
+            self.scene_manager.start_position.setPos(new_pos)
+            self.properties_updated.emit(self.scene_manager.start_position)
+            logger.debug(f"Позиция стартовой точки обновлена на ({x}, {y})")
+        else:
+            logger.warning("Попытка обновить позицию несуществующей стартовой точки")
+            
+    @pyqtSlot(float)
+    def update_start_position_direction(self, direction):
+        if self.scene_manager.start_position:
+            self.scene_manager.start_position.setRotation(direction)
+            self.properties_updated.emit(self.scene_manager.start_position)
+            logger.debug(f"Направление стартовой точки обновлено на {direction}")
+        else:
+            logger.warning("Попытка обновить направление несуществующей стартовой точки")

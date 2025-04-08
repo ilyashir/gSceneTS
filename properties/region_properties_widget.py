@@ -4,15 +4,16 @@
 
 from PyQt6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, 
-    QFormLayout, QSlider, QPushButton
+    QFormLayout, QSlider, QPushButton, QWidget, QLineEdit, QColorDialog, QFrame, QSizePolicy
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor
+from PyQt6.QtGui import QColor, QIntValidator
 import logging
 from properties.base_properties_widget import BasePropertiesWidget
 from properties.utils.grid_snap_utils import snap_to_grid, is_snap_enabled
 from utils.signal_utils import SignalBlock
 from custom_widgets import EditableLineEdit, ColorPickerButton, CustomSpinBox
+from scene.items.region import Region
 
 logger = logging.getLogger(__name__)
 
@@ -41,12 +42,14 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         self.initial_values = {}
         self.setup_cursors()
         
+        # Добавляем атрибут для хранения состояния привязки
+        self._snap_enabled = True
+        
     def create_widgets(self):
         """Создание всех виджетов."""
         # ID региона
         self.id_label = QLabel("ID:")
-        self.id_edit = EditableLineEdit()
-        self.id_edit.set_theme(self.is_dark_theme)
+        self.id_edit = QLineEdit()
         
         # Позиция
         self.position_label = QLabel("<b>Позиция</b>")
@@ -187,7 +190,7 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         self.color_button.colorChanged.connect(self.on_color_changed)
         
         # Подключаем изменение ID
-        self.id_edit.valueChanged.connect(self.on_id_changed)
+        self.id_edit.editingFinished.connect(self.on_id_changed)
         
         # Подключаем кнопку сброса
         self.reset_button.clicked.connect(self.reset_properties)
@@ -242,7 +245,7 @@ class RegionPropertiesWidget(BasePropertiesWidget):
                 
                 # Обновляем ID если он предоставлен
                 if region_id:
-                    self.id_edit.setValue(region_id)
+                    self.id_edit.setText(region_id)
         except Exception as e:
             logger.error(f"Ошибка при установке свойств региона: {e}")
             
@@ -504,16 +507,15 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         except Exception as e:
             logger.error(f"Ошибка при изменении цвета: {e}")
             
-    def on_id_changed(self, new_id, item=None):
+    def on_id_changed(self):
         """
         Обработчик изменения ID региона.
         
         Args:
             new_id: Новый ID
-            item: Элемент региона (опционально)
         """
         try:
-            self.id_changed.emit(new_id)
+            self.id_changed.emit(self.id_edit.text())
         except Exception as e:
             logger.error(f"Ошибка при изменении ID региона: {e}")
             
@@ -536,37 +538,46 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         """
         self.is_dark_theme = is_dark_theme
         self.apply_theme(self.is_dark_theme)
-        # Обновляем стиль для EditableLineEdit с ID региона
-        self.id_edit.set_theme(self.is_dark_theme)        
         # Обновляем тему для кнопки выбора цвета
         self.color_button.set_theme(self.is_dark_theme)
     
-    def update_properties(self, region):
-        """
-        Обновление свойств виджета на основе объекта региона.
-        
-        Args:
-            region: Объект региона
-        """
-        logger.debug(f"Обновление свойств региона: {region}")
-        if self.field_widget:
-            self.update_ranges(
-                int(self.field_widget.scene().sceneRect().left()),
-                int(self.field_widget.scene().sceneRect().right()),
-                int(self.field_widget.scene().sceneRect().top()),
-                int(self.field_widget.scene().sceneRect().bottom())
-            )
-            logger.debug(f"Обновлены диапазоны: min_x={self.x_spinbox.minimum()}, max_x={self.x_spinbox.maximum()}, min_y={self.y_spinbox.minimum()}, max_y={self.y_spinbox.maximum()}")
+    def update_properties(self, item):
+        """Обновление свойств виджета на основе объекта региона."""
+        if not item or not isinstance(item, Region):
+            return
 
-        self.set_properties(
-            int(region.pos().x()), 
-            int(region.pos().y()),
-            int(region.rect().width()), 
-            int(region.rect().height()),
-            region.brush().color(),
-            region.region_id
-        )
-        logger.debug(f"Установлены свойства региона: {region.pos().x()}, {region.pos().y()}, {region.rect().width()}, {region.rect().height()}, {region.brush().color()}, {region.region_id}")
+        self.id_edit.blockSignals(True)
+        self.x_spinbox.blockSignals(True)
+        self.y_spinbox.blockSignals(True)
+        self.width_spinbox.blockSignals(True)
+        self.height_spinbox.blockSignals(True)
+        self.color_button.blockSignals(True)
+
+        self.id_edit.setText(item.id)
+        self.x_spinbox.setValue(int(item.pos().x()))
+        self.y_spinbox.setValue(int(item.pos().y()))
+        self.width_spinbox.setValue(int(item.boundingRect().width()))
+        self.height_spinbox.setValue(int(item.boundingRect().height()))
+        
+        # Устанавливаем цвет кнопки через self.color_button.setColor()
+        try:
+            # item.color должен быть строкой hex, например, '#ffff00'
+            color_obj = QColor(item.color)
+            if color_obj.isValid():
+                self.color_button.setColor(color_obj)
+            else:
+                logger.warning(f"Неверный формат цвета '{item.color}', используется цвет по умолчанию")
+                self.color_button.setColor(QColor('#ffff00')) # Цвет по умолчанию
+        except Exception as e:
+            logger.error(f"Ошибка при установке цвета кнопки: {e}")
+            self.color_button.setColor(QColor('#ffff00')) # Цвет по умолчанию при ошибке
+
+        self.id_edit.blockSignals(False)
+        self.x_spinbox.blockSignals(False)
+        self.y_spinbox.blockSignals(False)
+        self.width_spinbox.blockSignals(False)
+        self.height_spinbox.blockSignals(False)
+        self.color_button.blockSignals(False)
     
     def connect_to_field_widget(self, field_widget):
         """
@@ -717,4 +728,10 @@ class RegionPropertiesWidget(BasePropertiesWidget):
             # Оповещаем об изменении размера
             self.size_changed.emit(self.width_spinbox.value(), value)
         except Exception as e:
-            logger.error(f"Ошибка при завершении редактирования высоты: {e}") 
+            logger.error(f"Ошибка при завершении редактирования высоты: {e}")
+
+    # --- Добавляем метод set_snap_enabled --- 
+    def set_snap_enabled(self, enabled):
+        self._snap_enabled = enabled
+        # Пока ничего не делаем с этим состоянием
+        logger.debug(f"RegionPropertiesWidget snap state set to: {enabled}") 

@@ -6,12 +6,16 @@ from PyQt6.QtWidgets import QGraphicsItem
 from PyQt6.QtCore import Qt, QRectF, QPointF
 from PyQt6.QtGui import QPainterPath
 from hover_highlight import HoverHighlightMixin
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod, ABCMeta
 import logging
 
 logger = logging.getLogger(__name__)
 
-class BaseSceneItem(QGraphicsItem, HoverHighlightMixin, ABC):
+# Создаем метакласс, который наследует от метаклассов QGraphicsItem и ABC
+class SceneItemMeta(type(QGraphicsItem), ABCMeta):
+    pass
+
+class BaseSceneItem(QGraphicsItem, HoverHighlightMixin, ABC, metaclass=SceneItemMeta):
     """
     Базовый класс для всех элементов сцены.
     Обеспечивает общую функциональность: идентификацию и базовое взаимодействие.

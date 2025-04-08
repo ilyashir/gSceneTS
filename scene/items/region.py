@@ -27,40 +27,45 @@ class Region(BaseSceneItem):
         # Генерация ID для региона
         if region_id:
             self.id = region_id
-            # Добавляем ID в множество только для не временных регионов
             if not is_temp:
                 Region._existing_ids.add(self.id)
         else:
             if is_temp:
-                # Для временных регионов генерируем ID, но не добавляем его в _existing_ids
                 self.id = f"temp_r{Region._next_id}"
             else:
-                # Для реальных регионов генерируем ID и добавляем его в _existing_ids
                 self.id = f"r{Region._next_id}"
                 Region._next_id += 1
                 Region._existing_ids.add(self.id)
+        
+        # --- Инициализируем геометрию ПЕРЕД super().__init__ --- 
+        self._rect = rect # Используем приватный атрибут для хранения QRectF
+        # ---------------------------------------------------------
         
         # Инициализация базового класса
         super().__init__(item_type="region", item_id=self.id, is_temp=is_temp, z_value=5)
         
         # Настройка внешнего вида региона
         self.color = QColor(color)
-        self.rect = rect
         
-        # Создаем прямоугольник для отображения региона
-        self.region_rect = QGraphicsRectItem(rect, self)
-        self.region_rect.setBrush(QBrush(self.color.lighter(150)))  # Делаем цвет немного светлее
-        self.region_rect.setPen(QPen(self.color.darker(150), 2))  # Делаем обводку немного темнее
+        # Создаем QGraphicsRectItem для отображения
+        # Используем self._rect для инициализации
+        self.region_rect = QGraphicsRectItem(self._rect, self)
+        self.region_rect.setBrush(QBrush(self.color.lighter(150)))
+        self.region_rect.setPen(QPen(self.color.darker(150), 2))
         self.region_rect.setData(0, "its_region")
         self.region_rect.setZValue(7)
         
         # Включаем обработку событий мыши
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
+        
+        # Обновляем подсветку при наведении, если она была создана в super().__init__
+        if hasattr(self, 'hover_rect') and self.hover_rect:
+            self.hover_rect.setRect(self._rect)
     
     def create_hover_highlight(self):
         """Создает подсветку при наведении для региона."""
-        hover_rect = QGraphicsRectItem(self.rect, self)
+        hover_rect = QGraphicsRectItem(self._rect, self)
         
         # Настраиваем перо с пунктирной линией синего цвета
         pen = QPen(QColor("#3399FF"), 2)
@@ -87,9 +92,8 @@ class Region(BaseSceneItem):
         :param enabled: Если True, регион выделяется прямоугольником.
         """
         if enabled:
-            # Создаем прямоугольник для выделения
-            if not self.highlight_rect:
-                self.highlight_rect = QGraphicsRectItem(self.rect, self)
+            if not hasattr(self, 'highlight_rect') or not self.highlight_rect:
+                self.highlight_rect = QGraphicsRectItem(self._rect, self)
                 self.highlight_rect.setPen(QPen(Qt.GlobalColor.blue, 3))
                 self.highlight_rect.setBrush(QBrush(Qt.GlobalColor.transparent))
             
@@ -109,7 +113,7 @@ class Region(BaseSceneItem):
     
     def boundingRect(self):
         """Возвращает прямоугольник, охватывающий регион"""
-        return self.rect
+        return self._rect
     
     def paint(self, painter, option, widget):
         """Отрисовка региона не требуется, так как используется QGraphicsRectItem"""
@@ -120,7 +124,7 @@ class Region(BaseSceneItem):
         Переопределяем shape(), чтобы регион реагировал на нажатие в любой точке прямоугольника.
         """
         path = QPainterPath()
-        path.addRect(self.rect)
+        path.addRect(self._rect)
         return path
     
     def set_color(self, color):
@@ -137,14 +141,15 @@ class Region(BaseSceneItem):
         Устанавливает новый прямоугольник для региона.
         :param rect: Новый прямоугольник (QRectF).
         """
-        self.rect = rect
+        self.prepareGeometryChange()
+        self._rect = rect
         self.region_rect.setRect(rect)
         
-        # Обновляем прямоугольники подсветки, если они существуют
         if hasattr(self, 'highlight_rect') and self.highlight_rect:
             self.highlight_rect.setRect(rect)
         if hasattr(self, 'hover_rect') and self.hover_rect:
             self.hover_rect.setRect(rect)
+        self.update()
     
     @classmethod
     def reset_ids(cls):

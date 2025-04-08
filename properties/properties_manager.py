@@ -6,11 +6,10 @@
 """
 
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QLayout, QStackedWidget
-from PyQt6.QtCore import Qt, pyqtSignal, QObject
+from PyQt6.QtCore import Qt, pyqtSignal, QObject, pyqtSlot
 import logging
 
-from .properties_window import PropertiesWindow
-from .properties_window_adapter import PropertiesWindowAdapter
+from .properties_window_adapter import PropertiesWindow
 from scene.items import Robot, Wall, Region, StartPosition
 
 from properties.robot_properties_widget import RobotPropertiesWidget
@@ -34,7 +33,7 @@ class PropertiesManager(QWidget):
     # Сигналы для изменения свойств стены
     wall_position_point1_changed = pyqtSignal(int, int)  # x1, y1
     wall_position_point2_changed = pyqtSignal(int, int)  # x2, y2
-    wall_width_changed = pyqtSignal(int)  # width
+    wall_stroke_width_changed = pyqtSignal(int)  # stroke_width
     wall_id_changed = pyqtSignal(str)  # id
 
     # Сигналы для изменения свойств региона
@@ -67,8 +66,12 @@ class PropertiesManager(QWidget):
         # Текущий виджет свойств
         self.current_widget = None
         
-        # Ссылка на field_widget для проверки привязки к сетке
-        self.field_widget = None
+        # Добавляем атрибут для хранения состояния привязки к сетке
+        self._grid_snap_enabled = True # По умолчанию включено
+        
+        # --- Возвращаем инициализацию field_widget --- 
+        self.field_widget = None 
+        # ---------------------------------------------
         
     def _setup_widgets(self):
         """Создание и настройка виджетов свойств."""
@@ -130,7 +133,7 @@ class PropertiesManager(QWidget):
         # Стена
         self.wall_widget.position_point1_changed.connect(self.wall_position_point1_changed)
         self.wall_widget.position_point2_changed.connect(self.wall_position_point2_changed)
-        self.wall_widget.width_changed.connect(self.wall_width_changed)
+        self.wall_widget.width_changed.connect(self.wall_stroke_width_changed)
         self.wall_widget.id_changed.connect(self.wall_id_changed)
         
         # Регион
@@ -149,12 +152,20 @@ class PropertiesManager(QWidget):
         # Скрываем все виджеты свойств
         self.hide_all_widgets()
 
-        # Восстанавливаем field_widget в виджетах
-        if self.field_widget:
-            self.robot_widget.field_widget = self.field_widget
-            self.wall_widget.field_widget = self.field_widget
-            self.region_widget.field_widget = self.field_widget
-            self.start_position_widget.field_widget = self.field_widget
+        # Передаем текущее состояние привязки к сетке в виджеты
+        snap_enabled = self._grid_snap_enabled
+        self.robot_widget.set_snap_enabled(snap_enabled)
+        self.wall_widget.set_snap_enabled(snap_enabled)
+        self.region_widget.set_snap_enabled(snap_enabled)
+        self.start_position_widget.set_snap_enabled(snap_enabled)
+
+        # --- Убираем ненужное использование self.field_widget --- 
+        # if self.field_widget:
+        #     self.robot_widget.field_widget = self.field_widget
+        #     self.wall_widget.field_widget = self.field_widget
+        #     self.region_widget.field_widget = self.field_widget
+        #     self.start_position_widget.field_widget = self.field_widget
+        # -------------------------------------------------------
 
         # Определяем тип элемента и показываем соответствующий виджет
         if isinstance(item, Robot):
@@ -212,11 +223,11 @@ class PropertiesManager(QWidget):
         Args:
             enabled: Статус привязки
         """
-        # Обновляем информацию о привязке к сетке во всех виджетах
-        self.robot_widget.on_grid_snap_changed(enabled)
-        self.wall_widget.on_grid_snap_changed(enabled)
-        self.region_widget.on_grid_snap_changed(enabled)
-        self.start_position_widget.on_grid_snap_changed(enabled)
+        logger.debug(f"PropertiesManager получил сигнал on_grid_snap_changed: {enabled}")
+        self._grid_snap_enabled = enabled
+        # Передаем новое состояние в активный виджет свойств
+        if self.current_widget and hasattr(self.current_widget, 'set_snap_enabled'):
+            self.current_widget.set_snap_enabled(enabled)
         
     def connect_to_field_widget(self, field_widget):
         """
@@ -225,14 +236,14 @@ class PropertiesManager(QWidget):
         Args:
             field_widget: Виджет поля
         """
-        self.field_widget = field_widget
+        # --- Возвращаем установку self.field_widget --- 
+        self.field_widget = field_widget 
+        # ---------------------------------------------
         
-        # Передаем виджет поля всем виджетам свойств
-        self.robot_widget.connect_to_field_widget(field_widget)
-        self.wall_widget.connect_to_field_widget(field_widget)
-        self.region_widget.connect_to_field_widget(field_widget)
-        self.start_position_widget.connect_to_field_widget(field_widget) 
-
+        # Получаем начальное состояние привязки из field_widget
+        self._grid_snap_enabled = field_widget.snap_to_grid_enabled
+        logger.debug(f"PropertiesManager подключен к FieldWidget, snap_enabled={self._grid_snap_enabled}")
+        
     # Слоты для стартовой позиции
     def _on_start_position_position_changed(self, x, y):
         """Обработчик изменения позиции стартовой позиции."""

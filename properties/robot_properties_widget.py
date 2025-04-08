@@ -35,6 +35,9 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         self.apply_theme(is_dark_theme)
         self.setup_cursors()
         
+        # Добавляем атрибут для хранения состояния привязки
+        self._snap_enabled = True
+        
     def create_widgets(self):
         """Создание всех виджетов."""
         # ID робота (неизменяемый)
@@ -488,3 +491,14 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         if self.field_widget:
             step_size = self.field_widget.grid_size if enabled else 1
             self.update_step_sizes(step_size) 
+
+    def set_snap_enabled(self, enabled):
+        """
+        Установка состояния привязки к сетке.
+        
+        Args:
+            enabled: True для включения привязки, False для отключения
+        """
+        self._snap_enabled = enabled
+        logger.debug(f"RobotPropertiesWidget snap state set to: {enabled}")
+        self.update_step_sizes() 

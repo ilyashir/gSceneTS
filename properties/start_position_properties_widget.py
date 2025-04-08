@@ -41,6 +41,9 @@ class StartPositionPropertiesWidget(BasePropertiesWidget):
         
         # По умолчанию виджет скрыт
         self.hide()
+        
+        # Добавляем атрибут для хранения состояния привязки
+        self._snap_enabled = True
     
     def create_widgets(self):
         """Создает виджеты для отображения свойств стартовой позиции."""
@@ -244,14 +247,29 @@ class StartPositionPropertiesWidget(BasePropertiesWidget):
         # Отображаем виджет
         self.show()
     
-    def update_properties(self, start_position):
+    def update_properties(self, item):
         """
         Обновляет отображаемые свойства стартовой позиции.
         
         Args:
-            start_position: Объект стартовой позиции
+            item: Объект стартовой позиции
         """
-        self.show_properties(start_position)
+        # Блокируем сигналы, чтобы избежать зацикливания
+        self.x_spinbox.blockSignals(True)
+        self.y_spinbox.blockSignals(True)
+        self.direction_spinbox.blockSignals(True)
+
+        # Учитываем смещение и преобразуем в int
+        center_offset = item.ITEM_SIZE / 2
+        self.x_spinbox.setValue(int(item.x() + center_offset))
+        self.y_spinbox.setValue(int(item.y() + center_offset))
+        # Преобразуем rotation в int
+        self.direction_spinbox.setValue(int(item.rotation()))
+        
+        # Разблокируем сигналы
+        self.x_spinbox.blockSignals(False)
+        self.y_spinbox.blockSignals(False)
+        self.direction_spinbox.blockSignals(False)
     
     def connect_to_field_widget(self, field_widget):
         """
@@ -470,4 +488,17 @@ class StartPositionPropertiesWidget(BasePropertiesWidget):
         Args:
             is_dark_theme: True для темной темы, False для светлой
         """
-        self.apply_theme(is_dark_theme) 
+        self.apply_theme(is_dark_theme)
+    
+    def set_snap_enabled(self, enabled):
+        """
+        Устанавливает состояние привязки к сетке.
+        
+        Args:
+            enabled: True для включения привязки, False для отключения
+        """
+        self._snap_enabled = enabled
+        logger.debug(f"StartPositionPropertiesWidget snap state set to: {enabled}")
+        if self.field_widget:
+            step_size = self.field_widget.grid_size if enabled else 1
+            self.update_step_sizes(step_size) 

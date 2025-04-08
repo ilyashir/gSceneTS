@@ -10,12 +10,17 @@ from PyQt6.QtCore import pyqtSignal, Qt, QObject
 from PyQt6.QtGui import QFont
 import logging
 
-from properties.properties_manager import PropertiesManager
-from robot import Robot
-from wall import Wall
-from region import Region
-from start_position import StartPosition
-from .properties_window import PropertiesWindow
+# Убираем импорт PropertiesManager, чтобы разорвать цикл
+# from properties.properties_manager import PropertiesManager 
+
+# Убираем импорты старых классов, т.к. работаем с новыми из scene.items
+# from robot import Robot
+# from wall import Wall
+# from region import Region
+# from start_position import StartPosition
+# Убираем старый импорт
+# from .properties_window import PropertiesWindow
+
 from scene.items import Robot, Wall, Region, StartPosition
 from .robot_properties_widget import RobotPropertiesWidget
 from .wall_properties_widget import WallPropertiesWidget
@@ -36,7 +41,7 @@ class PropertiesWindow(QWidget):
     robot_rotation_changed = pyqtSignal(int)  # rotation
     wall_position_point1_changed = pyqtSignal(int, int)  # x1, y1
     wall_position_point2_changed = pyqtSignal(int, int)  # x2, y2
-    wall_size_changed = pyqtSignal(int)  # width
+    wall_stroke_width_changed = pyqtSignal(int)  # stroke_width
     region_position_changed = pyqtSignal(int, int)  # x, y
     region_size_changed = pyqtSignal(int, int)  # width, height
     region_color_changed = pyqtSignal(str)  # color
@@ -47,20 +52,21 @@ class PropertiesWindow(QWidget):
     start_position_position_changed = pyqtSignal(float, float)  # x, y
     start_position_direction_changed = pyqtSignal(float)  # direction
     
-    def __init__(self, parent=None, is_dark_theme=False):
+    def __init__(self, properties_manager: 'PropertiesManager', is_dark_theme=False):
         """
         Инициализация адаптера.
         
         Args:
-            parent: Родительский виджет
+            properties_manager: Экземпляр менеджера свойств
             is_dark_theme: Флаг темной темы
         """
-        super().__init__(parent)
+        # Вызываем конструктор QWidget без parent, т.к. он будет добавлен в DockWidget
+        super().__init__() 
         self.setWindowTitle("Свойства")
         self.setMinimumWidth(380)
         
-        # Создаем и настраиваем менеджер свойств
-        self.properties_manager = PropertiesManager(parent, is_dark_theme)
+        # Сохраняем переданный менеджер свойств
+        self.properties_manager = properties_manager
         
         # Подключаем сигналы от менеджера свойств к сигналам адаптера
         self._connect_signals()
@@ -130,7 +136,7 @@ class PropertiesWindow(QWidget):
         # Сигналы стены
         self.properties_manager.wall_position_point1_changed.connect(self.wall_position_point1_changed)
         self.properties_manager.wall_position_point2_changed.connect(self.wall_position_point2_changed)
-        self.properties_manager.wall_width_changed.connect(self.wall_size_changed)
+        self.properties_manager.wall_stroke_width_changed.connect(self.wall_stroke_width_changed)
         self.properties_manager.wall_id_changed.connect(self.wall_id_changed)
         
         # Сигналы региона
