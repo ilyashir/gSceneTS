@@ -49,8 +49,8 @@ class PropertiesWindow(QWidget):
     region_id_changed = pyqtSignal(str)  # id for regions
     
     # Сигналы для оповещения об изменении свойств стартовой позиции
-    start_position_position_changed = pyqtSignal(float, float)  # x, y
-    start_position_direction_changed = pyqtSignal(float)  # direction
+    start_position_changed = pyqtSignal(int, int)  # x, y
+    start_position_direction_changed = pyqtSignal(int)  # direction
     
     def __init__(self, properties_manager: 'PropertiesManager', is_dark_theme=False):
         """
@@ -128,7 +128,7 @@ class PropertiesWindow(QWidget):
         self.robot_id = self.properties_manager.robot_widget.robot_id_label
         
     def _connect_signals(self):
-        """Подключение сигналов от менеджера свойств к сигналам адаптера."""
+        """Подключение сигналов и слотов."""
         # Сигналы робота
         self.properties_manager.robot_position_changed.connect(self.robot_position_changed)
         self.properties_manager.robot_rotation_changed.connect(self.robot_rotation_changed)
@@ -146,8 +146,8 @@ class PropertiesWindow(QWidget):
         self.properties_manager.region_id_changed.connect(self.region_id_changed)
         
         # Сигналы стартовой позиции
-        self.properties_manager.start_position_position_changed.connect(self.start_position_position_changed)
-        self.properties_manager.start_position_direction_changed.connect(self.start_position_direction_changed)
+        self.properties_manager.start_position_changed.connect(self.start_position_changed)
+        self.properties_manager.start_direction_changed.connect(self.start_position_direction_changed)
         
     def set_theme(self, is_dark_theme):
         """
@@ -182,6 +182,8 @@ class PropertiesWindow(QWidget):
         Args:
             item: Элемент для отображения свойств
         """
+        logger.debug(f"PropertiesWindow.update_properties вызван для {type(item).__name__}")
+        
         self.current_item = item
         
         # Скрываем пустую метку и показываем менеджер свойств
@@ -191,6 +193,8 @@ class PropertiesWindow(QWidget):
             
         # Делегируем обновление свойств менеджеру
         self.properties_manager.update_properties(item)
+        
+        logger.debug(f"PropertiesWindow.update_properties завершил обработку {type(item).__name__}")
         
     def clear_properties(self):
         """Очистка свойств."""

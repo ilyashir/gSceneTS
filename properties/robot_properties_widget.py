@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 import logging
 from properties.base_properties_widget import BasePropertiesWidget
-from properties.utils.grid_snap_utils import snap_to_grid, snap_rotation_to_grid, is_snap_enabled
+from properties.utils.grid_snap_utils import snap_to_grid, snap_rotation_to_grid
 from utils.signal_utils import SignalBlock
 from custom_widgets import CustomSpinBox
 
@@ -33,10 +33,12 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         """
         super().__init__("Свойства робота", parent)
         self.apply_theme(is_dark_theme)
-        self.setup_cursors()
         
         # Добавляем атрибут для хранения состояния привязки
         self._snap_enabled = True
+        # Добавляем инициализацию _step_size и _rotation_step, чтобы избежать AttributeError
+        self._step_size = 50  # Значение шага по умолчанию для спинбоксов и слайдеров (половина размера сетки)
+        self._rotation_step = 45
         
     def create_widgets(self):
         """Создание всех виджетов."""
@@ -72,6 +74,8 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         # Кнопка сброса параметров
         self.reset_button = QPushButton("Сбросить")
         self.reset_button.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        self.update_snap_step_size(True)
         
     def create_layouts(self):
         """Создание и настройка компоновки."""
@@ -121,15 +125,12 @@ class RobotPropertiesWidget(BasePropertiesWidget):
     def setup_connections(self):
         """Подключение сигналов и слотов."""
         # Связываем слайдеры и спинбоксы
-        self.x_spinbox.buttonValueChanged.connect(self.x_slider.setValue)
         self.x_spinbox.buttonValueChanged.connect(self.on_x_spinbox_value_changed)
         self.x_slider.valueChanged.connect(self.on_x_slider_changed)
         
-        self.y_spinbox.buttonValueChanged.connect(self.y_slider.setValue)
         self.y_spinbox.buttonValueChanged.connect(self.on_y_spinbox_value_changed)
         self.y_slider.valueChanged.connect(self.on_y_slider_changed)
         
-        self.rotation_spinbox.buttonValueChanged.connect(self.rotation_slider.setValue)
         self.rotation_spinbox.buttonValueChanged.connect(self.on_rotation_spinbox_value_changed)
         self.rotation_slider.valueChanged.connect(self.on_rotation_slider_changed)
         
@@ -152,30 +153,35 @@ class RobotPropertiesWidget(BasePropertiesWidget):
             robot_id: ID робота (опционально)
         """
         try:
-            # Запоминаем начальные значения для возможности сброса
-            self.initial_values = {
-                'x': x,
-                'y': y,
-                'rotation': rotation
-            }
+            logger.debug(f"Установка свойств робота: x={x}, y={y}, rotation={rotation}, robot_id={robot_id}")
             
-            # Блокируем сигналы на время обновления
-            with SignalBlock(self.x_spinbox), SignalBlock(self.x_slider), \
-                 SignalBlock(self.y_spinbox), SignalBlock(self.y_slider), \
-                 SignalBlock(self.rotation_spinbox), SignalBlock(self.rotation_slider):
+            self.x_spinbox.blockSignals(True)
+            self.y_spinbox.blockSignals(True)
+            self.rotation_spinbox.blockSignals(True)
+            self.x_slider.blockSignals(True) 
+            self.y_slider.blockSignals(True)
+            self.rotation_slider.blockSignals(True)
+            
+            self.x_spinbox.setValue(x)
+            self.y_spinbox.setValue(y)
+            self.rotation_spinbox.setValue(rotation)
+            
+            self.x_slider.setValue(x)
+            self.y_slider.setValue(y)
+            self.rotation_slider.setValue(rotation)
+            
+            self.x_spinbox.blockSignals(False)
+            self.y_spinbox.blockSignals(False)
+            self.rotation_spinbox.blockSignals(False)
+            self.x_slider.blockSignals(False)
+            self.y_slider.blockSignals(False)
+            self.rotation_slider.blockSignals(False)
                 
-                self.x_spinbox.setValue(x)
-                self.x_slider.setValue(x)
+            # Обновляем ID если он предоставлен
+            if robot_id:
+                self.robot_id_label.setText(robot_id)
                 
-                self.y_spinbox.setValue(y)
-                self.y_slider.setValue(y)
-                
-                self.rotation_spinbox.setValue(rotation)
-                self.rotation_slider.setValue(rotation)
-                
-                # Обновляем ID если он предоставлен
-                if robot_id:
-                    self.robot_id_label.setText(robot_id)
+            logger.debug(f"Свойства робота установлены: x={x}, y={y}, rotation={rotation}")
         except Exception as e:
             logger.error(f"Ошибка при установке свойств робота: {e}")
             
@@ -190,13 +196,20 @@ class RobotPropertiesWidget(BasePropertiesWidget):
             max_y: Максимальное значение Y
         """
         try:
+            logger.debug(f"Обновление диапазонов робота: min_x={min_x}, max_x={max_x}, min_y={min_y}, max_y={max_y}")
+            
+            # Размер робота (50x50)
+            robot_size = 50
+            
             # Обновляем диапазоны для X c учетом размера робота
-            self.x_spinbox.setRange(min_x, max_x - 50)
-            self.x_slider.setRange(min_x, max_x - 50)
+            self.x_spinbox.setRange(min_x, max_x - robot_size)
+            self.x_slider.setRange(min_x, max_x - robot_size)
             
             # Обновляем диапазоны для Y
-            self.y_spinbox.setRange(min_y, max_y - 50)
-            self.y_slider.setRange(min_y, max_y - 50)
+            self.y_spinbox.setRange(min_y, max_y - robot_size)
+            self.y_slider.setRange(min_y, max_y - robot_size)
+            
+            logger.debug(f"Установлены диапазоны для X: [{min_x}, {max_x - robot_size}], Y: [{min_y}, {max_y - robot_size}]")
         except Exception as e:
             logger.error(f"Ошибка при обновлении диапазонов: {e}")
             
@@ -221,41 +234,25 @@ class RobotPropertiesWidget(BasePropertiesWidget):
             self.rotation_changed.emit(self.initial_values.get('rotation', 0))
         except Exception as e:
             logger.error(f"Ошибка при сбросе свойств робота: {e}")
-            
-    def update_step_sizes(self, step_size=1):
-        """
-        Обновление шага изменения для спинбоксов.
-        
-        Args:
-            step_size: Размер шага
-        """
-        try:
-            self.x_spinbox.setSingleStep(step_size)
-            self.y_spinbox.setSingleStep(step_size)
-            
-            # Для поворота используем шаг 45 градусов если включен snap_to_grid
-            if is_snap_enabled(self.field_widget):
-                self.rotation_spinbox.setSingleStep(45)
-            else:
-                self.rotation_spinbox.setSingleStep(1)
-        except Exception as e:
-            logger.error(f"Ошибка при обновлении шага спинбоксов: {e}")
     
     # Обработчики событий
     def on_x_spinbox_value_changed(self, value):
         """Обработчик изменения значения X в спинбоксе (кнопками)."""
         try:
             # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
-                grid_size = getattr(self.field_widget, 'grid_size', 10)
-                value = snap_to_grid(value, grid_size)
-                
-                # Блокируем сигналы при обновлении значения
+            if hasattr(self, '_snap_enabled') and self._snap_enabled:                
+                value = snap_to_grid(value, self._step_size)
                 with SignalBlock(self.x_spinbox):
                     self.x_spinbox.setValue(value)
                 
+            # Обновляем слайдер
+            with SignalBlock(self.x_slider):
+                self.x_slider.setValue(value)
+                
             # Оповещаем об изменении позиции
             self.position_changed.emit(value, self.y_spinbox.value())
+            
+            logger.debug(f"X-координата изменена через спинбокс: {value}")
         except Exception as e:
             logger.error(f"Ошибка при изменении X-координаты через спинбокс: {e}")
 
@@ -263,16 +260,19 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         """Обработчик изменения значения Y в спинбоксе (кнопками)."""
         try:
             # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
-                grid_size = getattr(self.field_widget, 'grid_size', 10)
-                value = snap_to_grid(value, grid_size)
-                
-                # Блокируем сигналы при обновлении значения
+            if hasattr(self, '_snap_enabled') and self._snap_enabled:                
+                value = snap_to_grid(value, self._step_size)
                 with SignalBlock(self.y_spinbox):
                     self.y_spinbox.setValue(value)
                 
+            # Обновляем слайдер
+            with SignalBlock(self.y_slider):
+                self.y_slider.setValue(value)
+                
             # Оповещаем об изменении позиции
             self.position_changed.emit(self.x_spinbox.value(), value)
+            
+            logger.debug(f"Y-координата изменена через спинбокс: {value}")
         except Exception as e:
             logger.error(f"Ошибка при изменении Y-координаты через спинбокс: {e}")
 
@@ -280,15 +280,21 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         """Обработчик изменения значения поворота в спинбоксе (кнопками)."""
         try:
             # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
+            if hasattr(self, '_snap_enabled') and self._snap_enabled:
                 value = snap_rotation_to_grid(value, 45)
                 
                 # Блокируем сигналы при обновлении значения
                 with SignalBlock(self.rotation_spinbox):
                     self.rotation_spinbox.setValue(value)
                 
+            # Обновляем слайдер
+            with SignalBlock(self.rotation_slider):
+                self.rotation_slider.setValue(value)
+                
             # Оповещаем об изменении поворота
             self.rotation_changed.emit(value)
+            
+            logger.debug(f"Угол поворота изменен через спинбокс: {value}")
         except Exception as e:
             logger.error(f"Ошибка при изменении поворота через спинбокс: {e}")
 
@@ -301,20 +307,19 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         """
         try:
             # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
-                grid_size = getattr(self.field_widget, 'grid_size', 10)
-                value = snap_to_grid(value, grid_size)  
-                logger.info(f"Привязка к сетке: {value}")
+            if hasattr(self, '_snap_enabled') and self._snap_enabled:                
+                value = snap_to_grid(value, self._step_size)
 
-            logger.info(f"Изменение X: {value}")
             # Устанавливаем значение в спинбокс без эмиссии сигнала
             with SignalBlock(self.x_spinbox):
                 self.x_spinbox.setValue(value)
                 
             # Оповещаем об изменении позиции
             self.position_changed.emit(value, self.y_spinbox.value())
+            
+            logger.debug(f"X-координата изменена через слайдер: {value}")
         except Exception as e:
-            logger.error(f"Ошибка при изменении X-координаты: {e}")
+            logger.error(f"Ошибка при изменении X-координаты через слайдер: {e}")
             
     def on_y_slider_changed(self, value):
         """
@@ -325,9 +330,8 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         """
         try:
             # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
-                grid_size = getattr(self.field_widget, 'grid_size', 10)
-                value = snap_to_grid(value, grid_size)
+            if hasattr(self, '_snap_enabled') and self._snap_enabled:                
+                value = snap_to_grid(value, self._step_size)
                 
             # Устанавливаем значение в спинбокс без эмиссии сигнала
             with SignalBlock(self.y_spinbox):
@@ -335,8 +339,10 @@ class RobotPropertiesWidget(BasePropertiesWidget):
                 
             # Оповещаем об изменении позиции
             self.position_changed.emit(self.x_spinbox.value(), value)
+            
+            logger.debug(f"Y-координата изменена через слайдер: {value}")
         except Exception as e:
-            logger.error(f"Ошибка при изменении Y-координаты: {e}")
+            logger.error(f"Ошибка при изменении Y-координаты через слайдер: {e}")
             
     def on_rotation_slider_changed(self, value):
         """
@@ -347,7 +353,7 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         """
         try:
             # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
+            if hasattr(self, '_snap_enabled') and self._snap_enabled:
                 value = snap_rotation_to_grid(value, 45)
                 
             # Устанавливаем значение в спинбокс без эмиссии сигнала
@@ -356,30 +362,28 @@ class RobotPropertiesWidget(BasePropertiesWidget):
                 
             # Оповещаем об изменении поворота
             self.rotation_changed.emit(value)
+            
+            logger.debug(f"Угол поворота изменен через слайдер: {value}")
         except Exception as e:
-            logger.error(f"Ошибка при изменении поворота: {e}")
+            logger.error(f"Ошибка при изменении угла поворота через слайдер: {e}")
             
     def on_x_editing_finished(self):
         """Обработчик завершения редактирования X-координаты."""
         try:
             value = self.x_spinbox.value()
-            
+
             # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
-                grid_size = getattr(self.field_widget, 'grid_size', 10)
-                value = snap_to_grid(value, grid_size)
-                
-                # Обновляем значение в спинбоксе если оно изменилось
-                if value != self.x_spinbox.value():
-                    with SignalBlock(self.x_spinbox):
-                        self.x_spinbox.setValue(value)
-                
+            if hasattr(self, '_snap_enabled') and self._snap_enabled:                
+                value = snap_to_grid(value, self._step_size)
+
             # Обновляем слайдер
             with SignalBlock(self.x_slider):
                 self.x_slider.setValue(value)
                 
             # Оповещаем об изменении позиции
             self.position_changed.emit(value, self.y_spinbox.value())
+            
+            logger.debug(f"X-координата робота изменена после окончания редактирования: {value}")
         except Exception as e:
             logger.error(f"Ошибка при завершении редактирования X: {e}")
             
@@ -387,23 +391,19 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         """Обработчик завершения редактирования Y-координаты."""
         try:
             value = self.y_spinbox.value()
-            
+                
             # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
-                grid_size = getattr(self.field_widget, 'grid_size', 10)
-                value = snap_to_grid(value, grid_size)
-                
-                # Обновляем значение в спинбоксе если оно изменилось
-                if value != self.y_spinbox.value():
-                    with SignalBlock(self.y_spinbox):
-                        self.y_spinbox.setValue(value)
-                
+            if hasattr(self, '_snap_enabled') and self._snap_enabled:                
+                value = snap_to_grid(value, self._step_size)
+
             # Обновляем слайдер
             with SignalBlock(self.y_slider):
                 self.y_slider.setValue(value)
                 
             # Оповещаем об изменении позиции
             self.position_changed.emit(self.x_spinbox.value(), value)
+            
+            logger.debug(f"Y-координата робота изменена после окончания редактирования: {value}")
         except Exception as e:
             logger.error(f"Ошибка при завершении редактирования Y: {e}")
             
@@ -413,33 +413,20 @@ class RobotPropertiesWidget(BasePropertiesWidget):
             value = self.rotation_spinbox.value()
             
             # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
+            if hasattr(self, '_snap_enabled') and self._snap_enabled:
                 value = snap_rotation_to_grid(value, 45)
-                
-                # Обновляем значение в спинбоксе если оно изменилось
-                if value != self.rotation_spinbox.value():
-                    with SignalBlock(self.rotation_spinbox):
-                        self.rotation_spinbox.setValue(value)
-                
+                            
             # Обновляем слайдер
             with SignalBlock(self.rotation_slider):
                 self.rotation_slider.setValue(value)
                 
             # Оповещаем об изменении поворота
             self.rotation_changed.emit(value)
+            
+            logger.debug(f"Угол поворота изменен на {value}")
         except Exception as e:
             logger.error(f"Ошибка при завершении редактирования поворота: {e}")
             
-    def set_field_widget(self, field_widget):
-        """
-        Установка ссылки на виджет поля.
-        
-        Args:
-            field_widget: Виджет поля
-        """
-        self.field_widget = field_widget
-        self.update_step_sizes() 
-
     def set_theme(self, is_dark_theme):
         """
         Установка темы оформления.
@@ -456,20 +443,28 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         Args:
             robot: Объект робота
         """
-        if self.field_widget:
-            self.update_ranges(
-                int(self.field_widget.scene().sceneRect().left()),
-                int(self.field_widget.scene().sceneRect().right()),
-                int(self.field_widget.scene().sceneRect().top()),
-                int(self.field_widget.scene().sceneRect().bottom())
+        # Всегда обновляем диапазоны в первую очередь, они должны быть корректны
+        # перед установкой значений
+        try:
+            if self.field_widget:
+                # Получаем границы сцены для установки диапазонов
+                scene_rect = self.field_widget.scene().sceneRect()
+                min_x = int(scene_rect.left())
+                max_x = int(scene_rect.right())
+                min_y = int(scene_rect.top())
+                max_y = int(scene_rect.bottom())
+                
+                # Вызываем метод обновления диапазонов
+                self.update_ranges(min_x, max_x, min_y, max_y)                
+            
+            self.set_properties(
+                int(robot.x()),
+                int(robot.y()),
+                int(robot.rotation()),
+                "trikKitRobot"
             )
-        
-        self.set_properties(
-            int(robot.x()),
-            int(robot.y()),
-            int(robot.rotation()),
-            "trikKitRobot"
-        )
+        except Exception as e:
+            logger.error(f"Ошибка при обновлении свойств робота: {e}")
     
     def connect_to_field_widget(self, field_widget):
         """
@@ -479,19 +474,7 @@ class RobotPropertiesWidget(BasePropertiesWidget):
             field_widget: Виджет поля
         """
         self.field_widget = field_widget
-        self.update_step_sizes(field_widget.grid_size if hasattr(field_widget, 'grid_size') else 1)
     
-    def on_grid_snap_changed(self, enabled):
-        """
-        Обработчик изменения привязки к сетке.
-        
-        Args:
-            enabled: Статус привязки
-        """
-        if self.field_widget:
-            step_size = self.field_widget.grid_size if enabled else 1
-            self.update_step_sizes(step_size) 
-
     def set_snap_enabled(self, enabled):
         """
         Установка состояния привязки к сетке.
@@ -499,6 +482,38 @@ class RobotPropertiesWidget(BasePropertiesWidget):
         Args:
             enabled: True для включения привязки, False для отключения
         """
-        self._snap_enabled = enabled
-        logger.debug(f"RobotPropertiesWidget snap state set to: {enabled}")
-        self.update_step_sizes() 
+        logger.debug(f"RobotPropertiesWidget: set_snap_enabled вызван с параметром {enabled}")
+        
+        if self._snap_enabled != enabled:
+             self._snap_enabled = enabled
+             self.update_snap_step_size(enabled)
+        
+    def update_snap_step_size(self, enabled):
+        """Устанавливает шаг спинбоксов в зависимости от состояния привязки к сетке."""
+        try:
+            if enabled:
+                step_size = 50  # Шаг сетки для робота
+                rotation_step = 45
+                logger.debug(f"Установка шага для робота (привязка вкл.): коорд={step_size}, поворот={rotation_step}")
+            else:
+                step_size = 1
+                rotation_step = 1
+                logger.debug("Установка шага для робота (привязка выкл.): 1")
+
+            # Сохраняем шаги как атрибуты
+            self._step_size = step_size
+            self._rotation_step = rotation_step
+            logger.debug(f"[USSS] robot шаг={self._step_size}, поворот={self._rotation_step}")
+            
+            # Координаты X, Y
+            self.x_spinbox.setSingleStep(step_size)
+            self.y_spinbox.setSingleStep(step_size)
+            self.x_slider.setSingleStep(step_size)
+            self.y_slider.setSingleStep(step_size)
+
+            # Поворот
+            self.rotation_spinbox.setSingleStep(rotation_step)
+            self.rotation_slider.setSingleStep(rotation_step)
+
+        except Exception as e:
+            logger.error(f"Ошибка при установке шага привязки для робота: {e}") 

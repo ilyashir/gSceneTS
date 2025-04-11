@@ -1,6 +1,9 @@
 """
 Утилиты для работы с привязкой к сетке.
 """
+import logging
+
+logger = logging.getLogger(__name__)
 
 def snap_to_grid(value, grid_size):
     """
@@ -13,6 +16,7 @@ def snap_to_grid(value, grid_size):
     Returns:
         float: Значение, привязанное к сетке
     """
+    # Используем round() для более точного округления
     return round(value / grid_size) * grid_size
 
 def snap_rotation_to_grid(rotation, grid_size=45):
@@ -26,6 +30,7 @@ def snap_rotation_to_grid(rotation, grid_size=45):
     Returns:
         float: Угол поворота, привязанный к сетке
     """
+    # Используем round() для согласованности с snap_to_grid
     return round(rotation / grid_size) * grid_size
 
 def is_snap_enabled(obj):
@@ -51,18 +56,20 @@ def is_snap_enabled(obj):
         if hasattr(field_widget, 'snap_to_grid_enabled'):
             return field_widget.snap_to_grid_enabled
 
-def get_grid_size(scene):
+def get_grid_size(field_widget, default_size=50):
     """
-    Получает размер ячейки сетки.
-    
+    Возвращает размер сетки из field_widget или значение по умолчанию.
+
     Args:
-        scene: Сцена, содержащая настройки сетки
-        
+        field_widget: Виджет поля.
+        default_size: Размер сетки по умолчанию.
+
     Returns:
-        float: Размер ячейки сетки или 1 по умолчанию
+        int: Размер сетки.
     """
-    if not scene:
-        return 1
-        
-    field_widget = scene.parent()
-    return getattr(field_widget, 'grid_size', 1) 
+    if field_widget and hasattr(field_widget, 'grid_size'):
+        grid_size = getattr(field_widget, 'grid_size', default_size)
+        logger.debug(f"Получен grid_size={grid_size} из field_widget")
+        return grid_size
+    logger.warning(f"Не удалось получить grid_size из field_widget, используется значение по умолчанию {default_size}")
+    return default_size 

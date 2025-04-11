@@ -39,12 +39,11 @@ class WallPropertiesWidget(BasePropertiesWidget):
         super().__init__("Свойства стены", parent)
         self.is_dark_theme = is_dark_theme
         self.apply_theme(self.is_dark_theme)
-        self.field_widget = None
-        self.initial_values = {}
-        self.setup_cursors()
-        
         # Добавляем атрибут для хранения состояния привязки
         self._snap_enabled = True
+        self._step_size = 50  # Значение шага по умолчанию для спинбоксов и слайдеров (половина размера сетки)
+        self.field_widget = None
+        self.initial_values = {}
         
     def create_widgets(self):
         """Создание всех виджетов."""
@@ -98,6 +97,8 @@ class WallPropertiesWidget(BasePropertiesWidget):
         # Кнопка сброса параметров
         self.reset_button = QPushButton("Сбросить")
         self.reset_button.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        self.update_snap_step_size(True)
         
     def create_layouts(self):
         """Создание и настройка компоновки."""
@@ -162,24 +163,20 @@ class WallPropertiesWidget(BasePropertiesWidget):
     def setup_connections(self):
         """Подключение сигналов и слотов."""
         # Связываем слайдеры и спинбоксы для координат
-        self.x1_spinbox.buttonValueChanged.connect(self.x1_slider.setValue)
+    
         self.x1_spinbox.buttonValueChanged.connect(self.on_x1_changed)
         self.x1_slider.valueChanged.connect(self.on_x1_slider_changed)
         
-        self.y1_spinbox.buttonValueChanged.connect(self.y1_slider.setValue)
         self.y1_spinbox.buttonValueChanged.connect(self.on_y1_changed)
         self.y1_slider.valueChanged.connect(self.on_y1_slider_changed)
         
-        self.x2_spinbox.buttonValueChanged.connect(self.x2_slider.setValue)
         self.x2_spinbox.buttonValueChanged.connect(self.on_x2_changed)
         self.x2_slider.valueChanged.connect(self.on_x2_slider_changed)
         
-        self.y2_spinbox.buttonValueChanged.connect(self.y2_slider.setValue)
         self.y2_spinbox.buttonValueChanged.connect(self.on_y2_changed)
         self.y2_slider.valueChanged.connect(self.on_y2_slider_changed)
         
         # Связываем слайдер и спинбокс для ширины
-        self.wall_width_spinbox.buttonValueChanged.connect(self.wall_width_slider.setValue)
         self.wall_width_spinbox.buttonValueChanged.connect(self.on_width_changed)
         self.wall_width_slider.valueChanged.connect(self.on_width_slider_changed)
         
@@ -209,16 +206,6 @@ class WallPropertiesWidget(BasePropertiesWidget):
             wall_id: ID стены (опционально)
         """
         try:
-            # Запоминаем начальные значения для возможности сброса
-            self.initial_values = {
-                'x1': x1,
-                'y1': y1,
-                'x2': x2,
-                'y2': y2,
-                'width': width,
-                'id': wall_id or ''
-            }
-            
             # Блокируем сигналы на время обновления
             with SignalBlock(self.x1_spinbox), SignalBlock(self.x1_slider), \
                  SignalBlock(self.y1_spinbox), SignalBlock(self.y1_slider), \
@@ -259,19 +246,22 @@ class WallPropertiesWidget(BasePropertiesWidget):
             max_y: Максимальное значение Y
         """
         try:
-            # Обновляем диапазоны для X1, Y1
-            self.x1_spinbox.setRange(min_x, max_x)
-            self.x1_slider.setRange(min_x, max_x)
-            self.y1_spinbox.setRange(min_y, max_y)
-            self.y1_slider.setRange(min_y, max_y)
+            logger.debug(f"Обновление диапазонов WallProperties: min_x={min_x}, max_x={max_x}, min_y={min_y}, max_y={max_y}")
             
-            # Обновляем диапазоны для X2, Y2
+            # Обновляем диапазоны для X1, Y1, X2, Y2
+            self.x1_spinbox.setRange(min_x, max_x)
+            self.y1_spinbox.setRange(min_y, max_y)
             self.x2_spinbox.setRange(min_x, max_x)
-            self.x2_slider.setRange(min_x, max_x)
             self.y2_spinbox.setRange(min_y, max_y)
+            
+            self.x1_slider.setRange(min_x, max_x)
+            self.y1_slider.setRange(min_y, max_y)
+            self.x2_slider.setRange(min_x, max_x)
             self.y2_slider.setRange(min_y, max_y)
+            
+            logger.debug(f"Установлены диапазоны для X: [{min_x}, {max_x}], Y: [{min_y}, {max_y}]")
         except Exception as e:
-            logger.error(f"Ошибка при обновлении диапазонов: {e}")
+            logger.error(f"Ошибка при обновлении диапазонов WallProperties: {e}")
             
     def reset_properties(self):
         """Сброс свойств стены к начальным значениям."""
@@ -303,22 +293,7 @@ class WallPropertiesWidget(BasePropertiesWidget):
                 self.id_changed.emit(self.initial_values.get('id', ''))
         except Exception as e:
             logger.error(f"Ошибка при сбросе свойств стены: {e}")
-            
-    def update_step_sizes(self, step_size=1):
-        """
-        Обновление шага изменения для спинбоксов.
-        
-        Args:
-            step_size: Размер шага
-        """
-        try:
-            self.x1_spinbox.setSingleStep(step_size)
-            self.y1_spinbox.setSingleStep(step_size)
-            self.x2_spinbox.setSingleStep(step_size)
-            self.y2_spinbox.setSingleStep(step_size)
-        except Exception as e:
-            logger.error(f"Ошибка при обновлении шага спинбоксов: {e}")
-    
+               
     # Обработчики событий для слайдеров
     def on_x1_slider_changed(self, value):
         """
@@ -442,7 +417,10 @@ class WallPropertiesWidget(BasePropertiesWidget):
             field_widget: Виджет поля
         """
         self.field_widget = field_widget
-        self.update_step_sizes() 
+        if field_widget:
+             # Синхронизируем состояние привязки и обновляем шаг
+            self._snap_enabled = field_widget.snap_to_grid_enabled
+            self.update_snap_step_size(self._snap_enabled)
 
     def set_theme(self, is_dark_theme):
         """
@@ -461,34 +439,33 @@ class WallPropertiesWidget(BasePropertiesWidget):
         Args:
             item: Объект стены
         """
-        if self.field_widget:
-            self.update_ranges(
-                int(self.field_widget.scene().sceneRect().left()),
-                int(self.field_widget.scene().sceneRect().right()),
-                int(self.field_widget.scene().sceneRect().top()),
-                int(self.field_widget.scene().sceneRect().bottom())
+        try:
+            logger.debug(f"Обновление свойств для стены: {item}")
+            
+            # Обновляем диапазоны в первую очередь
+            if self.field_widget:
+                # Получаем границы сцены для установки диапазонов
+                scene_rect = self.field_widget.scene().sceneRect()
+                min_x = int(scene_rect.left())
+                max_x = int(scene_rect.right())
+                min_y = int(scene_rect.top())
+                max_y = int(scene_rect.bottom())
+                
+                # Вызываем метод обновления диапазонов
+                self.update_ranges(min_x, max_x, min_y, max_y)
+            
+            self.set_properties(
+                int(item.line().x1()),
+                int(item.line().y1()),
+                int(item.line().x2()),
+                int(item.line().y2()),
+                int(item.stroke_width),
+                item.id
             )
-        
-        self.id_edit.blockSignals(True)
-        self.x1_spinbox.blockSignals(True)
-        self.y1_spinbox.blockSignals(True)
-        self.x2_spinbox.blockSignals(True)
-        self.y2_spinbox.blockSignals(True)
-        self.wall_width_spinbox.blockSignals(True)
-
-        self.id_edit.setText(item.id)
-        self.x1_spinbox.setValue(int(item.line().x1()))
-        self.y1_spinbox.setValue(int(item.line().y1()))
-        self.x2_spinbox.setValue(int(item.line().x2()))
-        self.y2_spinbox.setValue(int(item.line().y2()))
-        self.wall_width_spinbox.setValue(int(item.stroke_width))
-        
-        self.id_edit.blockSignals(False)
-        self.x1_spinbox.blockSignals(False)
-        self.y1_spinbox.blockSignals(False)
-        self.x2_spinbox.blockSignals(False)
-        self.y2_spinbox.blockSignals(False)
-        self.wall_width_spinbox.blockSignals(False)
+            
+            logger.debug(f"Свойства стены обновлены: x1={int(item.line().x1())}, y1={int(item.line().y1())}, x2={int(item.line().x2())}, y2={int(item.line().y2())}, width={int(item.stroke_width)}, id={item.id}")
+        except Exception as e:
+            logger.error(f"Ошибка при обновлении свойств стены: {e}")
     
     def connect_to_field_widget(self, field_widget):
         """
@@ -498,8 +475,11 @@ class WallPropertiesWidget(BasePropertiesWidget):
             field_widget: Виджет поля
         """
         self.field_widget = field_widget
-        self.update_step_sizes(field_widget.grid_size if hasattr(field_widget, 'grid_size') else 1)
-    
+        if field_widget:
+             # Синхронизируем состояние привязки и обновляем шаг
+            self._snap_enabled = field_widget.snap_to_grid_enabled
+            self.update_snap_step_size(self._snap_enabled)
+
     def on_grid_snap_changed(self, enabled):
         """
         Обработчик изменения привязки к сетке.
@@ -507,81 +487,152 @@ class WallPropertiesWidget(BasePropertiesWidget):
         Args:
             enabled: Статус привязки
         """
-        if self.field_widget:
-            step_size = self.field_widget.grid_size if enabled else 1
-            self.update_step_sizes(step_size) 
+        self.set_snap_enabled(enabled)
 
-    def on_x1_changed(self, value):
-        """Обработчик изменения значения X1 в спинбоксе."""
+    # --- Добавляем метод set_snap_enabled --- 
+    def set_snap_enabled(self, enabled):
+        """
+        Установка состояния привязки к сетке.
+        
+        Args:
+            enabled: True для включения привязки, False для отключения
+        """
+        logger.debug(f"WallPropertiesWidget: set_snap_enabled вызван с параметром {enabled}")
+        
+        # Сохраняем состояние привязки
+        self._snap_enabled = enabled
+        
+        # Обновляем шаг для спинбоксов и слайдеров
+        if self.field_widget:
+            # Сначала обновляем шаг
+            step_size = self.field_widget.grid_size if enabled else 1
+            self.update_step_sizes(step_size)
+            
+            # Затем обновляем диапазоны, чтобы учесть новый шаг
+            scene_rect = self.field_widget.scene().sceneRect()
+            self.update_ranges(
+                int(scene_rect.left()),
+                int(scene_rect.right()),
+                int(scene_rect.top()),
+                int(scene_rect.bottom())
+            )
+            
+            logger.debug(f"WallPropertiesWidget обновил шаг и диапазоны после установки привязки к сетке: {enabled}") 
+
+    def update_snap_step_size(self, enabled):
+        """Устанавливает шаг спинбоксов в зависимости от состояния привязки к сетке."""
         try:
-            # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
-                grid_size = getattr(self.field_widget, 'grid_size', 10)
-                value = snap_to_grid(value, grid_size)
+            if enabled:
+                step_size = 50  # Шаг сетки для стены
+                logger.debug(f"Установка шага для стены (привязка вкл.): {step_size}")
+            else:
+                step_size = 1
+                logger.debug("Установка шага для стены (привязка выкл.): 1")
+
+            # Сохраняем шаг как атрибут
+            self._step_size = step_size
+
+            # Координаты X1, Y1, X2, Y2
+            self.x1_spinbox.setSingleStep(step_size)
+            self.y1_spinbox.setSingleStep(step_size)
+            self.x2_spinbox.setSingleStep(step_size)
+            self.y2_spinbox.setSingleStep(step_size)
+            self.x1_slider.setSingleStep(step_size)
+            self.y1_slider.setSingleStep(step_size)
+            self.x2_slider.setSingleStep(step_size)
+            self.y2_slider.setSingleStep(step_size)
+
+            # Ширина - всегда шаг 1
+            self.wall_width_spinbox.setSingleStep(1)
+            self.wall_width_slider.setSingleStep(1)
+
+        except Exception as e:
+            logger.error(f"Ошибка при установке шага привязки для стены: {e}")
+            
+    def update_ranges(self, min_x=-10000, max_x=10000, min_y=-10000, max_y=10000):
+        """
+        Обновление диапазонов значений для спинбоксов и слайдеров.
+        Шаг здесь больше не устанавливается.
+        """
+        try:
+            logger.debug(f"Обновление диапазонов WallProperties: min_x={min_x}, max_x={max_x}, min_y={min_y}, max_y={max_y}")
+            
+            # Обновляем диапазоны для X1, Y1, X2, Y2
+            self.x1_spinbox.setRange(min_x, max_x)
+            self.y1_spinbox.setRange(min_y, max_y)
+            self.x2_spinbox.setRange(min_x, max_x)
+            self.y2_spinbox.setRange(min_y, max_y)
+            
+            self.x1_slider.setRange(min_x, max_x)
+            self.y1_slider.setRange(min_y, max_y)
+            self.x2_slider.setRange(min_x, max_x)
+            self.y2_slider.setRange(min_y, max_y)
+
+            logger.debug(f"Установлены диапазоны для X: [{min_x}, {max_x}], Y: [{min_y}, {max_y}]")
+        except Exception as e:
+            logger.error(f"Ошибка при обновлении диапазонов WallProperties: {e}")
+ 
+    # Обработчики событий для слайдеров
+    def on_x1_changed(self, value):
+        """
+        Обработчик изменения спинбокса X1.
+        
+        Args:
+            value: Новое значение X1
+        """
+        try:
+            # Устанавливаем значение в спинбокс без эмиссии сигнала
+            with SignalBlock(self.x1_slider):
+                self.x1_slider.setValue(value)
                 
-                # Блокируем сигналы при обновлении значения
-                with SignalBlock(self.x1_spinbox):
-                    self.x1_spinbox.setValue(value)
-                
-            # Оповещаем об изменении координат
+            # Оповещаем об изменении позиции точки 1
             self.position_point1_changed.emit(value, self.y1_spinbox.value())
         except Exception as e:
             logger.error(f"Ошибка при изменении X1 через спинбокс: {e}")
             
     def on_y1_changed(self, value):
-        """Обработчик изменения значения Y1 в спинбоксе."""
+        """Обработчик изменения спинбокса Y1."""
         try:
-            # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
-                grid_size = getattr(self.field_widget, 'grid_size', 10)
-                value = snap_to_grid(value, grid_size)
-                
-                # Блокируем сигналы при обновлении значения
-                with SignalBlock(self.y1_spinbox):
-                    self.y1_spinbox.setValue(value)
-                
-            # Оповещаем об изменении координат
+            # Устанавливаем значение в спинбокс без эмиссии сигнала
+            with SignalBlock(self.x1_slider):
+                self.x1_slider.setValue(value)    
+
+            # Оповещаем об изменении позиции точки 1
             self.position_point1_changed.emit(self.x1_spinbox.value(), value)
         except Exception as e:
             logger.error(f"Ошибка при изменении Y1 через спинбокс: {e}")
             
     def on_x2_changed(self, value):
-        """Обработчик изменения значения X2 в спинбоксе."""
+        """Обработчик изменения спинбокса X2."""
         try:
-            # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
-                grid_size = getattr(self.field_widget, 'grid_size', 10)
-                value = snap_to_grid(value, grid_size)
+            # Устанавливаем значение в спинбокс без эмиссии сигнала
+            with SignalBlock(self.x2_slider):
+                self.x2_slider.setValue(value)
                 
-                # Блокируем сигналы при обновлении значения
-                with SignalBlock(self.x2_spinbox):
-                    self.x2_spinbox.setValue(value)
-                
-            # Оповещаем об изменении координат
+            # Оповещаем об изменении позиции точки 2
             self.position_point2_changed.emit(value, self.y2_spinbox.value())
         except Exception as e:
             logger.error(f"Ошибка при изменении X2 через спинбокс: {e}")
             
     def on_y2_changed(self, value):
-        """Обработчик изменения значения Y2 в спинбоксе."""
+        """Обработчик изменения спинбокса Y2."""
         try:
-            # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
-                grid_size = getattr(self.field_widget, 'grid_size', 10)
-                value = snap_to_grid(value, grid_size)
+            # Устанавливаем значение в спинбокс без эмиссии сигнала
+            with SignalBlock(self.y2_slider):
+                self.y2_slider.setValue(value)
                 
-                # Блокируем сигналы при обновлении значения
-                with SignalBlock(self.y2_spinbox):
-                    self.y2_spinbox.setValue(value)
-                
-            # Оповещаем об изменении координат
+            # Оповещаем об изменении позиции точки 2
             self.position_point2_changed.emit(self.x2_spinbox.value(), value)
         except Exception as e:
             logger.error(f"Ошибка при изменении Y2 через спинбокс: {e}")
             
     def on_width_changed(self, value):
-        """Обработчик изменения значения ширины в спинбоксе."""
+        """Обработчик изменения спинбокса ширины."""
         try:                
+            # Устанавливаем значение в слайдер без эмиссии сигнала
+            with SignalBlock(self.wall_width_slider):
+                self.wall_width_slider.setValue(value)
+                
             # Оповещаем об изменении ширины
             self.width_changed.emit(value)
         except Exception as e:
@@ -592,17 +643,7 @@ class WallPropertiesWidget(BasePropertiesWidget):
         """Обработчик завершения редактирования X1-координаты."""
         try:
             value = self.x1_spinbox.value()
-            
-            # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
-                grid_size = getattr(self.field_widget, 'grid_size', 10)
-                value = snap_to_grid(value, grid_size)
-                
-                # Обновляем значение в спинбоксе если оно изменилось
-                if value != self.x1_spinbox.value():
-                    with SignalBlock(self.x1_spinbox):
-                        self.x1_spinbox.setValue(value)
-                
+
             # Обновляем слайдер
             with SignalBlock(self.x1_slider):
                 self.x1_slider.setValue(value)
@@ -616,17 +657,7 @@ class WallPropertiesWidget(BasePropertiesWidget):
         """Обработчик завершения редактирования Y1-координаты."""
         try:
             value = self.y1_spinbox.value()
-            
-            # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
-                grid_size = getattr(self.field_widget, 'grid_size', 10)
-                value = snap_to_grid(value, grid_size)
-                
-                # Обновляем значение в спинбоксе если оно изменилось
-                if value != self.y1_spinbox.value():
-                    with SignalBlock(self.y1_spinbox):
-                        self.y1_spinbox.setValue(value)
-                
+
             # Обновляем слайдер
             with SignalBlock(self.y1_slider):
                 self.y1_slider.setValue(value)
@@ -640,17 +671,7 @@ class WallPropertiesWidget(BasePropertiesWidget):
         """Обработчик завершения редактирования X2-координаты."""
         try:
             value = self.x2_spinbox.value()
-            
-            # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
-                grid_size = getattr(self.field_widget, 'grid_size', 10)
-                value = snap_to_grid(value, grid_size)
-                
-                # Обновляем значение в спинбоксе если оно изменилось
-                if value != self.x2_spinbox.value():
-                    with SignalBlock(self.x2_spinbox):
-                        self.x2_spinbox.setValue(value)
-                
+
             # Обновляем слайдер
             with SignalBlock(self.x2_slider):
                 self.x2_slider.setValue(value)
@@ -664,17 +685,7 @@ class WallPropertiesWidget(BasePropertiesWidget):
         """Обработчик завершения редактирования Y2-координаты."""
         try:
             value = self.y2_spinbox.value()
-            
-            # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
-                grid_size = getattr(self.field_widget, 'grid_size', 10)
-                value = snap_to_grid(value, grid_size)
-                
-                # Обновляем значение в спинбоксе если оно изменилось
-                if value != self.y2_spinbox.value():
-                    with SignalBlock(self.y2_spinbox):
-                        self.y2_spinbox.setValue(value)
-                
+
             # Обновляем слайдер
             with SignalBlock(self.y2_slider):
                 self.y2_slider.setValue(value)
@@ -697,9 +708,3 @@ class WallPropertiesWidget(BasePropertiesWidget):
             self.width_changed.emit(value)
         except Exception as e:
             logger.error(f"Ошибка при завершении редактирования ширины: {e}")
-
-    # --- Добавляем метод set_snap_enabled --- 
-    def set_snap_enabled(self, enabled):
-        self._snap_enabled = enabled
-        # Пока ничего не делаем с этим состоянием
-        logger.debug(f"WallPropertiesWidget snap state set to: {enabled}") 

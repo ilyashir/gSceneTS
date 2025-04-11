@@ -10,6 +10,7 @@ class StartPosition(BaseSceneItem):
     """
     Класс стартовой позиции. Реализует паттерн Singleton.
     Рисует красный крестик 25x25.
+    Работает с координатами центра.
     """
     
     _id = "startPosition"
@@ -30,23 +31,44 @@ class StartPosition(BaseSceneItem):
             super().__init__(item_type="start_position", item_id=self._id, z_value=900)
             
             # Устанавливаем точку трансформации в центр
-            self.setTransformOriginPoint(self.ITEM_SIZE / 2, self.ITEM_SIZE / 2)
+            center = self.ITEM_SIZE / 2
+            self.setTransformOriginPoint(center, center)
             
             self.setRotation(direction)
             self._is_initialized = True
             logger.debug(f"Стартовая позиция инициализирована с id={self.id}")
         
-        # --- Корректируем установку позиции --- 
-        # Вычитаем половину размера, чтобы ЦЕНТР элемента был в pos
-        center_offset = self.ITEM_SIZE / 2
-        self.setPos(pos.x() - center_offset, pos.y() - center_offset)
-        # ---------------------------------------
+        # Используем переопределенный setPos, который ожидает центр
+        self.setPos(pos) 
         
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
         
         if direction != 0:
             self.setRotation(direction)
+
+    def pos(self) -> QPointF:
+        """Возвращает координаты центра элемента."""
+        center_offset = self.ITEM_SIZE / 2
+        # Получаем позицию левого верхнего угла от базового класса
+        top_left_pos = super().pos()
+        # Возвращаем позицию центра
+        return top_left_pos + QPointF(center_offset, center_offset)
+
+    def setPos(self, *args):
+        """Устанавливает позицию элемента по его центру."""
+        if len(args) == 1 and isinstance(args[0], QPointF):
+            center_pos = args[0]
+        elif len(args) == 2:
+            center_pos = QPointF(args[0], args[1])
+        else:
+            raise TypeError("setPos принимает QPointF или две координаты (x, y)")
+
+        center_offset = self.ITEM_SIZE / 2
+        # Вычисляем позицию левого верхнего угла
+        top_left_pos = center_pos - QPointF(center_offset, center_offset)
+        # Устанавливаем позицию левого верхнего угла с помощью базового класса
+        super().setPos(top_left_pos)
     
     def create_hover_highlight(self):
         # Используем ITEM_SIZE

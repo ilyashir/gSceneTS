@@ -46,7 +46,7 @@ class ShortcutsManager(QObject):
             QShortcut: Созданный объект горячей клавиши
         """
         if name in self.shortcuts:
-            logger.warning(f"Горячая клавиша с именем '{name}' уже зарегистрирована. Перезаписываем.")
+            logger.warning(f"[HOTKEY] Горячая клавиша с именем '{name}' уже зарегистрирована. Перезаписываем.")
         
         # Создаем объект QShortcut
         shortcut = QShortcut(QKeySequence(key_sequence), self.main_window)
@@ -64,7 +64,7 @@ class ShortcutsManager(QObject):
             "description": description or ""
         }
         
-        logger.debug(f"Зарегистрирована горячая клавиша: {name} -> {key_sequence}")
+        logger.debug(f"[HOTKEY] Зарегистрирована горячая клавиша: {name} -> {key_sequence}")
         return shortcut
     
     def register_from_config(self, name, callback, context=None):
@@ -81,7 +81,7 @@ class ShortcutsManager(QObject):
         """
         shortcut_config = DEFAULT_SHORTCUTS.get(name)
         if not shortcut_config:
-            logger.warning(f"Горячая клавиша с именем '{name}' не найдена в конфигурации.")
+            logger.warning(f"[HOTKEY] Горячая клавиша с именем '{name}' не найдена в конфигурации.")
             return None
         
         return self.register_shortcut(
@@ -103,7 +103,7 @@ class ShortcutsManager(QObject):
             bool: True, если клавиша была успешно удалена, иначе False
         """
         if name not in self.shortcuts:
-            logger.warning(f"Горячая клавиша с именем '{name}' не зарегистрирована.")
+            logger.warning(f"[HOTKEY] Горячая клавиша с именем '{name}' не зарегистрирована.")
             return False
         
         # Удаляем объект QShortcut
@@ -111,7 +111,7 @@ class ShortcutsManager(QObject):
         shortcut_info["shortcut"].setEnabled(False)
         shortcut_info["shortcut"].deleteLater()
         
-        logger.debug(f"Удалена горячая клавиша: {name}")
+        logger.debug(f"[HOTKEY] Удалена горячая клавиша: {name}")
         return True
     
     def get_shortcut(self, name):

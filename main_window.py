@@ -77,11 +77,6 @@ class MainWindow(QMainWindow):
         logger.debug("Создаем адаптер окна свойств")
         self.properties_window = PropertiesWindow(self.properties_manager, is_dark_theme=self.is_dark_theme)
         
-        # Устанавливаем тему для окна свойств (адаптера)
-        if hasattr(self.properties_window, 'set_theme'):
-            logger.debug("Вызываем set_theme для адаптера окна свойств")
-            self.properties_window.set_theme(self.is_dark_theme)
-        
         self.properties_dock = QDockWidget("Свойства", self)
         self.properties_dock.setWidget(self.properties_window)
         self.properties_dock.setStyleSheet(
@@ -128,9 +123,6 @@ class MainWindow(QMainWindow):
         container.setLayout(layout)
         self.setCentralWidget(container)
         
-        # Подключаем сигналы от главного окна
-        self.scene_size_changed.connect(self.field_widget.set_scene_size)
-        
         # Подключаем все сигналы
         self._connect_signals()
 
@@ -164,7 +156,7 @@ class MainWindow(QMainWindow):
         
         self.snap_to_grid_checkbox = QCheckBox("Привязаться к сетке", self)
         self.snap_to_grid_checkbox.setStyleSheet(AppStyles.DARK_CHECKBOX_STYLE if self.is_dark_theme else AppStyles.LIGHT_CHECKBOX_STYLE)
-        self.snap_to_grid_checkbox.setChecked(self.field_widget.snap_to_grid_enabled)
+        self.snap_to_grid_checkbox.setChecked(self.snap_to_grid_default)
         self.snap_to_grid_checkbox.stateChanged.connect(self.toggle_snap_to_grid)
         self.snap_to_grid_checkbox.setCursor(Qt.CursorShape.PointingHandCursor)
         
@@ -216,6 +208,39 @@ class MainWindow(QMainWindow):
         
         logger.debug("Главное окно инициализировано")
     
+    def _connect_signals(self):
+        """Подключаем сигналы приложения."""
+        # Подключаем cигнал изменения сцены
+        self.scene_size_changed.connect(self.field_widget.set_scene_size)
+        # Сигналы от FieldWidget
+        self.field_widget.mouse_coords_updated.connect(self.update_coords_label)
+        self.field_widget.item_selected.connect(self.properties_window.update_properties)
+        self.field_widget.item_deselected.connect(self.properties_window.clear_properties)
+        self.field_widget.properties_updated.connect(self.properties_window.update_properties)
+        # Подключение сигнала изменения размера сцены к менеджеру свойств
+        self.field_widget.scene_rect_changed.connect(self.properties_manager.on_scene_rect_changed)
+
+        # Сигналы от PropertiesWindow (адаптера)
+        # Робот
+        self.properties_window.robot_position_changed.connect(self.field_widget.update_robot_position)
+        self.properties_window.robot_rotation_changed.connect(self.field_widget.update_robot_rotation)
+        
+        # Стена
+        self.properties_window.wall_position_point1_changed.connect(self.field_widget.update_wall_point1)
+        self.properties_window.wall_position_point2_changed.connect(self.field_widget.update_wall_point2)
+        self.properties_window.wall_stroke_width_changed.connect(self.field_widget.update_wall_stroke_width)
+        self.properties_window.wall_id_changed.connect(self.field_widget.update_wall_id)
+        
+        # Регион
+        self.properties_window.region_position_changed.connect(self.field_widget.update_region_position)
+        self.properties_window.region_size_changed.connect(self.field_widget.update_region_size)
+        self.properties_window.region_color_changed.connect(self.field_widget.update_region_color)
+        self.properties_window.region_id_changed.connect(self.field_widget.update_region_id)
+        
+        # Стартовая позиция
+        self.properties_window.start_position_changed.connect(self.field_widget.update_start_position_position)
+        self.properties_window.start_position_direction_changed.connect(self.field_widget.update_start_position_direction)
+
     def setup_cursors(self):
         """Устанавливает курсоры для всех элементов интерфейса"""
         # Устанавливаем курсоры для всех кнопок
@@ -244,9 +269,10 @@ class MainWindow(QMainWindow):
     def toggle_snap_to_grid(self, state):
         """Включает или выключает привязку к сетке."""
         enabled = state == Qt.CheckState.Checked.value
-        # Используем метод set_grid_snap вместо прямого изменения свойства,
-        # чтобы корректно эмитировать сигнал grid_snap_changed
+        # Обновляем состояние FieldWidget
         self.field_widget.set_grid_snap(enabled)
+        # Уведомляем PropertiesManager
+        self.properties_manager.on_grid_snap_changed(enabled)
         # Сохраняем настройку в конфиг
         config.set("grid", "snap_to_grid", enabled)
     
@@ -1071,33 +1097,3 @@ class MainWindow(QMainWindow):
             logger.error(f"Ошибка загрузки XML: {e}", exc_info=True)
             QMessageBox.critical(self, "Ошибка", f"Произошла ошибка при загрузке XML: {e}")
             return False
-
-    def _connect_signals(self):
-        """Подключаем сигналы приложения."""
-        # Сигналы от FieldWidget
-        self.field_widget.mouse_coords_updated.connect(self.update_coords_label)
-        self.field_widget.item_selected.connect(self.properties_window.update_properties)
-        self.field_widget.item_deselected.connect(self.properties_window.clear_properties)
-        self.field_widget.properties_updated.connect(self.properties_window.update_properties)
-        self.field_widget.grid_snap_changed.connect(self.properties_manager.on_grid_snap_changed)
-
-        # Сигналы от PropertiesWindow (адаптера)
-        # Робот
-        self.properties_window.robot_position_changed.connect(self.field_widget.update_robot_position)
-        self.properties_window.robot_rotation_changed.connect(self.field_widget.update_robot_rotation)
-        
-        # Стена
-        self.properties_window.wall_position_point1_changed.connect(self.field_widget.update_wall_point1)
-        self.properties_window.wall_position_point2_changed.connect(self.field_widget.update_wall_point2)
-        self.properties_window.wall_stroke_width_changed.connect(self.field_widget.update_wall_stroke_width)
-        self.properties_window.wall_id_changed.connect(self.field_widget.update_wall_id)
-        
-        # Регион
-        self.properties_window.region_position_changed.connect(self.field_widget.update_region_position)
-        self.properties_window.region_size_changed.connect(self.field_widget.update_region_size)
-        self.properties_window.region_color_changed.connect(self.field_widget.update_region_color)
-        self.properties_window.region_id_changed.connect(self.field_widget.update_region_id)
-        
-        # Стартовая позиция
-        self.properties_window.start_position_position_changed.connect(self.field_widget.update_start_position_position)
-        self.properties_window.start_position_direction_changed.connect(self.field_widget.update_start_position_direction)

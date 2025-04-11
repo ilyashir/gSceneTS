@@ -646,9 +646,11 @@ class CustomSpinBox(QSpinBox):
         # Если изменение было вызвано кнопкой, эмитируем сигнал
         if self._is_button_change:
             self._is_button_change = False
+            logger.debug(f"Сигнал buttonValueChanged по нажатию кнопок отправлен с значением: {value}")
             self.buttonValueChanged.emit(value)
         # Программное изменение значения (не от ручного ввода и не от кнопок)
         elif not self.hasFocus():
+            logger.debug(f"Сигнал buttonValueChanged по программному изменению отправлен с значением: {value}")
             self.buttonValueChanged.emit(value)
     
     def stepBy(self, steps):
@@ -672,8 +674,4 @@ class CustomSpinBox(QSpinBox):
         Обработчик события потери фокуса.
         Сигнализирует о завершении редактирования.
         """
-        if self._is_editing and self.value() != self._value_before_edit:
-            # При потере фокуса, если значение изменилось, отправляем сигнал
-            self.buttonValueChanged.emit(self.value())
-        self._is_editing = False
         super().focusOutEvent(event) 

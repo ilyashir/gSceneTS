@@ -2,7 +2,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel, 
     QSlider, QCheckBox, QGroupBox, QColorDialog, QComboBox
 )
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QIntValidator
 
 from properties.base_properties_widget import BasePropertiesWidget
@@ -22,9 +22,9 @@ class StartPositionPropertiesWidget(BasePropertiesWidget):
     Наследуется от BasePropertiesWidget.
     """
     
-    # Сигналы
-    position_changed = pyqtSignal(float, float)  # x, y
-    direction_changed = pyqtSignal(float)  # direction
+    # Сигналы - разделяем на отдельные X и Y
+    position_changed = pyqtSignal(int, int)  # x и y
+    direction_changed = pyqtSignal(int)  # direction
     
     def __init__(self, parent=None, is_dark_theme=False):
         """
@@ -42,8 +42,10 @@ class StartPositionPropertiesWidget(BasePropertiesWidget):
         # По умолчанию виджет скрыт
         self.hide()
         
-        # Добавляем атрибут для хранения состояния привязки
+        # Добавляем атрибуты для хранения состояния
         self._snap_enabled = True
+        self._step_size = 25  # Значение шага по умолчанию для спинбоксов и слайдеров (половина размера сетки)
+        self._rotation_step = 45  # Шаг для поворота по умолчанию
     
     def create_widgets(self):
         """Создает виджеты для отображения свойств стартовой позиции."""
@@ -69,7 +71,6 @@ class StartPositionPropertiesWidget(BasePropertiesWidget):
         self.y_spinbox = CustomSpinBox()
         self.y_spinbox.setRange(-10000, 10000)
         self.y_spinbox.setValue(25)  # Значение по умолчанию
-        self.y_spinbox.setSingleStep(1)
         self.y_spinbox.setMinimumWidth(70)
         
         self.y_slider = QSlider(Qt.Orientation.Horizontal)
@@ -81,12 +82,17 @@ class StartPositionPropertiesWidget(BasePropertiesWidget):
         self.direction_spinbox = CustomSpinBox()
         self.direction_spinbox.setRange(0, 360)
         self.direction_spinbox.setValue(0)  # Значение по умолчанию
-        self.direction_spinbox.setSingleStep(5)
         self.direction_spinbox.setMinimumWidth(70)
         
         self.direction_slider = QSlider(Qt.Orientation.Horizontal)
         self.direction_slider.setRange(0, 360)
         self.direction_slider.setValue(0)  # Значение по умолчанию
+    
+        # Кнопка сброса параметров
+        self.reset_button = QPushButton("Сбросить")
+        self.reset_button.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        self.update_snap_step_size(True)
     
     def create_layouts(self):
         """Создает компоновку виджетов."""
@@ -119,6 +125,9 @@ class StartPositionPropertiesWidget(BasePropertiesWidget):
         direction_layout.addWidget(self.direction_spinbox)
         main_layout.addLayout(direction_layout)
         main_layout.addWidget(self.direction_slider)
+
+        # Кнопка сброса параметров
+        main_layout.addWidget(self.reset_button, alignment=Qt.AlignmentFlag.AlignRight)
         
         # Очищаем текущий лейаут, если он есть
         # и добавляем все виджеты в новый лейаут
@@ -136,24 +145,24 @@ class StartPositionPropertiesWidget(BasePropertiesWidget):
                 self.properties_layout.addLayout(item.layout())
     
     def setup_connections(self):
-        """Устанавливает соединения для сигналов и слотов."""
-        # X координата
-        self.x_spinbox.buttonValueChanged.connect(self.x_slider.setValue)
+        """Подключение сигналов к слотам."""
+        # Связываем слайдеры и спинбоксы
         self.x_spinbox.buttonValueChanged.connect(self.on_x_spinbox_value_changed)
         self.x_slider.valueChanged.connect(self.on_x_slider_value_changed)
-        self.x_spinbox.editingFinished.connect(self.on_x_editing_finished)
         
-        # Y координата
-        self.y_spinbox.buttonValueChanged.connect(self.y_slider.setValue)
         self.y_spinbox.buttonValueChanged.connect(self.on_y_spinbox_value_changed)
         self.y_slider.valueChanged.connect(self.on_y_slider_value_changed)
-        self.y_spinbox.editingFinished.connect(self.on_y_editing_finished)
         
-        # Направление
-        self.direction_spinbox.buttonValueChanged.connect(self.direction_slider.setValue)
         self.direction_spinbox.buttonValueChanged.connect(self.on_direction_spinbox_value_changed)
         self.direction_slider.valueChanged.connect(self.on_direction_slider_value_changed)
+        
+        # Подключаем сигналы редактирования
+        self.x_spinbox.editingFinished.connect(self.on_x_editing_finished)
+        self.y_spinbox.editingFinished.connect(self.on_y_editing_finished)
         self.direction_spinbox.editingFinished.connect(self.on_direction_editing_finished)
+        
+        # Подключаем кнопку сброса
+        self.reset_button.clicked.connect(self.reset_properties) 
     
     def update_ranges(self, min_x, max_x, min_y, max_y):
         """
@@ -165,59 +174,47 @@ class StartPositionPropertiesWidget(BasePropertiesWidget):
             min_y: Минимальное значение Y
             max_y: Максимальное значение Y
         """
-        # Обновляем диапазоны спинбоксов
-        self.x_spinbox.setRange(min_x, max_x)
-        self.y_spinbox.setRange(min_y, max_y)
-        
-        # Обновляем диапазоны слайдеров
-        self.x_slider.setRange(min_x, max_x)
-        self.y_slider.setRange(min_y, max_y)
-    
-    def update_step_sizes(self, step_size=1):
-        """
-        Обновляет шаг изменения значений для элементов.
-        
-        Args:
-            step_size: Размер шага
-        """
         try:
-            # Обновляем шаг для координат
-            self.x_spinbox.setSingleStep(step_size)
-            self.y_spinbox.setSingleStep(step_size)
+            logger.debug(f"Обновление диапазонов стартовой позиции: min_x={min_x}, max_x={max_x}, min_y={min_y}, max_y={max_y}")
             
-            # Для направления используем шаг 45 градусов если включен snap_to_grid
-            if is_snap_enabled(self.field_widget):
-                self.direction_spinbox.setSingleStep(45)
-            else:
-                self.direction_spinbox.setSingleStep(5)
+            # Обновляем диапазоны спинбоксов
+            self.x_spinbox.setRange(min_x, max_x)
+            self.y_spinbox.setRange(min_y, max_y)
+            
+            # Обновляем диапазоны слайдеров
+            self.x_slider.setRange(min_x, max_x)
+            self.y_slider.setRange(min_y, max_y)
+            
+            logger.debug(f"Установлены диапазоны X: [{min_x}, {max_x}], Y: [{min_y}, {max_y}] с шагом {self._step_size}, поворот с шагом {self._rotation_step}°")
         except Exception as e:
-            logger.error(f"Ошибка при обновлении шага спинбоксов: {e}")
+            logger.error(f"Ошибка при обновлении диапазонов стартовой позиции: {e}")   
     
     def set_properties(self, x, y, direction):
         """
-        Устанавливает свойства стартовой позиции.
-        
+        Устанавливает свойства стартовой позиции (координаты центра).
+
         Args:
-            x: Координата X
-            y: Координата Y
+            x: Координата X центра
+            y: Координата Y центра
             direction: Направление в градусах
         """
         # Блокируем сигналы на время обновления
-        with SignalBlock(self.x_spinbox, self.x_slider, 
+        with SignalBlock(self.x_spinbox, self.x_slider,
                         self.y_spinbox, self.y_slider,
                         self.direction_spinbox, self.direction_slider):
             # Устанавливаем значения для спинбоксов и слайдеров
-            self.x_spinbox.setValue(x)
-            self.x_slider.setValue(x)
-            self.y_spinbox.setValue(y)
-            self.y_slider.setValue(y)
-            self.direction_spinbox.setValue(direction)
-            self.direction_slider.setValue(direction)
-    
+            # Используем переданные координаты центра как есть
+            self.x_spinbox.setValue(int(x))
+            self.x_slider.setValue(int(x))
+            self.y_spinbox.setValue(int(y))
+            self.y_slider.setValue(int(y))
+            self.direction_spinbox.setValue(int(direction))
+            self.direction_slider.setValue(int(direction))
+
     def show_properties(self, start_position):
         """
         Отображает свойства стартовой позиции.
-        
+
         Args:
             start_position: Объект стартовой позиции
         """
@@ -225,134 +222,154 @@ class StartPositionPropertiesWidget(BasePropertiesWidget):
             logger.warning("Отсутствует объект стартовой позиции для отображения свойств")
             self.hide()
             return
-            
+
         logger.debug(f"Показываем свойства стартовой позиции: {start_position}")
-        
+
         # Обновляем диапазоны значений, если у нас есть ссылка на поле
         if self.field_widget:
             scene_rect = self.field_widget.scene().sceneRect()
-            min_x = int(scene_rect.left()) + 25
-            max_x = int(scene_rect.right()) - 25
-            min_y = int(scene_rect.top()) + 25
-            max_y = int(scene_rect.bottom()) - 25
+            # Диапазоны для КООРДИНАТ ЦЕНТРА
+            half_item = start_position.ITEM_SIZE / 2
+            min_x = int(scene_rect.left() + half_item)
+            max_x = int(scene_rect.right() - half_item)
+            min_y = int(scene_rect.top() + half_item)
+            max_y = int(scene_rect.bottom() - half_item)
             self.update_ranges(min_x, max_x, min_y, max_y)
-        
-        # Устанавливаем значения свойств
+
+        # Получаем координаты ВЕРХНЕГО ЛЕВОГО угла
+        item_x = start_position.x()
+        item_y = start_position.y()
+        # Добавляем смещение для получения КООРДИНАТ ЦЕНТРА
+        center_offset = start_position.ITEM_SIZE / 2
+        center_x = item_x + center_offset
+        center_y = item_y + center_offset
+
+        # Устанавливаем значения свойств (координаты центра)
         self.set_properties(
-            int(start_position.x()),
-            int(start_position.y()),
-            int(start_position.direction())
+            int(center_x),
+            int(center_y),
+            int(start_position.rotation()) # Используем rotation() вместо direction()
         )
-        
+
         # Отображаем виджет
         self.show()
-    
+
     def update_properties(self, item):
         """
         Обновляет отображаемые свойства стартовой позиции.
-        
+
         Args:
             item: Объект стартовой позиции
         """
-        # Блокируем сигналы, чтобы избежать зацикливания
-        self.x_spinbox.blockSignals(True)
-        self.y_spinbox.blockSignals(True)
-        self.direction_spinbox.blockSignals(True)
+        try:
+            if item is None:
+                self.clear_properties()
+                return
 
-        # Учитываем смещение и преобразуем в int
-        center_offset = item.ITEM_SIZE / 2
-        self.x_spinbox.setValue(int(item.x() + center_offset))
-        self.y_spinbox.setValue(int(item.y() + center_offset))
-        # Преобразуем rotation в int
-        self.direction_spinbox.setValue(int(item.rotation()))
-        
-        # Разблокируем сигналы
-        self.x_spinbox.blockSignals(False)
-        self.y_spinbox.blockSignals(False)
-        self.direction_spinbox.blockSignals(False)
+            # Обновляем диапазоны в первую очередь
+            if self.field_widget:
+                scene_rect = self.field_widget.scene().sceneRect()
+                # Учитываем центр для StartPosition
+                half_item = 25 # StartPosition.ITEM_SIZE / 2
+                sp_min_x = int(scene_rect.left() + half_item)
+                sp_max_x = int(scene_rect.right() - half_item)
+                sp_min_y = int(scene_rect.top() + half_item)
+                sp_max_y = int(scene_rect.bottom() - half_item)
+                self.update_ranges(sp_min_x, sp_max_x, sp_min_y, sp_max_y)
+
+            self.set_properties(
+                int(item.x()),
+                int(item.y()),
+                int(item.rotation())
+            )
+
+            logger.debug(f"Свойства стартовой позиции (центр) обновлены в виджете: x={int(center_x)}, y={int(center_y)}, direction={rot_val}")
+        except Exception as e:
+            logger.error(f"Ошибка при обновлении свойств стартовой позиции: {e}")
     
     def connect_to_field_widget(self, field_widget):
         """
-        Устанавливает ссылку на виджет поля.
-        
-        Args:
-            field_widget: Виджет поля
+        Установка ссылки на виджет поля.
         """
         self.field_widget = field_widget
-        self.update_step_sizes(field_widget.grid_size if hasattr(field_widget, 'grid_size') else 1)
+        
+        logger.debug(f"StartPositionPropertiesWidget подключен к field_widget")
     
+
+    @pyqtSlot(bool)
     def on_grid_snap_changed(self, enabled):
         """
-        Обработчик изменения привязки к сетке.
+        Обработчик сигнала изменения режима привязки к сетке.
         
         Args:
-            enabled: Статус привязки
+            enabled: True - привязка включена, False - выключена
         """
-        if self.field_widget:
-            step_size = self.field_widget.grid_size if enabled else 1
-            self.update_step_sizes(step_size)
+        # Просто вызываем метод set_snap_enabled с полученным параметром
+        self.set_snap_enabled(enabled)
     
     # Обработчики изменения значений X
     def on_x_spinbox_value_changed(self, value):
         """Обработчик изменения значения X в спинбоксе (кнопками)."""
-        try:
+        try:            
             # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
-                grid_size = getattr(self.field_widget, 'grid_size', 10) // 2
-                value = snap_to_grid(value, grid_size)
-                
-                # Блокируем сигналы при обновлении значения
+            if hasattr(self, '_snap_enabled') and self._snap_enabled:                
+                value = snap_to_grid(value, self._step_size)
                 with SignalBlock(self.x_spinbox):
-                    self.x_spinbox.setValue(value)
-                
-            # Оповещаем об изменении позиции
+                    self.x_spinbox.setValue(value) 
+                logger.debug(f"Привязка к сетке X: {value} (шаг {self._step_size})")
+
+            # Обновляем слайдер в любом случае для синхронизации
+            with SignalBlock(self.x_slider):
+                self.x_slider.setValue(value)
+
+            # Эмитируем сигнал только если значение реально изменилось
+            logger.debug(f"Эмитируем position_x_changed({value}) из on_x_spinbox_value_changed.")
             self.position_changed.emit(value, self.y_spinbox.value())
+
         except Exception as e:
             logger.error(f"Ошибка при изменении X-координаты через спинбокс: {e}")
 
     def on_x_slider_value_changed(self, value):
         """
         Обработчик изменения слайдера X.
-        
+
         Args:
             value: Новое значение X
         """
         try:
             # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
-                grid_size = getattr(self.field_widget, 'grid_size', 10) // 2
-                value = snap_to_grid(value, grid_size)
-                
-            # Устанавливаем значение в спинбокс без эмиссии сигнала
+            if hasattr(self, '_snap_enabled') and self._snap_enabled:                
+                value = snap_to_grid(value, self._step_size)  
+                logger.debug(f"Привязка к сетке X: {value} (шаг {self._step_size})")
+
+            # Устанавливаем значение в спинбокс без эмиссии сигнала, только если изменилось
             with SignalBlock(self.x_spinbox):
                 self.x_spinbox.setValue(value)
-                
-            # Оповещаем об изменении позиции
+
+            # Оповещаем об изменении позиции, только если значение изменилось
+            logger.debug(f"Эмитируем position_x_changed({value}) из on_x_slider_value_changed.")
             self.position_changed.emit(value, self.y_spinbox.value())
+
         except Exception as e:
-            logger.error(f"Ошибка при изменении X-координаты: {e}")
+            logger.error(f"Ошибка при изменении X-координаты слайдером: {e}")
 
     def on_x_editing_finished(self):
         """Обработчик завершения редактирования X-координаты."""
         try:
             value = self.x_spinbox.value()
-            
+
             # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
-                grid_size = getattr(self.field_widget, 'grid_size', 10) // 2
-                value = snap_to_grid(value, grid_size)
-                
-                # Обновляем значение в спинбоксе если оно изменилось
-                if value != self.x_spinbox.value():
-                    with SignalBlock(self.x_spinbox):
-                        self.x_spinbox.setValue(value)
-                
-            # Обновляем слайдер
+            if hasattr(self, '_snap_enabled') and self._snap_enabled:                
+                value = snap_to_grid(value, self._step_size)  
+                logger.debug(f"Привязка к сетке X: {value} (шаг {self._step_size})")
+
+            # Обновляем слайдер в любом случае для синхронизации
             with SignalBlock(self.x_slider):
                 self.x_slider.setValue(value)
-                
-            # Оповещаем об изменении позиции
+
+            logger.debug(f"Эмитируем position_x_changed({value}) из on_x_editing_finished.")
             self.position_changed.emit(value, self.y_spinbox.value())
+            
         except Exception as e:
             logger.error(f"Ошибка при завершении редактирования X: {e}")
 
@@ -361,62 +378,59 @@ class StartPositionPropertiesWidget(BasePropertiesWidget):
         """Обработчик изменения значения Y в спинбоксе (кнопками)."""
         try:
             # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
-                grid_size = getattr(self.field_widget, 'grid_size', 10) // 2
-                value = snap_to_grid(value, grid_size)
-                
-                # Блокируем сигналы при обновлении значения
+            if hasattr(self, '_snap_enabled') and self._snap_enabled:                
+                value = snap_to_grid(value, self._step_size)  
                 with SignalBlock(self.y_spinbox):
-                    self.y_spinbox.setValue(value)
-                
-            # Оповещаем об изменении позиции
+                    self.y_spinbox.setValue(value) 
+                logger.debug(f"Привязка к сетке Y: {value} (шаг {self._step_size})")
+
+            with SignalBlock(self.y_slider):
+                 self.y_slider.setValue(value)
+
+            logger.debug(f"Эмитируем position_y_changed({value}) из on_y_spinbox_value_changed.")
             self.position_changed.emit(self.x_spinbox.value(), value)
+
         except Exception as e:
             logger.error(f"Ошибка при изменении Y-координаты через спинбокс: {e}")
 
     def on_y_slider_value_changed(self, value):
         """
         Обработчик изменения слайдера Y.
-        
+
         Args:
             value: Новое значение Y
         """
         try:
             # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
-                grid_size = getattr(self.field_widget, 'grid_size', 10) // 2
-                value = snap_to_grid(value, grid_size)
-                
-            # Устанавливаем значение в спинбокс без эмиссии сигнала
+            if hasattr(self, '_snap_enabled') and self._snap_enabled:                
+                value = snap_to_grid(value, self._step_size)  
+                logger.debug(f"Привязка к сетке Y: {value} (шаг {self._step_size})")
+
             with SignalBlock(self.y_spinbox):
                 self.y_spinbox.setValue(value)
-                
-            # Оповещаем об изменении позиции
+            
+            logger.debug(f"Эмитируем position_y_changed({value}) из on_y_slider_value_changed.")
             self.position_changed.emit(self.x_spinbox.value(), value)
+            
         except Exception as e:
-            logger.error(f"Ошибка при изменении Y-координаты: {e}")
+            logger.error(f"Ошибка при изменении Y-координаты слайдером: {e}")
 
     def on_y_editing_finished(self):
         """Обработчик завершения редактирования Y-координаты."""
         try:
             value = self.y_spinbox.value()
-            
+
             # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
-                grid_size = getattr(self.field_widget, 'grid_size', 10) // 2
-                value = snap_to_grid(value, grid_size)
-                
-                # Обновляем значение в спинбоксе если оно изменилось
-                if value != self.y_spinbox.value():
-                    with SignalBlock(self.y_spinbox):
-                        self.y_spinbox.setValue(value)
-                
-            # Обновляем слайдер
+            if hasattr(self, '_snap_enabled') and self._snap_enabled:                
+                value = snap_to_grid(value, self._step_size)  
+                logger.debug(f"Привязка к сетке Y: {value} (шаг {self._step_size})")
+
             with SignalBlock(self.y_slider):
                 self.y_slider.setValue(value)
-                
-            # Оповещаем об изменении позиции
+
+            logger.debug(f"Эмитируем position_y_changed({value}) из on_y_editing_finished.")
             self.position_changed.emit(self.x_spinbox.value(), value)
+
         except Exception as e:
             logger.error(f"Ошибка при завершении редактирования Y: {e}")
 
@@ -425,13 +439,15 @@ class StartPositionPropertiesWidget(BasePropertiesWidget):
         """Обработчик изменения значения направления в спинбоксе (кнопками)."""
         try:
             # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
-                value = snap_rotation_to_grid(value, 45)
-                
-                # Блокируем сигналы при обновлении значения
+            if hasattr(self, '_snap_enabled') and self._snap_enabled:                
+                value = snap_rotation_to_grid(value, self._rotation_step)  
                 with SignalBlock(self.direction_spinbox):
-                    self.direction_spinbox.setValue(value)
-                
+                    self.direction_spinbox.setValue(value) 
+                logger.debug(f"Привязка к сетке направления: {value} (шаг {self._rotation_step}°)")
+
+            with SignalBlock(self.direction_slider):
+                self.direction_slider.setValue(value)
+
             # Оповещаем об изменении направления
             self.direction_changed.emit(value)
         except Exception as e:
@@ -446,9 +462,10 @@ class StartPositionPropertiesWidget(BasePropertiesWidget):
         """
         try:
             # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
-                value = snap_rotation_to_grid(value, 45)
-                
+            if hasattr(self, '_snap_enabled') and self._snap_enabled:                
+                value = snap_rotation_to_grid(value, self._rotation_step)  
+                logger.debug(f"Привязка к сетке направления: {value} (шаг {self._rotation_step}°)")
+
             # Устанавливаем значение в спинбокс без эмиссии сигнала
             with SignalBlock(self.direction_spinbox):
                 self.direction_spinbox.setValue(value)
@@ -462,16 +479,12 @@ class StartPositionPropertiesWidget(BasePropertiesWidget):
         """Обработчик завершения редактирования направления."""
         try:
             value = self.direction_spinbox.value()
-            
+  
             # Привязка к сетке если необходимо
-            if is_snap_enabled(self.field_widget):
-                value = snap_rotation_to_grid(value, 45)
-                
-                # Обновляем значение в спинбоксе если оно изменилось
-                if value != self.direction_spinbox.value():
-                    with SignalBlock(self.direction_spinbox):
-                        self.direction_spinbox.setValue(value)
-                
+            if hasattr(self, '_snap_enabled') and self._snap_enabled:                
+                value = snap_rotation_to_grid(value, self._rotation_step)  
+                logger.debug(f"Привязка к сетке направления: {value} (шаг {self._rotation_step}°)")
+
             # Обновляем слайдер
             with SignalBlock(self.direction_slider):
                 self.direction_slider.setValue(value)
@@ -488,17 +501,50 @@ class StartPositionPropertiesWidget(BasePropertiesWidget):
         Args:
             is_dark_theme: True для темной темы, False для светлой
         """
-        self.apply_theme(is_dark_theme)
-    
+        self.apply_theme(is_dark_theme) 
+
+    def update_snap_step_size(self, enabled):
+        """Устанавливает шаг спинбоксов и слайдеров в зависимости от состояния привязки к сетке."""
+        try:
+            if enabled:
+                step_size = 25  # Шаг полсетки для старта
+                rotation_step = 45
+                logger.debug(f"Установка шага для старта (привязка вкл.): коорд={step_size}, поворот={rotation_step}")
+            else:
+                step_size = 1
+                rotation_step = 1
+                logger.debug("Установка шага для старта (привязка выкл.): 1")
+
+            # Сохраняем шаги как атрибуты для возможного использования
+            self._step_size = step_size
+            self._rotation_step = rotation_step
+            logger.debug(f"[USSS] start_position шаг={self._step_size}, поворот={self._rotation_step}")
+
+            # Координаты X, Y
+            self.x_spinbox.setSingleStep(step_size)
+            self.y_spinbox.setSingleStep(step_size)
+            self.x_slider.setSingleStep(step_size)
+            self.y_slider.setSingleStep(step_size)
+
+            # Направление
+            self.direction_spinbox.setSingleStep(rotation_step)
+            self.direction_slider.setSingleStep(rotation_step)
+
+        except Exception as e:
+            logger.error(f"Ошибка при установке шага привязки для старта: {e}")
+
     def set_snap_enabled(self, enabled):
         """
-        Устанавливает состояние привязки к сетке.
+        Установка состояния привязки к сетке.
         
         Args:
             enabled: True для включения привязки, False для отключения
         """
-        self._snap_enabled = enabled
-        logger.debug(f"StartPositionPropertiesWidget snap state set to: {enabled}")
-        if self.field_widget:
-            step_size = self.field_widget.grid_size if enabled else 1
-            self.update_step_sizes(step_size) 
+        try:
+            logger.debug(f"StartPositionPropertiesWidget: set_snap_enabled вызван с параметром {enabled}")
+            if self._snap_enabled != enabled:
+                self._snap_enabled = enabled
+                self.update_snap_step_size(enabled)
+            
+        except Exception as e:
+            logger.error(f"Ошибка при установке привязки к сетке для стартовой позиции: {e}")

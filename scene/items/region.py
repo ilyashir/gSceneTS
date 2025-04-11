@@ -49,6 +49,7 @@ class Region(BaseSceneItem):
         
         # Создаем QGraphicsRectItem для отображения
         # Используем self._rect для инициализации
+        logger.debug(f"Инициализация региона: {self._rect}, c координатами: {self._rect.topLeft()}")
         self.region_rect = QGraphicsRectItem(self._rect, self)
         self.region_rect.setBrush(QBrush(self.color.lighter(150)))
         self.region_rect.setPen(QPen(self.color.darker(150), 2))
@@ -160,3 +161,26 @@ class Region(BaseSceneItem):
         cls._next_id = 1
         cls._existing_ids.clear()
         logger.debug("Счетчик ID регионов сброшен") 
+
+    def pos(self):
+        """
+        Возвращает позицию региона.
+        """
+        return self._rect.topLeft()
+    
+    def width(self):
+        """
+        Возвращает ширину региона.
+        """
+        return self._rect.width()
+    
+    def height(self):
+        """
+        Возвращает высоту региона.
+        """
+        return self._rect.height()
+    
+    
+
+    
+    

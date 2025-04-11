@@ -172,15 +172,15 @@ class SceneManager(QObject):
         """Проверяет, находится ли регион в пределах сцены."""
         rect = region.boundingRect()
         pos = region.pos()
-        
+        logger.debug(f"Проверяем регион: {rect} в позиции: {pos}")
         # Проверяем все углы прямоугольника
         points = [
-            QPointF(pos.x() + rect.x(), pos.y() + rect.y()),
-            QPointF(pos.x() + rect.x() + rect.width(), pos.y() + rect.y()),
-            QPointF(pos.x() + rect.x(), pos.y() + rect.y() + rect.height()),
-            QPointF(pos.x() + rect.x() + rect.width(), pos.y() + rect.y() + rect.height())
+            QPointF(pos.x(), pos.y()),
+            QPointF(pos.x() + rect.width(), pos.y()),
+            QPointF(pos.x(), pos.y() + rect.height()),
+            QPointF(pos.x() + rect.width(), pos.y() + rect.height())
         ]
-        
+        logger.debug(f"Проверяем точки: {points}")
         for point in points:
             if not (-self.scene_width / 2 <= point.x() <= self.scene_width / 2 and
                    -self.scene_height / 2 <= point.y() <= self.scene_height / 2):

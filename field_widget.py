@@ -33,17 +33,20 @@ class FieldWidget(QGraphicsView):
     item_deselected = pyqtSignal()
     # Сигнал для обновления свойств объекта
     properties_updated = pyqtSignal(object)
-    # Сигнал изменения режима привязки к сетке
-    grid_snap_changed = pyqtSignal(bool)
+    # Сигнал изменения прямоугольника сцены
+    scene_rect_changed = pyqtSignal(QRectF)
 
     def __init__(self, properties_window, scene_width=1300, scene_height=800, grid_size=50):
         super().__init__()
         self.properties_window = properties_window
 
         # Подключаем сигналы к слотам
+        logger.debug("Подключение сигналов FieldWidget к PropertiesWindow")
         self.item_selected.connect(self.properties_window.update_properties)
         self.item_deselected.connect(self.properties_window.clear_properties)
-        self.properties_updated.connect(self.properties_window.update_properties)
+        # ЗАКОММЕНТИРУЕМ И ЗДЕСЬ ТОЖЕ НА ВСЯКИЙ СЛУЧАЙ:
+        # self.properties_updated.connect(self.properties_window.update_properties)
+        logger.debug("Сигналы FieldWidget успешно подключены к PropertiesWindow")
 
         self.setScene(QGraphicsScene(self))
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -123,7 +126,7 @@ class FieldWidget(QGraphicsView):
             line.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, False)
             line.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
             self.grid_layer.addToGroup(line)
-            logger.debug(f"Added grid line at x={x}")
+            # logger.debug(f"Added grid line at x={x}")
 
         for y in range(-self.scene_height // 2, self.scene_height // 2, self.grid_size):
             line = QGraphicsLineItem(-self.scene_width // 2, y, self.scene_width // 2, y)
@@ -131,7 +134,7 @@ class FieldWidget(QGraphicsView):
             line.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, False)
             line.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
             self.grid_layer.addToGroup(line)
-            logger.debug(f"Added grid line at y={y}")
+            # logger.debug(f"Added grid line at y={y}")
     # отрисовка осей
     def draw_axes(self):
         logger.debug("Drawing axes...")
@@ -216,7 +219,10 @@ class FieldWidget(QGraphicsView):
                 
             # Активируем выделение объекта
             self.selected_item.set_highlight(True)
+            
+            logger.debug(f"Эмитим сигнал item_selected для объекта {type(item).__name__}")
             self.item_selected.emit(item)
+            logger.debug(f"Сигнал item_selected был эмитирован")
             
     def deselect_item(self):
         """Снимает выделение с объекта."""
@@ -319,6 +325,7 @@ class FieldWidget(QGraphicsView):
     def init_start_position(self, position, direction=0):
         """Инициализирует или обновляет стартовую позицию."""
         # Пытаемся разместить/обновить стартовую позицию через менеджер
+        logger.debug(f"Инициализация стартовой позиции: pos={position}, direction={direction}")
         start_item = self.scene_manager.place_start_position(position, direction)
         
         if start_item:
@@ -348,48 +355,36 @@ class FieldWidget(QGraphicsView):
         self.edit_mode = enabled
 
     def set_scene_size(self, width, height):
-        logger.debug(f"Setting scene size to width={width}, height={height}")
-
-        # Проверка, влезают ли объекты
+        """Устанавливает новый размер сцены и обновляет связанные элементы."""
+        logger.debug(f"Установка нового размера сцены: {width}x{height}")
+        # Проверяем, что объекты остаются в границах
         if not self.check_objects_within_bounds(width, height):
-            logger.warning("Objects do not fit in the new scene size.")
-            # Выводим уведомление, если объекты не влезают
-            QMessageBox.warning(
-                None,
-                "Ошибка",
-                f"При новом размере объекты вылезут за границу сцены. Пожалуйста, выберите другой размер.",
-                QMessageBox.StandardButton.Ok
-            )
+            logger.warning("Невозможно изменить размер сцены, объекты выйдут за границы.")
+            # Опционально: показать сообщение пользователю
+            # QMessageBox.warning(self, "Ошибка", "Невозможно изменить размер сцены, объекты выйдут за границы.")
+            # Отправляем текущий размер обратно в поля ввода
             self.update_size_fields.emit(self.scene_width, self.scene_height)
             return
 
-        # Убираем старую сетку со сцены
-        for item in self.grid_layer.childItems():
-            self.grid_layer.removeFromGroup(item)
-            self.scene().removeItem(item)  # Удаляем элементы из сцены
-
-        # Убираем старые оси координат со сцены
-        for item in self.axes_layer.childItems():
-            self.axes_layer.removeFromGroup(item)
-            self.scene().removeItem(item)  # Удаляем элементы из сцены    
-
-        # Обновляем размеры сцены
+        # Обновляем размеры
         self.scene_width = width
         self.scene_height = height
-        logger.debug(f"Updated scene dimensions: width={self.scene_width}, height={self.scene_height}")
 
-        logger.debug("Drawing grid and axes...")
-        self.draw_grid()
-        self.draw_axes()
-        
-        # Обновляем размер сцены
-        self.scene().setSceneRect(-self.scene_width/2, -self.scene_height/2, self.scene_width, self.scene_height)
+        # Обновляем sceneRect
+        new_rect = QRectF(-width / 2, -height / 2, width, height)
+        self.scene().setSceneRect(new_rect)
+        logger.debug(f"SceneRect обновлен: {new_rect}")
 
-        # Обновляем видимость скроллбаров после изменения размера сцены
+        # Перерисовываем сетку и оси
+        self.redraw_grid()
+        self.draw_axes() # Оси тоже нужно перерисовать, т.к. их длина зависит от размера
+
+        # Обновляем видимость полос прокрутки
         self.update_scrollbars_visibility()
 
-        logger.debug("Scene size updated successfully.") 
-        logger.debug(f"Scene size set to: {width}x{height}")
+        # Отправляем сигнал об изменении прямоугольника сцены
+        self.scene_rect_changed.emit(new_rect)
+        logger.info(f"Размер сцены успешно изменен на {width}x{height}")
 
     def update_scrollbars_visibility(self):
         """Обновляет видимость скроллбаров в зависимости от размера сцены и текущего масштаба"""
@@ -527,7 +522,7 @@ class FieldWidget(QGraphicsView):
         return isinstance(item, (Robot, Wall, Region, StartPosition))
         
     def get_selectable_parent(self, item):
-        logger.debug(f"[GET_PARENT] Checking item: {item}") # <-- Лог входа
+        # logger.debug(f"[GET_PARENT] Checking item: {item}") # <-- Лог входа
         if not item:
             logger.debug("[GET_PARENT] Item is None, returning None")
             return None
@@ -556,7 +551,7 @@ class FieldWidget(QGraphicsView):
                  return current
             current = current.parentItem()
             
-        logger.debug("[GET_PARENT] No supported parent/ancestor found, returning None")
+        # logger.debug("[GET_PARENT] No supported parent/ancestor found, returning None")
         return None
         
     def mousePressEvent(self, event):
@@ -638,9 +633,9 @@ class FieldWidget(QGraphicsView):
         self.mouse_coords_updated.emit(pos.x(), pos.y())
         
         # --- Режим РИСОВАНИЯ (Остается в начале) --- 
-        logger.debug(f"[DRAW_CHECK] edit={self.edit_mode}, draw_mode={self.drawing_mode}, wall_start={self.wall_start is not None}, region_start={self.region_start is not None}")
+        # logger.debug(f"[DRAW_CHECK] edit={self.edit_mode}, draw_mode={self.drawing_mode}, wall_start={self.wall_start is not None}, region_start={self.region_start is not None}")
         if self.drawing_mode:
-            logger.debug(f"[DRAW_INSIDE] Entered 'if self.drawing_mode'. draw_mode='{self.drawing_mode}', wall_start set: {self.wall_start is not None}")
+            # logger.debug(f"[DRAW_INSIDE] Entered 'if self.drawing_mode'. draw_mode='{self.drawing_mode}', wall_start set: {self.wall_start is not None}")
             if self.drawing_mode == "wall" and self.wall_start:
                 if self.temp_wall:
                     self.scene().removeItem(self.temp_wall)
@@ -664,11 +659,6 @@ class FieldWidget(QGraphicsView):
                 self.scene().update(self.sceneRect()) # Обновляем сцену
                 logger.debug(f"[DRAW_REGION_MOVE] Added temp_region to scene: {self.temp_region}")
         # --- Конец блока РИСОВАНИЯ ---
-
-        # --- Логика перетаскивания объектов (перемещена обратно внутрь if event.buttons) ---
-        # if self.edit_mode and self.dragging_item and not self.selected_marker: 
-        #    # ... (этот блок теперь ниже)
-        # --- Конец перемещенной логики ---
 
         if event.buttons() == Qt.MouseButton.LeftButton:
             if self.edit_mode:
@@ -876,53 +866,7 @@ class FieldWidget(QGraphicsView):
             self.robot_model.set_direction(direction)
             return True
         return False
-    
-    def update_robot_id(self, new_id):
-        """
-        Обновляет ID робота.
-        
-        Args:
-            new_id: Новый ID робота
             
-        Returns:
-            bool: True, если обновление прошло успешно, False в противном случае
-        """
-        if self.robot_model:
-            old_id = self.robot_model.id
-            # Используем метод set_id для установки нового ID
-            result = self.robot_model.set_id(new_id)
-            if result:
-                logger.debug(f"Robot ID changed from {old_id} to {new_id}")
-                # Обновляем свойства объекта с новым ID
-                self.properties_updated.emit(self.robot_model)
-                return True
-            else:
-                logger.warning(f"Failed to change robot ID from {old_id} to {new_id}")
-                QMessageBox.warning(
-                    None,
-                    "Ошибка",
-                    f"Не удалось изменить ID робота. Возможно, ID '{new_id}' уже используется.",
-                    QMessageBox.StandardButton.Ok
-                )
-                return False
-        return False
-    
-    def update_robot_name(self, name):
-        """
-        Обновляет имя робота.
-        
-        Args:
-            name: Новое имя робота
-            
-        Returns:
-            bool: True, если обновление прошло успешно, False в противном случае
-        """
-        if self.robot_model:
-            self.robot_model.set_name(name)
-            logger.debug(f"Robot name changed to {name}")
-            return True
-        return False
-    
     def update_wall_point1(self, x1, y1):
         """Обновляет первую точку стены."""
         logger.debug(f"Updating wall point1 to {x1}, {y1}")
@@ -1044,61 +988,37 @@ class FieldWidget(QGraphicsView):
     def update_region_position(self, x, y):
         """Обновляет позицию региона."""
         if self.selected_item and isinstance(self.selected_item, Region):
-            # Получаем boundingRect из пути региона
-            path_rect = self.selected_item.path().boundingRect()
-            
-            # Создаем точки для временного региона
-            points = [
-                QPointF(x + path_rect.x(), y + path_rect.y()),
-                QPointF(x + path_rect.x() + path_rect.width(), y + path_rect.y()),
-                QPointF(x + path_rect.x() + path_rect.width(), y + path_rect.y() + path_rect.height()),
-                QPointF(x + path_rect.x(), y + path_rect.y() + path_rect.height())
-            ]
-            
-            # Создаем временный регион для проверки границ сцены
-            temp_region = Region.create_temp_region(points)
-            
-            if not self.check_object_within_scene(temp_region):
-                logger.warning(f"Region position update to ({x}, {y}) rejected - would be out of scene bounds")
-                # Показываем предупреждение о выходе за границы сцены
-                QMessageBox.warning(
-                    None,
-                    "Ошибка",
-                    "Регион выйдет за границы сцены. Пожалуйста, укажите другие координаты.",
-                    QMessageBox.StandardButton.Ok
-                )
-                # Обновляем свойства с правильной позицией
-                self.properties_updated.emit(self.selected_item)
-                return False
-            
-            # Освобождаем ID временного региона
-            try:
-                if temp_region.id in Region._existing_ids:
-                    Region._existing_ids.remove(temp_region.id)
-            except Exception as e:
-                logger.debug(f"Ошибка при освобождении ID временного региона: {e}")
-            
-            # Если проверка пройдена, обновляем позицию
-            self.selected_item.setPos(x, y)
-            return True
-        return False
-    
-    def update_region_size(self, width, height):
-        """Обновляет размер выбранного региона."""
-        if self.selected_item and isinstance(self.selected_item, Region):
-            logger.debug(f"Обновление размера региона {self.selected_item.id} на {width}x{height}")
-            # Используем setRect вместо set_size
-            try:
-                # Устанавливаем прямоугольник в локальных координатах (0,0) с новыми размерами
-                self.selected_item.prepareGeometryChange() # Важно вызвать перед изменением геометрии
-                self.selected_item.setRect(0, 0, width, height)
-                self.scene().update() # Обновляем сцену для перерисовки
-                self.properties_updated.emit(self.selected_item) # Обновляем свойства
-            except Exception as e:
-                logger.error(f"Ошибка при обновлении размера региона: {e}")
+            # Создаем QPointF из входных координат
+            new_pos = QPointF(x, y)
+
+            # Перемещаем регион на новую позицию
+            self.selected_item.setPos(new_pos)
+            self.properties_updated.emit(self.selected_item)
+
+            logger.debug(f"Позиция региона {self.selected_item.id} обновлена на ({x}, {y})")
         else:
-            logger.warning("Попытка обновить размер, но регион не выбран")
-    
+            logger.warning("Попытка обновить позицию невыделенного или неверного региона")
+
+    def update_region_size(self, width, height):
+        """
+        Устаревший метод. Оставлен для совместимости.
+        Вызовы этого метода должны быть заменены на вызовы метода
+        @pyqtSlot(int, int) update_region_size ниже в коде.
+        """
+        logger.warning("Использование устаревшего метода update_region_size")
+        
+        # Логика аналогична методу со слотом @pyqtSlot(int, int) update_region_size
+        if self.selected_item and isinstance(self.selected_item, Region):
+            # Создаем новый QRectF с той же позицией, но новыми размерами
+            new_rect = QRectF(0, 0, width, height)  # Координаты относительно родительского элемента
+            
+            # Применяем обновленный прямоугольник
+            self.selected_item.set_rect(new_rect)
+            self.properties_updated.emit(self.selected_item)
+            logger.debug(f"Размер региона {self.selected_item.id} обновлен на {width}x{height}")
+        else:
+            logger.warning("Попытка обновить размер невыделенного или неверного региона")
+
     def update_region_color(self, color):
         """Обновляет цвет региона."""
         if self.selected_item and isinstance(self.selected_item, Region):
@@ -1110,9 +1030,6 @@ class FieldWidget(QGraphicsView):
         """Включает/выключает привязку к сетке."""
         if self.snap_to_grid_enabled != enabled:
             self.snap_to_grid_enabled = enabled
-            # Эмитируем сигнал об изменении режима привязки к сетке
-            logger.debug(f"Изменение режима привязки к сетке: {enabled}")
-            self.grid_snap_changed.emit(enabled)
     
     def set_grid_size(self, size):
         """Устанавливает размер сетки."""
@@ -1136,31 +1053,6 @@ class FieldWidget(QGraphicsView):
                     None,
                     "Ошибка",
                     f"ID '{new_id}' уже используется другой стеной. Пожалуйста, выберите другой ID.",
-                    QMessageBox.StandardButton.Ok
-                )
-                # Обновляем свойства с правильным ID
-                self.properties_updated.emit(self.selected_item)
-                return False
-        return False
-
-    def update_region_id(self, new_id):
-        """Обновляет ID выбранного региона."""
-        if self.selected_item and isinstance(self.selected_item, Region):
-            old_id = self.selected_item.id
-            # Используем метод set_id класса Region для установки ID
-            result = self.selected_item.set_id(new_id)
-            if result:
-                logger.debug(f"Region ID changed from {old_id} to {new_id}")
-                # Обновляем свойства объекта с новым ID
-                self.properties_updated.emit(self.selected_item)
-                return True
-            else:
-                logger.warning(f"Failed to change region ID from {old_id} to {new_id}")
-                # Показываем предупреждение о дублировании ID
-                QMessageBox.warning(
-                    None,
-                    "Ошибка",
-                    f"ID '{new_id}' уже используется другим регионом. Пожалуйста, выберите другой ID.",
                     QMessageBox.StandardButton.Ok
                 )
                 # Обновляем свойства с правильным ID
@@ -1434,20 +1326,15 @@ class FieldWidget(QGraphicsView):
             
         return False
 
+    @pyqtSlot(int)
     def update_start_position_direction(self, direction):
-        """
-        Обновляет направление стартовой позиции.
-        
-        Args:
-            direction: Новое направление (в градусах)
+        """Обновляет направление стартовой позиции."""
+        if self.scene_manager.start_position:
+            logger.debug(f"Сигнал на изменение направления стартовой точки на сцене на {direction}")
+            self.scene_manager.start_position.setRotation(direction)
             
-        Returns:
-            bool: True, если обновление прошло успешно, False в противном случае
-        """
-        if self.start_position_model:
-            self.start_position_model.set_direction(direction)
-            return True
-        return False
+        else:
+            logger.warning("Попытка обновить направление несуществующей стартовой точки")
 
     def place_start_position(self, position, direction=0):
         """
@@ -1569,19 +1456,18 @@ class FieldWidget(QGraphicsView):
     def update_robot_position(self, x, y):
         if self.scene_manager.robot:
             new_pos = QPointF(x, y)
-            # Сначала проверяем в менеджере, можно ли туда ставить
+            # Проверки...
             if self.scene_manager.robot_intersects_walls(new_pos):
                 logger.warning(f"Нельзя переместить робота в ({x},{y}), пересечение со стеной.")
-                # Восстанавливаем старые значения в properties
-                self.properties_updated.emit(self.scene_manager.robot)
+                # self.properties_updated.emit(self.scene_manager.robot) # <-- Закомментировать
                 return
-            if not self.scene_manager._check_robot_within_scene(Robot(new_pos)): # Используем временный объект
+            if not self.scene_manager._check_robot_within_scene(Robot(new_pos)):
                  logger.warning(f"Нельзя переместить робота в ({x},{y}), выходит за границы.")
-                 self.properties_updated.emit(self.scene_manager.robot)
+                 # self.properties_updated.emit(self.scene_manager.robot) # <-- Закомментировать
                  return
 
             self.scene_manager.robot.setPos(new_pos)
-            self.properties_updated.emit(self.scene_manager.robot)
+            # self.properties_updated.emit(self.scene_manager.robot) # <-- Закомментировать
             logger.debug(f"Позиция робота обновлена на ({x}, {y})")
         else:
             logger.warning("Попытка обновить позицию несуществующего робота")
@@ -1590,7 +1476,7 @@ class FieldWidget(QGraphicsView):
     def update_robot_rotation(self, rotation):
         if self.scene_manager.robot:
             self.scene_manager.robot.setRotation(rotation)
-            self.properties_updated.emit(self.scene_manager.robot)
+            # self.properties_updated.emit(self.scene_manager.robot) # <-- Закомментировать
             logger.debug(f"Направление робота обновлено на {rotation}")
         else:
             logger.warning("Попытка обновить направление несуществующего робота")
@@ -1611,11 +1497,11 @@ class FieldWidget(QGraphicsView):
             # Проверяем выход за границы
             if not (-self.scene_width / 2 <= x <= self.scene_width / 2 and -self.scene_height / 2 <= y <= self.scene_height / 2):
                 logger.warning(f"Нельзя переместить точку стены p1 в ({x},{y}), выходит за границы.")
-                self.properties_updated.emit(self.selected_item)
+                self.properties_updated.emit(self.selected_item) 
                 return
             
             self.selected_item.setLine(new_line)
-            self.properties_updated.emit(self.selected_item)
+            # self.properties_updated.emit(self.selected_item) # <-- Закомментировать
             logger.debug(f"Позиция точки p1 стены {self.selected_item.id} обновлена на ({x}, {y})")
         else:
             logger.warning("Попытка обновить точку p1 невыделенной или неверной стены")
@@ -1631,16 +1517,15 @@ class FieldWidget(QGraphicsView):
             if self.scene_manager.robot and \
                self.scene_manager.wall_intersects_robot(line.x1(), line.y1(), new_p2.x(), new_p2.y(), self.selected_item.stroke_width):
                 logger.warning(f"Нельзя переместить точку стены p2 в ({x},{y}), пересечение с роботом.")
-                self.properties_updated.emit(self.selected_item)
+                self.properties_updated.emit(self.selected_item) 
                 return
             # Проверяем выход за границы
             if not (-self.scene_width / 2 <= x <= self.scene_width / 2 and -self.scene_height / 2 <= y <= self.scene_height / 2):
                 logger.warning(f"Нельзя переместить точку стены p2 в ({x},{y}), выходит за границы.")
-                self.properties_updated.emit(self.selected_item)
+                self.properties_updated.emit(self.selected_item) 
                 return
             
             self.selected_item.setLine(new_line)
-            self.properties_updated.emit(self.selected_item)
             logger.debug(f"Позиция точки p2 стены {self.selected_item.id} обновлена на ({x}, {y})")
         else:
             logger.warning("Попытка обновить точку p2 невыделенной или неверной стены")
@@ -1658,7 +1543,6 @@ class FieldWidget(QGraphicsView):
                 return
                 
             self.selected_item.set_stroke_width(width)
-            self.properties_updated.emit(self.selected_item) # Обновляем свойства
             logger.debug(f"Толщина стены {self.selected_item.id} обновлена на {width}")
         else:
             logger.warning("Попытка обновить толщину невыделенной или неверной стены")
@@ -1670,7 +1554,7 @@ class FieldWidget(QGraphicsView):
             # TODO: Добавить валидацию ID в SceneManager или здесь?
             self.selected_item.id = new_id
             # Обновляем ID в менеджере? (Пока нет явной необходимости)
-            self.properties_updated.emit(self.selected_item)
+            # self.properties_updated.emit(self.selected_item) # <-- Закомментировать
             logger.debug(f"ID стены {old_id} изменен на {new_id}")
         else:
             logger.warning("Попытка обновить ID невыделенной или неверной стены")
@@ -1678,10 +1562,12 @@ class FieldWidget(QGraphicsView):
     @pyqtSlot(int, int)
     def update_region_position(self, x, y):
         if self.selected_item and isinstance(self.selected_item, Region):
+            # Создаем QPointF из входных координат
             new_pos = QPointF(x, y)
-            # TODO: Проверка границ/пересечений?
+
+            # Перемещаем регион на новую позицию
             self.selected_item.setPos(new_pos)
-            self.properties_updated.emit(self.selected_item)
+            # self.properties_updated.emit(self.selected_item) # <-- Закомментировать
             logger.debug(f"Позиция региона {self.selected_item.id} обновлена на ({x}, {y})")
         else:
             logger.warning("Попытка обновить позицию невыделенного или неверного региона")
@@ -1689,9 +1575,13 @@ class FieldWidget(QGraphicsView):
     @pyqtSlot(int, int)
     def update_region_size(self, width, height):
         if self.selected_item and isinstance(self.selected_item, Region):
-            # TODO: Проверка границ/пересечений?
-            self.selected_item.set_size(width, height)
-            self.properties_updated.emit(self.selected_item)
+            # Создаем новый QRectF с той же позицией, но новыми размерами
+            current_pos = self.selected_item.pos()
+            new_rect = QRectF(0, 0, width, height)  # Координаты относительно родительского элемента
+            
+            # Применяем обновленный прямоугольник
+            self.selected_item.set_rect(new_rect)
+            # self.properties_updated.emit(self.selected_item) # <-- Закомментировать
             logger.debug(f"Размер региона {self.selected_item.id} обновлен на {width}x{height}")
         else:
             logger.warning("Попытка обновить размер невыделенного или неверного региона")
@@ -1700,7 +1590,7 @@ class FieldWidget(QGraphicsView):
     def update_region_color(self, color_hex):
         if self.selected_item and isinstance(self.selected_item, Region):
             self.selected_item.set_color(color_hex)
-            self.properties_updated.emit(self.selected_item)
+            # self.properties_updated.emit(self.selected_item) # <-- Закомментировать
             logger.debug(f"Цвет региона {self.selected_item.id} обновлен на {color_hex}")
         else:
             logger.warning("Попытка обновить цвет невыделенного или неверного региона")
@@ -1711,35 +1601,77 @@ class FieldWidget(QGraphicsView):
             old_id = self.selected_item.id
             # TODO: Добавить валидацию ID
             self.selected_item.id = new_id
-            self.properties_updated.emit(self.selected_item)
+            # self.properties_updated.emit(self.selected_item) # <-- Закомментировать
             logger.debug(f"ID региона {old_id} изменен на {new_id}")
         else:
             logger.warning("Попытка обновить ID невыделенного или неверного региона")
             
-    @pyqtSlot(float, float)
+    @pyqtSlot(int, int)
     def update_start_position_position(self, x, y):
+        """Устаревший метод, оставлен для совместимости. Используйте update_start_position_x и update_start_position_y."""
         if self.scene_manager.start_position:
             new_pos = QPointF(x, y)
             # Проверка границ
             temp_start = StartPosition(new_pos)
             if not self.scene_manager._check_start_position_within_scene(temp_start):
                 logger.warning(f"Нельзя переместить стартовую позицию в ({x},{y}), выходит за границы.")
-                self.properties_updated.emit(self.scene_manager.start_position)
-                StartPosition.reset_instance() # Сбрасываем временный объект
                 return
-            StartPosition.reset_instance() # Сбрасываем временный объект
             
-            self.scene_manager.start_position.setPos(new_pos)
-            self.properties_updated.emit(self.scene_manager.start_position)
-            logger.debug(f"Позиция стартовой точки обновлена на ({x}, {y})")
+            logger.debug(f"Сигнал на изменение позиции стартовой точки на сцене на ({x}, {y})")
+            self.scene_manager.start_position.setPos(new_pos)            
         else:
             logger.warning("Попытка обновить позицию несуществующей стартовой точки")
             
-    @pyqtSlot(float)
-    def update_start_position_direction(self, direction):
+    @pyqtSlot(int)
+    def update_start_position_x(self, x):
+        """Обновляет только X-координату стартовой позиции."""
         if self.scene_manager.start_position:
-            self.scene_manager.start_position.setRotation(direction)
-            self.properties_updated.emit(self.scene_manager.start_position)
-            logger.debug(f"Направление стартовой точки обновлено на {direction}")
+            # Сохраняем текущую Y-координату
+            current_y = self.scene_manager.start_position.y()
+            new_pos = QPointF(x, current_y)
+            
+            # Проверка границ
+            temp_start = StartPosition(new_pos)
+            if not self.scene_manager._check_start_position_within_scene(temp_start):
+                logger.warning(f"Нельзя переместить стартовую позицию по X в {x}, выходит за границы.")
+                # self.properties_updated.emit(self.scene_manager.start_position) # <-- Закомментировать
+                # ...
+                return
+            # ...
+            # Вычитаем смещение для установки верхнего левого угла
+            offset = self.scene_manager.start_position.ITEM_SIZE / 2
+            x_adjusted = x - offset
+
+            # Обновляем только X-координату
+            self.scene_manager.start_position.setX(x_adjusted)
+            # self.properties_updated.emit(self.scene_manager.start_position) # <-- Закомментировать
+            logger.debug(f"X-координата стартовой точки обновлена на {x} (установлено {x_adjusted})")
         else:
-            logger.warning("Попытка обновить направление несуществующей стартовой точки")
+            logger.warning("Попытка обновить X-координату несуществующей стартовой точки")
+            
+    @pyqtSlot(int)
+    def update_start_position_y(self, y):
+        """Обновляет только Y-координату стартовой позиции."""
+        if self.scene_manager.start_position:
+            # Сохраняем текущую X-координату
+            current_x = self.scene_manager.start_position.x()
+            new_pos = QPointF(current_x, y)
+
+            # Проверка границ
+            temp_start = StartPosition(new_pos)
+            if not self.scene_manager._check_start_position_within_scene(temp_start):
+                logger.warning(f"Нельзя переместить стартовую позицию по Y в {y}, выходит за границы.")
+                # self.properties_updated.emit(self.scene_manager.start_position) # <-- Закомментировать
+                # ...
+                return
+            # ...
+            # Вычитаем смещение для установки верхнего левого угла
+            offset = self.scene_manager.start_position.ITEM_SIZE / 2
+            y_adjusted = y - offset
+
+            # Обновляем только Y-координату
+            self.scene_manager.start_position.setY(y_adjusted)
+            # self.properties_updated.emit(self.scene_manager.start_position) # <-- Закомментировать
+            logger.debug(f"Y-координата стартовой точки обновлена на {y} (установлено {y_adjusted})")
+        else:
+            logger.warning("Попытка обновить Y-координату несуществующей стартовой точки")
