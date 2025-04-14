@@ -79,7 +79,7 @@ class SceneManager(QObject):
         # Создаем реальный регион
         region = Region(rect_or_points, region_id, color)
         self.regions.append(region)
-        logger.debug(f"Добавлен регион: {region.id}")
+        logger.debug(f"Добавлен регион: {region.id}, {region.pos()}, {region.width()}, {region.height()}")
         
         return region
         

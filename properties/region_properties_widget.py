@@ -40,6 +40,7 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         self.apply_theme(self.is_dark_theme)
         self.field_widget = None
         self.initial_values = {}
+        self._current_item = None
         
         # Добавляем атрибут для хранения состояния привязки
         self._snap_enabled = True
@@ -329,7 +330,9 @@ class RegionPropertiesWidget(BasePropertiesWidget):
                 grid_size = getattr(self.field_widget, 'grid_size', 50)
                 value = int(snap_to_grid(value, grid_size))  # Преобразуем в целое число
                 logger.debug(f"Привязка координаты Y региона к сетке с шагом {grid_size}: {value}")
-                
+
+            self.update_ranges()
+
             # Устанавливаем значение в спинбокс без эмиссии сигнала
             with SignalBlock(self.y_spinbox):
                 self.y_spinbox.setValue(value)
@@ -351,7 +354,7 @@ class RegionPropertiesWidget(BasePropertiesWidget):
             if self._snap_enabled:
                 value = int(snap_to_grid(value, self._step_size))  # Преобразуем в целое число
 
-
+            self.update_ranges()
             # Устанавливаем значение в спинбокс без эмиссии сигнала
             with SignalBlock(self.width_spinbox):
                 self.width_spinbox.setValue(value)
@@ -373,6 +376,7 @@ class RegionPropertiesWidget(BasePropertiesWidget):
             if self._snap_enabled:
                 value = int(snap_to_grid(value, self._step_size))  # Преобразуем в целое число
 
+            self.update_ranges()
 
             # Устанавливаем значение в спинбокс без эмиссии сигнала
             with SignalBlock(self.height_spinbox):
@@ -403,7 +407,8 @@ class RegionPropertiesWidget(BasePropertiesWidget):
             # Устанавливаем значение в слайдер без эмиссии сигнала
             with SignalBlock(self.x_slider):
                 self.x_slider.setValue(value)
-                
+
+            logger.debug(f"-on_x_spinbox_changed-Изменение X-координаты региона: {value}, {self.y_spinbox.value()}")
             # Оповещаем об изменении позиции
             self.position_changed.emit(value, self.y_spinbox.value())
         except Exception as e:
@@ -548,20 +553,22 @@ class RegionPropertiesWidget(BasePropertiesWidget):
             if not item:
                 logger.warning("Пустой объект региона")
                 return
-                
-            logger.debug(f"Обновление свойств для региона: {item}")
+
+            self._current_item = item
+
+            logger.debug(f"---Обновление свойств для региона: {item}")
             self.update_ranges()               
             
             self.set_properties(
-                int(item.pos().x()), 
-                int(item.pos().y()), 
-                int(item.width()), 
-                int(item.height()), 
-                item.color, 
-                item.id
+                int(self._current_item.pos().x()), 
+                int(self._current_item.pos().y()), 
+                int(self._current_item.width()), 
+                int(self._current_item.height()), 
+                self._current_item.color, 
+                self._current_item.id
                 )
             
-            logger.debug(f"Свойства региона обновлены: x={item.pos().x()}, y={item.pos().y()}, width={item.width()}, height={item.height()}")
+            logger.debug(f"---Свойства региона обновлены: x={self._current_item.pos().x()}, y={self._current_item.pos().y()}, width={self._current_item.width()}, height={self._current_item.height()}")
         except Exception as e:
             logger.error(f"Ошибка при обновлении свойств региона: {e}")
 
@@ -666,30 +673,30 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         except Exception as e:
             logger.error(f"Ошибка при завершении редактирования высоты: {e}")
 
-    # --- Добавляем метод set_snap_enabled --- 
-    def set_snap_enabled(self, enabled):
-        """
-        Устанавливает режим привязки к сетке.
+    # # --- Добавляем метод set_snap_enabled --- 
+    # def set_snap_enabled(self, enabled):
+    #     """
+    #     Устанавливает режим привязки к сетке.
         
-        Args:
-            enabled: флаг, включена ли привязка к сетке
-        """
-        try:
-            self._snap_enabled = enabled
+    #     Args:
+    #         enabled: флаг, включена ли привязка к сетке
+    #     """
+    #     try:
+    #         self._snap_enabled = enabled
             
-            # Устанавливаем шаг в зависимости от того, включена ли привязка
-            if self.field_widget and hasattr(self.field_widget, 'grid_size'):
-                grid_size = self.field_widget.grid_size
-                self._step_size = grid_size if enabled else 1
-            else:
-                self._step_size = 50 if enabled else 1
+    #         # Устанавливаем шаг в зависимости от того, включена ли привязка
+    #         if self.field_widget and hasattr(self.field_widget, 'grid_size'):
+    #             grid_size = self.field_widget.grid_size
+    #             self._step_size = grid_size if enabled else 1
+    #         else:
+    #             self._step_size = 50 if enabled else 1
                 
-            # Обновляем шаг для контролов
-            self.update_step_sizes()  
+    #         # Обновляем шаг для контролов
+    #         self.update_step_sizes()  
             
-            logger.debug(f"RegionPropertiesWidget: установлен шаг {self._step_size} (привязка к сетке: {enabled})")
-        except Exception as e:
-            logger.error(f"Ошибка при установке режима привязки к сетке: {e}") 
+    #         logger.debug(f"RegionPropertiesWidget: установлен шаг {self._step_size} (привязка к сетке: {enabled})")
+    #     except Exception as e:
+    #         logger.error(f"Ошибка при установке режима привязки к сетке: {e}") 
 
     def update_snap_step_size(self, enabled):
         """Устанавливает шаг спинбоксов в зависимости от состояния привязки к сетке."""
@@ -731,15 +738,16 @@ class RegionPropertiesWidget(BasePropertiesWidget):
         Шаг больше не устанавливается здесь, но минимальный размер зависит от _step_size.
         """
         try:
-            logger.debug(f"Обновление диапазонов RegionProperties: min_x={min_x}, max_x={max_x}, min_y={min_y}, max_y={max_y}")
+            logger.debug(f"Обновление диапазонов RegionProperties для региона {self._current_item.id}")
+            logger.debug(f"Поля для региона: {self._current_item.pos().x()}, {self._current_item.pos().y()}, {self._current_item.width()}, {self._current_item.height()}")
             
             if self.field_widget:
                 min_x = int(self.field_widget.scene().sceneRect().left())
-                max_x = int(self.field_widget.scene().sceneRect().right()) - self.width_spinbox.value()
+                max_x = int(self.field_widget.scene().sceneRect().right() - self._current_item.width())
                 min_y = int(self.field_widget.scene().sceneRect().top())
-                max_y = int(self.field_widget.scene().sceneRect().bottom()) - self.height_spinbox.value()
-                max_width = int(self.field_widget.scene().sceneRect().right()) - self.x_spinbox.value()
-                max_height = int(self.field_widget.scene().sceneRect().bottom()) - self.y_spinbox.value()
+                max_y = int(self.field_widget.scene().sceneRect().bottom() - self._current_item.height())
+                max_width = int(self.field_widget.scene().sceneRect().right() - self.x_spinbox.value())
+                max_height = int(self.field_widget.scene().sceneRect().bottom() - self.y_spinbox.value())
 
             # Обновляем диапазоны для X, Y
             self.x_spinbox.setRange(min_x, max_x)

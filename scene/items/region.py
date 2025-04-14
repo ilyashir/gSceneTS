@@ -61,7 +61,7 @@ class Region(BaseSceneItem):
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
         
         # Обновляем подсветку при наведении, если она была создана в super().__init__
-        if hasattr(self, 'hover_rect') and self.hover_rect:
+        if hasattr(self, 'hover_rect') and self.hover_rect and not is_temp:
             self.hover_rect.setRect(self._rect)
     
     def create_hover_highlight(self):

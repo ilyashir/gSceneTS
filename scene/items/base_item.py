@@ -44,7 +44,8 @@ class BaseSceneItem(QGraphicsItem, HoverHighlightMixin, ABC, metaclass=SceneItem
             z_value: Z-индекс элемента на сцене
         """
         super().__init__()
-        HoverHighlightMixin.__init__(self)
+        if not is_temp:
+            HoverHighlightMixin.__init__(self)
         
         self.item_type = item_type
         self.is_temp = is_temp
@@ -62,8 +63,9 @@ class BaseSceneItem(QGraphicsItem, HoverHighlightMixin, ABC, metaclass=SceneItem
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsFocusable, True)
         
-        # Инициализация подсветки
-        self.init_hover_highlight()
+        if not is_temp:
+            # Инициализация подсветки
+            self.init_hover_highlight()
         
         self._is_initialized = True
     

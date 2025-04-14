@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QGraphicsEllipseItem, QGraphicsPolygonItem, QGraphicsPathItem
 )
 from PyQt6.QtGui import QPainter, QPixmap, QPen, QBrush, QColor, QImage, QTransform, QPainterPath, QPolygonF
-from PyQt6.QtCore import Qt, QPointF, QRectF, QLineF, pyqtSignal, pyqtSlot, QThread, QTimer, QDataStream, QIODevice, QByteArray
+from PyQt6.QtCore import Qt, QPointF, QRectF, QLineF, pyqtSignal, pyqtSlot, QThread, QTimer, QDataStream, QIODevice, QByteArray, QSizeF
 from PyQt6.QtSvg import QSvgRenderer
 from scene.items import Robot, Wall, Region, StartPosition
 from scene.managers import SceneManager
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 class FieldWidget(QGraphicsView):
     # Сигнал для передачи координат мыши
     mouse_coords_updated = pyqtSignal(float, float)
-    # Сигнал для обновления полей ввода
+    # Сигнал для обновления размера поля
     update_size_fields = pyqtSignal(int, int)
     # Сигнал для выбора объекта
     item_selected = pyqtSignal(object)
@@ -39,14 +39,6 @@ class FieldWidget(QGraphicsView):
     def __init__(self, properties_window, scene_width=1300, scene_height=800, grid_size=50):
         super().__init__()
         self.properties_window = properties_window
-
-        # Подключаем сигналы к слотам
-        logger.debug("Подключение сигналов FieldWidget к PropertiesWindow")
-        self.item_selected.connect(self.properties_window.update_properties)
-        self.item_deselected.connect(self.properties_window.clear_properties)
-        # ЗАКОММЕНТИРУЕМ И ЗДЕСЬ ТОЖЕ НА ВСЯКИЙ СЛУЧАЙ:
-        # self.properties_updated.connect(self.properties_window.update_properties)
-        logger.debug("Сигналы FieldWidget успешно подключены к PropertiesWindow")
 
         self.setScene(QGraphicsScene(self))
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -200,7 +192,7 @@ class FieldWidget(QGraphicsView):
     def select_item(self, item):
         """Выделяет объект"""
         # Проверяем, не выделяем ли тот же объект
-        logger.debug(f"Selecting item: {item}, а был выделен {self.selected_item}")
+        logger.debug(f"Выделяем item: {item}, а был ранее выделен {self.selected_item}")
         if item == self.selected_item:
             logger.debug(f"Item {item} is already selected, skipping")
             return
@@ -984,40 +976,6 @@ class FieldWidget(QGraphicsView):
             self.selected_item.set_stroke_width(width)            
             return True
         return False
-    
-    def update_region_position(self, x, y):
-        """Обновляет позицию региона."""
-        if self.selected_item and isinstance(self.selected_item, Region):
-            # Создаем QPointF из входных координат
-            new_pos = QPointF(x, y)
-
-            # Перемещаем регион на новую позицию
-            self.selected_item.setPos(new_pos)
-            self.properties_updated.emit(self.selected_item)
-
-            logger.debug(f"Позиция региона {self.selected_item.id} обновлена на ({x}, {y})")
-        else:
-            logger.warning("Попытка обновить позицию невыделенного или неверного региона")
-
-    def update_region_size(self, width, height):
-        """
-        Устаревший метод. Оставлен для совместимости.
-        Вызовы этого метода должны быть заменены на вызовы метода
-        @pyqtSlot(int, int) update_region_size ниже в коде.
-        """
-        logger.warning("Использование устаревшего метода update_region_size")
-        
-        # Логика аналогична методу со слотом @pyqtSlot(int, int) update_region_size
-        if self.selected_item and isinstance(self.selected_item, Region):
-            # Создаем новый QRectF с той же позицией, но новыми размерами
-            new_rect = QRectF(0, 0, width, height)  # Координаты относительно родительского элемента
-            
-            # Применяем обновленный прямоугольник
-            self.selected_item.set_rect(new_rect)
-            self.properties_updated.emit(self.selected_item)
-            logger.debug(f"Размер региона {self.selected_item.id} обновлен на {width}x{height}")
-        else:
-            logger.warning("Попытка обновить размер невыделенного или неверного региона")
 
     def update_region_color(self, color):
         """Обновляет цвет региона."""
@@ -1565,10 +1523,17 @@ class FieldWidget(QGraphicsView):
             # Создаем QPointF из входных координат
             new_pos = QPointF(x, y)
 
-            # Перемещаем регион на новую позицию
-            self.selected_item.setPos(new_pos)
+            # Получаем текущие размеры
+            current_width = self.selected_item.width()
+            current_height = self.selected_item.height()
+            
+            # Создаем новый прямоугольник с новой позицией и старыми размерами
+            new_rect = QRectF(new_pos, QSizeF(current_width, current_height))
+
+            # Используем set_rect для обновления позиции и перерисовки
+            self.selected_item.set_rect(new_rect)
             # self.properties_updated.emit(self.selected_item) # <-- Закомментировать
-            logger.debug(f"Позиция региона {self.selected_item.id} обновлена на ({x}, {y})")
+            logger.debug(f"Позиция региона {self.selected_item.id} обновлена на ({x}, {y}) через set_rect")
         else:
             logger.warning("Попытка обновить позицию невыделенного или неверного региона")
 
@@ -1577,7 +1542,7 @@ class FieldWidget(QGraphicsView):
         if self.selected_item and isinstance(self.selected_item, Region):
             # Создаем новый QRectF с той же позицией, но новыми размерами
             current_pos = self.selected_item.pos()
-            new_rect = QRectF(0, 0, width, height)  # Координаты относительно родительского элемента
+            new_rect = QRectF(current_pos, QSizeF(width, height))  # Координаты относительно родительского элемента
             
             # Применяем обновленный прямоугольник
             self.selected_item.set_rect(new_rect)
