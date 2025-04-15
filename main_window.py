@@ -219,6 +219,8 @@ class MainWindow(QMainWindow):
         self.field_widget.properties_updated.connect(self.properties_window.update_properties)
         # Подключение сигнала изменения размера сцены к менеджеру свойств
         self.field_widget.scene_rect_changed.connect(self.properties_manager.on_scene_rect_changed)
+        # Подключение сигнала для обновления полей ввода размера сцены
+        self.field_widget.update_size_fields.connect(self.update_size_input_fields)
 
         # Сигналы от PropertiesWindow (адаптера)
         # Робот
@@ -1097,3 +1099,17 @@ class MainWindow(QMainWindow):
             logger.error(f"Ошибка загрузки XML: {e}", exc_info=True)
             QMessageBox.critical(self, "Ошибка", f"Произошла ошибка при загрузке XML: {e}")
             return False
+
+    def update_size_input_fields(self, width, height):
+        """Обновляет поля ввода размера сцены."""
+        # Блокируем сигналы на время обновления, чтобы избежать рекурсии
+        # (хотя для QLineEdit это обычно не проблема, но для спинбоксов важно)
+        self.width_input.blockSignals(True)
+        self.height_input.blockSignals(True)
+        
+        self.width_input.setText(str(width))
+        self.height_input.setText(str(height))
+        
+        self.width_input.blockSignals(False)
+        self.height_input.blockSignals(False)
+        logger.debug(f"Поля ввода размера сцены обновлены на {width}x{height}")

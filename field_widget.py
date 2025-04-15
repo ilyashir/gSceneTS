@@ -353,7 +353,7 @@ class FieldWidget(QGraphicsView):
         if not self.check_objects_within_bounds(width, height):
             logger.warning("Невозможно изменить размер сцены, объекты выйдут за границы.")
             # Опционально: показать сообщение пользователю
-            # QMessageBox.warning(self, "Ошибка", "Невозможно изменить размер сцены, объекты выйдут за границы.")
+            QMessageBox.warning(self, "Ошибка", "Невозможно изменить размер сцены, объекты выйдут за границы.")
             # Отправляем текущий размер обратно в поля ввода
             self.update_size_fields.emit(self.scene_width, self.scene_height)
             return
@@ -418,13 +418,13 @@ class FieldWidget(QGraphicsView):
                 pos.y() + rect.y() < -height // 2 or 
                 pos.y() + rect.y() + rect.height() > height // 2):
                 return False
-
-        if (self.robot_model.pos().x() < -width // 2 or self.robot_model.pos().x() + self.robot_model.boundingRect().width() > width // 2 or
-            self.robot_model.pos().y() < -height // 2 or self.robot_model.pos().y() + self.robot_model.boundingRect().height() > height // 2):
+        robot = self.scene_manager.robot
+        if (robot.pos().x() < -width // 2 or robot.pos().x() + robot.boundingRect().width() > width // 2 or
+            robot.pos().y() < -height // 2 or robot.pos().y() + robot.boundingRect().height() > height // 2):
                 return False
-        
-        if (self.start_position_model.pos().x() < -width // 2 or self.start_position_model.pos().x() + self.start_position_model.boundingRect().width() > width // 2 or
-            self.start_position_model.pos().y() < -height // 2 or self.start_position_model.pos().y() + self.start_position_model.boundingRect().height() > height // 2):
+        start_pos = self.scene_manager.start_position
+        if (start_pos.pos().x() < -width // 2 or start_pos.pos().x() + start_pos.boundingRect().width() > width // 2 or
+            start_pos.pos().y() < -height // 2 or start_pos.pos().y() + start_pos.boundingRect().height() > height // 2):
                 return False
 
         return True
