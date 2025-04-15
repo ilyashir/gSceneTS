@@ -136,6 +136,13 @@ class Region(BaseSceneItem):
         self.color = QColor(color)
         self.region_rect.setBrush(QBrush(self.color.lighter(150)))
         self.region_rect.setPen(QPen(self.color.darker(150), 2))
+
+    def setPos(self, pos):
+        """
+        Устанавливает новую позицию для региона.
+        :param pos: Новая позиция (QPointF).
+        """
+        self.set_rect(QRectF(pos, self._rect.size()))
     
     def set_rect(self, rect):
         """

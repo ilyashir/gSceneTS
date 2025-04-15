@@ -704,7 +704,7 @@ class FieldWidget(QGraphicsView):
                                 logger.debug("[DRAG_MOVE] Robot out of bounds, cancel")
                                 can_move = False
                         elif isinstance(self.dragging_item, Region):
-                            if not self.scene_manager._check_region_within_scene(Region(self.dragging_item.boundingRect().translated(new_pos), is_temp=True)):
+                            if not self.scene_manager.check_object_within_scene(Region(QRectF(new_pos, self.dragging_item.boundingRect().size()), is_temp=True)):
                                 logger.debug("[DRAG_MOVE] Region out of bounds, cancel")
                                 can_move = False
                         elif isinstance(self.dragging_item, StartPosition):
