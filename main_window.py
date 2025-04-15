@@ -382,7 +382,7 @@ class MainWindow(QMainWindow):
         self.zoom_out_button = QToolButton()
         self.zoom_out_button.setText("-")
         self.zoom_out_button.setToolTip("Уменьшить (или Ctrl+колесико мыши вниз)")
-        self.zoom_out_button.clicked.connect(self.field_widget.zoomOut)
+        self.zoom_out_button.clicked.connect(self.field_widget.zoom_controller.zoom_out)
         self.zoom_out_button.setStyleSheet(AppStyles.get_scale_button_style(self.is_dark_theme))
         scale_buttons_layout.addWidget(self.zoom_out_button)
         
@@ -400,7 +400,7 @@ class MainWindow(QMainWindow):
         self.zoom_in_button = QToolButton()
         self.zoom_in_button.setText("+")
         self.zoom_in_button.setToolTip("Увеличить (или Ctrl+колесико мыши вверх)")
-        self.zoom_in_button.clicked.connect(self.field_widget.zoomIn)
+        self.zoom_in_button.clicked.connect(self.field_widget.zoom_controller.zoom_in)
         self.zoom_in_button.setStyleSheet(AppStyles.get_scale_button_style(self.is_dark_theme))
         scale_buttons_layout.addWidget(self.zoom_in_button)
         
@@ -408,7 +408,7 @@ class MainWindow(QMainWindow):
         self.reset_zoom_button = QToolButton()
         self.reset_zoom_button.setText("1:1")
         self.reset_zoom_button.setToolTip("Сбросить масштаб")
-        self.reset_zoom_button.clicked.connect(self.field_widget.resetScale)
+        self.reset_zoom_button.clicked.connect(self.field_widget.zoom_controller.reset_scale)
         self.reset_zoom_button.setStyleSheet(AppStyles.get_scale_button_style(self.is_dark_theme))
         scale_buttons_layout.addWidget(self.reset_zoom_button)
         
@@ -427,20 +427,18 @@ class MainWindow(QMainWindow):
         # Добавляем виджет на панель инструментов
         self.toolbar.addWidget(scale_widget)
         
-        # Таймер для обновления отображения масштаба
-        self.scale_update_timer = QTimer()
-        self.scale_update_timer.setInterval(100)  # Обновляем каждые 100 мс
-        self.scale_update_timer.timeout.connect(self.updateScaleDisplay)
-        self.scale_update_timer.start()
+        # Подключаем сигнал изменения масштаба от контроллера
+        self.field_widget.zoom_controller.scale_changed.connect(self.updateScaleDisplay)
+        # Обновляем дисплей начальным значением
+        self.updateScaleDisplay(self.field_widget.zoom_controller.current_scale())
 
-    def updateScaleDisplay(self):
-        """Обновляет отображение текущего масштаба"""
-        current_scale = self.field_widget.currentScale()
+    def updateScaleDisplay(self, current_scale):
+        """Обновляет отображение текущего масштаба."""
         self.scale_display.setText(f"{current_scale:.1f}")
         
         # Обновляем состояние кнопок масштабирования
-        self.zoom_in_button.setEnabled(current_scale < self.field_widget._max_scale)
-        self.zoom_out_button.setEnabled(current_scale > self.field_widget._min_scale)
+        self.zoom_in_button.setEnabled(current_scale < self.field_widget.zoom_controller._max_scale)
+        self.zoom_out_button.setEnabled(current_scale > self.field_widget.zoom_controller._min_scale)
 
     def apply_size_changes(self):
         """Обработчик нажатия кнопки 'Применить'."""

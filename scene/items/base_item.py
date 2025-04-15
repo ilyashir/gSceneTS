@@ -2,10 +2,10 @@
 Base class for all scene items.
 """
 
-from PyQt6.QtWidgets import QGraphicsItem
-from PyQt6.QtCore import Qt, QRectF, QPointF
-from PyQt6.QtGui import QPainterPath
-from hover_highlight import HoverHighlightMixin
+from PyQt6.QtWidgets import QGraphicsItem, QGraphicsItemGroup
+from PyQt6.QtCore import Qt, QRectF, QPointF, pyqtSignal
+from PyQt6.QtGui import QPainterPath, QPen, QColor, QBrush
+from utils.hover_highlight import HoverHighlightMixin
 from abc import ABC, abstractmethod, ABCMeta
 import logging
 

@@ -282,4 +282,58 @@ class SceneManager(QObject):
             StartPosition.reset_instance()
             self.start_position = None
             
-        logger.debug("Сцена очищена") 
+        logger.debug("Сцена очищена")
+
+    def check_objects_within_bounds(self, width, height):
+        """Проверяет, все ли управляемые объекты остаются в заданных границах."""
+        half_width = width / 2
+        half_height = height / 2
+
+        # Проверка стен
+        for wall in self.walls:
+            line = wall.line()
+            if not (
+                -half_width <= line.x1() <= half_width and
+                -half_height <= line.y1() <= half_height and
+                -half_width <= line.x2() <= half_width and
+                -half_height <= line.y2() <= half_height
+            ):
+                logger.warning(f"Стена {wall.id} выходит за границы при размере {width}x{height}")
+                return False
+
+        # Проверка регионов
+        for region in self.regions:
+            rect = region.boundingRect() # Получаем прямоугольник относительно (0,0)
+            pos = region.pos()           # Получаем позицию верхнего левого угла
+            if not (
+                -half_width <= pos.x() + rect.left() and 
+                pos.x() + rect.right() <= half_width and
+                -half_height <= pos.y() + rect.top() and 
+                pos.y() + rect.bottom() <= half_height
+            ):
+                logger.warning(f"Регион {region.id} выходит за границы при размере {width}x{height}")
+                return False
+
+        # Проверка робота
+        if self.robot:
+            pos = self.robot.pos()
+            # Используем фиксированный размер робота 50x50
+            if not (
+                -half_width <= pos.x() and pos.x() + 50 <= half_width and
+                -half_height <= pos.y() and pos.y() + 50 <= half_height
+            ):
+                logger.warning(f"Робот выходит за границы при размере {width}x{height}")
+                return False
+
+        # Проверка стартовой позиции
+        if self.start_position:
+            pos = self.start_position.pos()
+            # Используем центр стартовой позиции и отступ 25
+            if not (
+                -half_width + 25 <= pos.x() <= half_width - 25 and
+                -half_height + 25 <= pos.y() <= half_height - 25
+            ):
+                logger.warning(f"Стартовая позиция выходит за границы при размере {width}x{height}")
+                return False
+
+        return True 

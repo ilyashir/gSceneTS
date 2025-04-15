@@ -9,7 +9,9 @@ from PyQt6.QtSvg import QSvgRenderer
 from scene.items import Robot, Wall, Region, StartPosition
 from scene.managers import SceneManager
 from styles import AppStyles
-from hover_highlight import HoverHighlightMixin
+from utils.hover_highlight import HoverHighlightMixin
+# Импортируем ZoomController
+from view_controllers.zoom_controller import ZoomController 
 # Импортируем утилитные функции
 from utils.geometry_utils import (distance_to_line, line_intersects_rect, 
                                   line_with_thickness_intersects_rect, snap_to_grid)
@@ -73,6 +75,7 @@ class FieldWidget(QGraphicsView):
 
         self.drawing_mode = None
         self.edit_mode = False
+        
         self.selected_item = None
         self.selected_marker = None
         self.dragging_item = None # <-- Инициализируем здесь
@@ -90,16 +93,11 @@ class FieldWidget(QGraphicsView):
         self._current_start_item = None
         
         # Состояния объектов
-        self.dragging_robot = False
-        self.robot_offset = QPointF()
         self.scene_width = scene_width
         self.scene_height = scene_height
 
-        # Инициализация масштаба
-        self._scale_factor = 1.0
-        self._min_scale = 0.5
-        self._max_scale = 3.0
-        self._scale_step = 0.5
+        # Создаем ZoomController
+        self.zoom_controller = ZoomController(self)
 
         self._scroll_manager = None
 
@@ -349,8 +347,8 @@ class FieldWidget(QGraphicsView):
     def set_scene_size(self, width, height):
         """Устанавливает новый размер сцены и обновляет связанные элементы."""
         logger.debug(f"Установка нового размера сцены: {width}x{height}")
-        # Проверяем, что объекты остаются в границах
-        if not self.check_objects_within_bounds(width, height):
+        # Проверяем, что объекты остаются в границах, используя метод из scene_manager
+        if not self.scene_manager.check_objects_within_bounds(width, height):
             logger.warning("Невозможно изменить размер сцены, объекты выйдут за границы.")
             # Опционально: показать сообщение пользователю
             QMessageBox.warning(self, "Ошибка", "Невозможно изменить размер сцены, объекты выйдут за границы.")
@@ -402,109 +400,6 @@ class FieldWidget(QGraphicsView):
         self.draw_axes()
         
         logger.debug("Grid redrawn")
-
-    def check_objects_within_bounds(self, width, height):
-        # Используем self.scene_manager.walls вместо self.walls
-        for wall in self.scene_manager.walls:
-            if (wall.line().x1() < -width // 2 or wall.line().x2() > width // 2 or
-                wall.line().y1() < -height // 2 or wall.line().y2() > height // 2):
-                return False
-        # Используем self.scene_manager.regions вместо self.regions
-        for region in self.scene_manager.regions:
-            rect = region.path().boundingRect()
-            pos = region.pos()
-            if (pos.x() + rect.x() < -width // 2 or 
-                pos.x() + rect.x() + rect.width() > width // 2 or
-                pos.y() + rect.y() < -height // 2 or 
-                pos.y() + rect.y() + rect.height() > height // 2):
-                return False
-        robot = self.scene_manager.robot
-        if (robot.pos().x() < -width // 2 or robot.pos().x() + robot.boundingRect().width() > width // 2 or
-            robot.pos().y() < -height // 2 or robot.pos().y() + robot.boundingRect().height() > height // 2):
-                return False
-        start_pos = self.scene_manager.start_position
-        if (start_pos.pos().x() < -width // 2 or start_pos.pos().x() + start_pos.boundingRect().width() > width // 2 or
-            start_pos.pos().y() < -height // 2 or start_pos.pos().y() + start_pos.boundingRect().height() > height // 2):
-                return False
-
-        return True
-    
-    def check_object_within_scene(self, item):
-        """
-        Проверяет, находится ли объект в пределах сцены.
-        
-        Args:
-            item: Объект для проверки
-            
-        Returns:
-            bool: True, если объект в пределах сцены, False в противном случае
-        """
-        scene_width = self.scene_width
-        scene_height = self.scene_height
-        
-        # Проверяем, является ли элемент стеной
-        if isinstance(item, Wall):
-            # Для стены проверяем обе точки линии
-            line = item.line()
-            return (
-                -scene_width / 2 <= line.x1() <= scene_width / 2 and
-                -scene_height / 2 <= line.y1() <= scene_height / 2 and
-                -scene_width / 2 <= line.x2() <= scene_width / 2 and
-                -scene_height / 2 <= line.y2() <= scene_height / 2
-            )
-        
-        # Проверяем, является ли элемент регионом
-        elif isinstance(item, Region):
-            # Для региона проверяем его ограничивающий прямоугольник
-            rect = item.boundingRect()
-            pos = item.pos()
-            
-            # Проверяем, что все углы прямоугольника находятся в пределах сцены
-            top_left = QPointF(pos.x() + rect.x(), pos.y() + rect.y())
-            top_right = QPointF(pos.x() + rect.x() + rect.width(), pos.y() + rect.y())
-            bottom_left = QPointF(pos.x() + rect.x(), pos.y() + rect.y() + rect.height())
-            bottom_right = QPointF(pos.x() + rect.x() + rect.width(), pos.y() + rect.y() + rect.height())
-            
-            # Проверяем, что все углы прямоугольника находятся в пределах сцены
-            return (
-                -scene_width / 2 <= top_left.x() <= scene_width / 2 and
-                -scene_height / 2 <= top_left.y() <= scene_height / 2 and
-                -scene_width / 2 <= top_right.x() <= scene_width / 2 and
-                -scene_height / 2 <= top_right.y() <= scene_height / 2 and
-                -scene_width / 2 <= bottom_left.x() <= scene_width / 2 and
-                -scene_height / 2 <= bottom_left.y() <= scene_height / 2 and
-                -scene_width / 2 <= bottom_right.x() <= scene_width / 2 and
-                -scene_height / 2 <= bottom_right.y() <= scene_height / 2
-            )
-        
-        elif isinstance(item, Robot):
-            # Для робота проверяем его позицию и размеры
-            # Размер робота фиксирован - 50x50 пикселей
-            pos = item.pos()
-            logger.debug(f"Checking robot position: pos=({pos.x()}, {pos.y()})")
-            logger.debug(f"Scene bounds: x=({-scene_width/2}, {scene_width/2}), y=({-scene_height/2}, {scene_height/2})")
-            
-            # Проверяем, что робот полностью находится в пределах сцены
-            # с учетом его размеров (50x50 пикселей)
-            # Используем точные размеры робота, а не размеры boundingRect
-            return (
-                -scene_width / 2 <= pos.x() and pos.x() + 50 <= scene_width / 2 and
-                -scene_height / 2 <= pos.y() and pos.y() + 50 <= scene_height / 2
-            )
-            
-        elif isinstance(item, StartPosition):
-            # Для стартовой позиции проверяем центр, т.к. крест довольно компактный
-            pos = item.pos()
-            logger.debug(f"Checking start position: pos=({pos.x()}, {pos.y()})")
-            
-            # Проверяем, что стартовая позиция находится в пределах сцены
-            # Добавляем отступ 25 пикселей 
-            return (
-                -scene_width / 2 + 25 <= pos.x() <= scene_width / 2 - 25 and
-                -scene_height / 2 + 25 <= pos.y() <= scene_height / 2 - 25
-            )
-        
-        return False
     
     def is_supported_item(self, item):
         """
@@ -772,7 +667,7 @@ class FieldWidget(QGraphicsView):
                             # Если нет последней допустимой позиции, возвращаем в центр
                             self.dragging_item.setPos(0, 0)
                     # Проверка на выход за границы сцены
-                    elif not self.check_object_within_scene(self.dragging_item):
+                    elif not self.scene_manager.check_object_within_scene(self.dragging_item):
                         logger.debug(f"Robot is out of bounds, resetting position")
                         # Возвращаем робота в последнюю допустимую позицию
                         if hasattr(self, 'last_valid_robot_pos'):
@@ -824,7 +719,7 @@ class FieldWidget(QGraphicsView):
             temp_robot = Robot(new_pos)
             
             # Проверяем, находится ли робот в пределах сцены
-            if not self.check_object_within_scene(temp_robot):
+            if not self.scene_manager.check_object_within_scene(temp_robot):
                 logger.warning(f"Robot position update to ({x}, {y}) rejected - would be out of scene bounds")
                 # Показываем предупреждение о выходе за границы сцены
                 QMessageBox.warning(
@@ -889,7 +784,7 @@ class FieldWidget(QGraphicsView):
                 self.properties_updated.emit(self.selected_item)
                 return False
             
-            if not self.check_object_within_scene(temp_wall):
+            if not self.scene_manager.check_object_within_scene(temp_wall):
                 # Очищаем временный ID
                 Wall.cleanup_temp_id(temp_wall_id)
                 
@@ -944,7 +839,7 @@ class FieldWidget(QGraphicsView):
                 self.properties_updated.emit(self.selected_item)
                 return False
             
-            if not self.check_object_within_scene(temp_wall):
+            if not self.scene_manager.check_object_within_scene(temp_wall):
                 # Очищаем временный ID
                 Wall.cleanup_temp_id(temp_wall_id)
                 
@@ -1024,91 +919,17 @@ class FieldWidget(QGraphicsView):
 
     def wheelEvent(self, event):
         """Обработка события колесика мыши для масштабирования и прокрутки"""
-        # Проверяем, зажата ли клавиша Ctrl
-        is_ctrl_pressed = event.modifiers() & Qt.KeyboardModifier.ControlModifier
-        
-        # Если Ctrl зажат, выполняем масштабирование
-        if is_ctrl_pressed:
-            # Получаем текущее положение курсора в координатах сцены
-            view_pos = event.position()
-            scene_pos = self.mapToScene(int(view_pos.x()), int(view_pos.y()))
-            
-            # Определяем направление прокрутки
-            scroll_direction = 1 if event.angleDelta().y() > 0 else -1
-            
-            # Изменяем масштаб
-            old_scale = self._scale_factor
-            if scroll_direction > 0:
-                # Увеличиваем масштаб
-                self.scale_view(self._scale_factor + self._scale_step)
-            else:
-                # Уменьшаем масштаб
-                self.scale_view(self._scale_factor - self._scale_step)
-                
-            # Если масштаб не изменился, используем стандартную прокрутку
-            if self._scale_factor == old_scale:
-                super().wheelEvent(event)
-                return
-                
-            # Корректируем положение сцены, чтобы точка под курсором осталась на месте
-            new_pos = self.mapFromScene(scene_pos)
-            delta = QPointF(new_pos.x() - view_pos.x(), new_pos.y() - view_pos.y())
-            self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() + int(delta.x()))
-            self.verticalScrollBar().setValue(self.verticalScrollBar().value() + int(delta.y()))
-            
-            # Обновляем видимость скроллбаров после изменения масштаба и прокрутки
+        # Пытаемся обработать масштабирование через ZoomController
+        if self.zoom_controller.handle_wheel_event(event):
+            # Если ZoomController обработал событие, обновляем скроллбары и выходим
             self.update_scrollbars_visibility()
-            
-            # Сообщаем об изменении масштаба
-            logger.debug(f"Scale changed to: {self._scale_factor}")
-            
-            # Подавляем стандартную обработку события
-            event.accept()
-        else:
-            # Если Ctrl не зажат, используем стандартную прокрутку
-            super().wheelEvent(event)
-            
-            # Обновляем видимость скроллбаров после прокрутки
-            self.update_scrollbars_visibility()
-    
-    def scale_view(self, new_scale):
-        """Масштабирует представление до указанного значения"""
-        # Ограничиваем масштаб минимальным и максимальным значениями
-        new_scale = max(min(new_scale, self._max_scale), self._min_scale)
+            return 
         
-        # Если масштаб не изменился, ничего не делаем
-        if new_scale == self._scale_factor:
-            return
-            
-        # Сохраняем новый масштаб
-        self._scale_factor = new_scale
+        # Если ZoomController не обработал (Ctrl не зажат), выполняем стандартную прокрутку
+        super().wheelEvent(event)
         
-        # Применяем новый масштаб
-        self.setTransform(QTransform().scale(self._scale_factor, self._scale_factor))
-        
-        # Обновляем видимость скроллбаров
+        # Обновляем видимость скроллбаров после прокрутки
         self.update_scrollbars_visibility()
-        
-        logger.debug(f"View scaled to: {self._scale_factor}")
-    
-    def resetScale(self):
-        """Сбрасывает масштаб к стандартному (1.0)"""
-        self.scale_view(1.0)
-        logger.debug("Scale reset to 1.0")
-    
-    def zoomIn(self):
-        """Увеличивает масштаб на один шаг"""
-        self.scale_view(self._scale_factor + self._scale_step)
-        logger.debug(f"Zoomed in to: {self._scale_factor}")
-    
-    def zoomOut(self):
-        """Уменьшает масштаб на один шаг"""
-        self.scale_view(self._scale_factor - self._scale_step)
-        logger.debug(f"Zoomed out to: {self._scale_factor}")
-    
-    def currentScale(self):
-        """Возвращает текущий масштаб"""
-        return self._scale_factor
 
     def delete_wall(self, wall):
         """Удаляет стену со сцены"""
@@ -1188,7 +1009,7 @@ class FieldWidget(QGraphicsView):
         # Проверяем, находится ли робот в пределах сцены
         # Создаем временного робота для проверки границ
         temp_robot = Robot(position, name=name, direction=direction)
-        if not self.check_object_within_scene(temp_robot):
+        if not self.scene_manager.check_object_within_scene(temp_robot):
             logger.warning("Робот выходит за границы сцены - отмена размещения")
             # Сбрасываем экземпляр, т.к. его не удалось разместить
             Robot.reset_instance()
@@ -1265,7 +1086,7 @@ class FieldWidget(QGraphicsView):
             
             # Создаем временный объект для проверки границ сцены
             temp_start = StartPosition(QPointF(x, y))
-            if not self.check_object_within_scene(temp_start):
+            if not self.scene_manager.check_object_within_scene(temp_start):
                 logger.warning(f"Start position update to ({x}, {y}) rejected - would be out of scene bounds")
                 # Показываем предупреждение о выходе за границы сцены
                 QMessageBox.warning(
@@ -1308,7 +1129,7 @@ class FieldWidget(QGraphicsView):
         # Создаем временный объект для проверки границ сцены
         temp_start = StartPosition(position, direction)
         
-        if not self.check_object_within_scene(temp_start):
+        if not self.scene_manager.check_object_within_scene(temp_start):
             logger.warning("Стартовая позиция выходит за границы сцены - отмена размещения")
             # Сбрасываем экземпляр, т.к. его не удалось разместить
             StartPosition.reset_instance()
